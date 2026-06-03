@@ -1,0 +1,92 @@
+import { api, getToken } from './client';
+import type { ApiResponse, User } from '../types';
+
+export interface ProfileUpdate {
+  display_name?: string;
+  location?: string;
+  bio?: string;
+}
+
+export interface LocationUpdate {
+  home_zip_location?: string | null;
+  home_distance_preference?: number | null;
+}
+
+export async function updateProfile(tenantId: string, updates: ProfileUpdate) {
+  return api.put<ApiResponse<{ user: User }>>(`/auth/me?tenant_id=${tenantId}`, updates);
+}
+
+export async function updateLocation(updates: LocationUpdate) {
+  return api.patch<{ data: { profile: {
+    home_zip_location: string | null;
+    home_zip_lat: number | null;
+    home_zip_lon: number | null;
+    home_distance_preference: number | null;
+  } } }>('/auth/profile/location', updates);
+}
+
+export async function getMember(tenant: string, memberId: string) {
+  return api.get<ApiResponse<{
+    member: User & { bio: string | null; created_at: number };
+    active_offers: Array<{
+      id: string; title: string; offer_type: string;
+      location: string | null; created_at: number;
+      category_name: string | null; category_icon: string | null;
+    }>;
+  }>>(`/t/${tenant}/members/${memberId}`);
+}
+
+/**
+ * Upload a profile image for the current user.
+ * blob should already be resized/converted to WebP by the caller (Canvas API).
+ * Sends raw binary with correct Content-Type — bypasses the JSON client wrapper.
+ */
+export async function uploadAvatar(
+  tenantId: string,
+  blob: Blob
+): Promise<{ data: { avatar_url: string | null } }> {
+  const token = getToken();
+  const headers: Record<string, string> = {
+    'Content-Type': blob.type || 'image/webp',
+  };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const res = await fetch(`/api/auth/profile/avatar?tenant_id=${tenantId}`, {
+    method: 'POST',
+    headers,
+    body: blob,
+    credentials: 'include',
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((body as any).error || `Upload failed: ${res.status}`);
+  }
+
+  return res.json();
+}
+
+export interface MerchantApplication {
+  name: string;
+  category: string;
+  description?: string;
+  address?: string;
+  zip?: string;
+  phone?: string;
+  website?: string;
+  lat?: number;
+  lon?: number;
+}
+
+export async function applyMerchant(application: MerchantApplication) {
+  return api.post<ApiResponse<any>>('/auth/profile/apply-merchant', application);
+}
+
+export async function getAdminMerchants() {
+  return api.get<ApiResponse<any[]>>('/auth/profile/admin/merchants');
+}
+
+export async function reviewMerchant(id: number, status: 'verified' | 'rejected' | 'pending') {
+  return api.post<ApiResponse<any>>(`/auth/profile/admin/merchants/${id}/review`, { status });
+}
+

@@ -1,0 +1,338 @@
+import { useEffect } from 'react';
+import { X, Compass, AlertCircle, Printer, Download } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+import { useTenant } from '../../context/TenantContext';
+import { getToken } from '../../api/client';
+
+interface Props {
+  open: boolean;
+  onClose: () => void;
+}
+
+export default function MerchantQrDrawer({ open, onClose }: Props) {
+  const { user } = useAuth();
+  const { tenant } = useTenant();
+
+  const creditsName = tenant?.config.credits_name ?? 'KrowdKredits';
+
+  // Lock body scroll while open
+  useEffect(() => {
+    document.body.style.overflow = open ? 'hidden' : '';
+    return () => { document.body.style.overflow = ''; };
+  }, [open]);
+
+  if (!user || !user.business_id) return null;
+
+  const token = getToken();
+  const qrCodeUrl = `/api/auth/merchant/qr-code?token=${token}`;
+
+  const handlePrint = () => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Print QR Code - ${user.business_name || 'Merchant'}</title>
+          <style>
+            body {
+              font-family: system-ui, -apple-system, sans-serif;
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              height: 100vh;
+              margin: 0;
+              background: #fff;
+              color: #1e3320;
+              text-align: center;
+            }
+            .container {
+              border: 3px solid #1e3320;
+              padding: 40px;
+              border-radius: 24px;
+              max-width: 450px;
+              box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+            }
+            h1 {
+              font-size: 2.2rem;
+              margin: 0 0 8px 0;
+              font-weight: 800;
+            }
+            p {
+              font-size: 1.1rem;
+              color: #536b56;
+              margin: 0 0 30px 0;
+            }
+            .qr-box {
+              background: #fff;
+              border: 1px solid #ddd;
+              padding: 20px;
+              border-radius: 16px;
+              display: inline-block;
+              margin-bottom: 24px;
+            }
+            img {
+              width: 280px;
+              height: 280px;
+            }
+            .footer {
+              font-size: 0.9rem;
+              font-weight: bold;
+              opacity: 0.8;
+            }
+            @media print {
+              .no-print { display: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <h1>Scan &amp; Check In</h1>
+            <p>Support <strong>${user.business_name}</strong> and collect stamps!</p>
+            <div class="qr-box">
+              <img src="${qrCodeUrl}" alt="Check-in QR Code" />
+            </div>
+            <div class="footer">Powered by ${tenant?.config.brand_name || 'Lake & Locals'} Passport</div>
+            <br />
+            <button class="no-print" onclick="window.print()" style="padding: 10px 20px; font-weight: bold; background: #1e3320; color: white; border: none; border-radius: 8px; cursor: pointer;">Print Now</button>
+          </div>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
+  return (
+    <>
+      {/* Overlay Backdrop */}
+      <div
+        onClick={onClose}
+        style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0,0,0,0.6)',
+          backdropFilter: 'blur(2px)',
+          zIndex: 300,
+          display: open ? 'block' : 'none',
+          transition: 'opacity 0.25s ease',
+        }}
+      />
+
+      {/* Slide-Up Bottom Drawer */}
+      <aside
+        aria-label="Merchant Check-in QR Code"
+        style={{
+          position: 'fixed',
+          left: 0,
+          right: 0,
+          bottom: 0,
+          maxHeight: '85vh',
+          background: 'var(--cream)',
+          borderTopLeftRadius: 'var(--r-lg)',
+          borderTopRightRadius: 'var(--r-lg)',
+          borderTop: '1px solid var(--border)',
+          boxShadow: '0 -4px 24px rgba(0, 0, 0, 0.15)',
+          zIndex: 301,
+          display: 'flex',
+          flexDirection: 'column',
+          paddingBottom: 'calc(24px + env(safe-area-inset-bottom))',
+          transform: open ? 'translateY(0)' : 'translateY(100%)',
+          transition: 'transform 0.28s cubic-bezier(0.32, 0.94, 0.6, 1)',
+          overflow: 'hidden',
+        }}
+      >
+        {/* Grabber Drag Handle */}
+        <div style={{
+          width: 44,
+          height: 5,
+          background: '#ddd8cc',
+          borderRadius: 3,
+          margin: '10px auto 4px auto',
+          flexShrink: 0,
+        }} />
+
+        {/* Header */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '12px 20px',
+          borderBottom: '1px solid var(--border)',
+          flexShrink: 0,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Compass size={18} color="var(--green)" />
+            <h2 style={{
+              fontFamily: 'var(--font-serif)',
+              fontSize: '1.15rem',
+              fontWeight: 'bold',
+              color: 'var(--green)',
+              margin: 0,
+            }}>
+              Merchant Check-in QR Code
+            </h2>
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: 'var(--green)',
+              width: 36,
+              height: 36,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: 'var(--r-sm)',
+              transition: 'background 0.15s',
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.04)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'none'}
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Scrollable Content */}
+        <div style={{
+          overflowY: 'auto',
+          padding: '24px 20px',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          textAlign: 'center',
+        }}>
+          {/* QR Code Container */}
+          <div style={{
+            background: 'var(--white)',
+            border: '2px solid var(--border)',
+            borderRadius: 'var(--r-lg)',
+            padding: 16,
+            width: 240,
+            height: 240,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.06)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginBottom: 20,
+            overflow: 'hidden',
+          }}>
+            {open && (
+              <img
+                src={qrCodeUrl}
+                alt="Business Check-in QR Code"
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'contain',
+                }}
+              />
+            )}
+          </div>
+
+          {/* Business Name */}
+          <h3 style={{
+            fontFamily: 'var(--font-serif)',
+            fontSize: '1.2rem',
+            fontWeight: 'bold',
+            color: 'var(--green)',
+            margin: '0 0 6px 0',
+          }}>
+            {user.business_name}
+          </h3>
+
+          <div style={{
+            fontFamily: 'var(--font-sans)',
+            fontSize: '0.75rem',
+            fontWeight: 700,
+            color: 'var(--sage)',
+            background: 'rgba(80,120,80,0.1)',
+            padding: '3px 10px',
+            borderRadius: 'var(--r-pill)',
+            marginBottom: 16,
+          }}>
+            MERCHANT ID: KK-BIZ-{user.business_id}
+          </div>
+
+          <p style={{
+            fontFamily: 'var(--font-sans)',
+            fontSize: '0.85rem',
+            color: 'var(--muted)',
+            lineHeight: 1.5,
+            maxWidth: 340,
+            margin: '0 0 20px 0',
+          }}>
+            Display this QR code physically at your register, host stand, or checkout. Customers scan it with their mobile cameras to verify their visit, unlock their regional stamp, and earn {creditsName}!
+          </p>
+
+          {/* Print/Download CTA button row */}
+          <div style={{ display: 'flex', gap: 12, marginBottom: 24, width: '100%', maxWidth: 340 }}>
+            <button
+              onClick={handlePrint}
+              className="btn btn-green"
+              style={{
+                flex: 1,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                fontSize: '0.85rem',
+                fontWeight: 600,
+                minHeight: 40,
+              }}
+            >
+              <Printer size={16} /> Print Flyer
+            </button>
+            <a
+              href={qrCodeUrl}
+              download={`qr-code-${user.business_name || 'business'}.svg`}
+              className="btn btn-secondary"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                flex: 1,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                fontSize: '0.85rem',
+                fontWeight: 600,
+                minHeight: 40,
+                textDecoration: 'none'
+              }}
+            >
+              <Download size={16} /> Download SVG
+            </a>
+          </div>
+
+          {/* Secure Badge Info */}
+          <div style={{
+            display: 'flex',
+            gap: 8,
+            alignItems: 'center',
+            background: 'rgba(30,51,32,0.04)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--r-md)',
+            padding: '10px 14px',
+            width: '100%',
+            maxWidth: 340,
+          }}>
+            <AlertCircle size={16} color="var(--sage)" style={{ flexShrink: 0 }} />
+            <p style={{
+              fontFamily: 'var(--font-sans)',
+              fontSize: '0.72rem',
+              color: 'var(--green)',
+              margin: 0,
+              textAlign: 'left',
+              lineHeight: 1.45,
+            }}>
+              <strong>Verified Presence Guard:</strong> When scanned, our platform momentarily checks the scanner's high-accuracy GPS coordinates against your geofenced business coordinates to prevent off-site claims.
+            </p>
+          </div>
+        </div>
+      </aside>
+    </>
+  );
+}

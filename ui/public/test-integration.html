@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lake & Locals — Merchant App Hub (Embed SDK Demo)</title>
+  <style>
+    :root {
+      --green: #1e3320;
+      --cream: #f4f1ea;
+      --amber: #c8860a;
+      --sage: #507850;
+      --white: #ffffff;
+      --border: #e3dec3;
+      --muted: #6b695c;
+    }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #f7f6f0;
+      color: var(--green);
+    }
+    header {
+      background: var(--green);
+      color: var(--cream);
+      padding: 16px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    header h1 {
+      margin: 0;
+      font-size: 1.25rem;
+      font-family: serif;
+    }
+    .container {
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 0 20px;
+    }
+    .card {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 32px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+      text-align: center;
+    }
+    h2 {
+      font-family: serif;
+      font-size: 2rem;
+      margin-top: 0;
+      margin-bottom: 12px;
+    }
+    p {
+      color: var(--muted);
+      line-height: 1.6;
+      max-width: 500px;
+      margin: 0 auto 24px auto;
+    }
+    .btn {
+      background: var(--amber);
+      color: var(--white);
+      border: none;
+      padding: 12px 28px;
+      border-radius: 6px;
+      font-size: 1rem;
+      font-weight: bold;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(200,134,10,0.25);
+      transition: transform 0.15s, background 0.15s;
+    }
+    .btn:hover {
+      transform: translateY(-1px);
+      background: #b27607;
+    }
+    .badge {
+      display: inline-block;
+      background: rgba(80,120,80,0.1);
+      color: var(--sage);
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 0.78rem;
+      font-weight: bold;
+      margin-bottom: 20px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>Merchant App Partner Portal</h1>
+    <div style="font-size: 0.85rem; font-weight: bold; color: var(--amber);">Lake & Locals Connected ✓</div>
+  </header>
+
+  <div class="container">
+    <div class="card">
+      <span class="badge">SDK Integration Active</span>
+      <h2>External Partner App Demo</h2>
+      <p>
+        This simulated website demonstrates how any other application in the regional ecosystem can load the Passport operations drawer.
+      </p>
+      <p>
+        Look for the custom floating Passport icon in the bottom right corner of the page, or click the button below to trigger it programmatically!
+      </p>
+      <button class="btn" onclick="openPassportDrawer()">
+        🎟️ Open My Passport Drawer
+      </button>
+    </div>
+  </div>
+
+  <!-- Load the Lightweight Passport Integration SDK -->
+  <script src="/passport-sdk.js"></script>
+  <script>
+    // Initialize the Passport SDK
+    PassportSDK.init();
+
+    // Custom function to open it programmatically from existing elements
+    function openPassportDrawer() {
+      PassportSDK.open();
+    }
+  </script>
+</body>
+</html>

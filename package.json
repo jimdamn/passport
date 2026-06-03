@@ -1,0 +1,25 @@
+{
+  "name": "krowdkraft-passport",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler pages dev ./ui/dist --d1=DB --kv=PASSPORT_CONFIG --port=8788",
+    "dev:ui": "cd ui && npm run dev",
+    "build": "cd ui && npm run build",
+    "deploy": "npm run build && wrangler pages deploy ./ui/dist",
+    "db:create": "wrangler d1 create krowdkraft-passport",
+    "db:migrate": "wrangler d1 execute krowdkraft-passport --file=./schema.sql --remote",
+    "db:seed": "wrangler d1 execute krowdkraft-passport --file=./seed.sql --remote",
+    "db:reset": "wrangler d1 execute krowdkraft-passport --file=./schema.sql --remote && wrangler d1 execute krowdkraft-passport --file=./seed.sql --remote"
+  },
+  "dependencies": {
+    "hono": "^4.4.0",
+    "jose": "^5.6.3",
+    "nanoid": "^5.0.7",
+    "qr-svg": "^1.1.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240909.0",
+    "typescript": "^5.5.0",
+    "wrangler": "^4.92.0"
+  }
+}

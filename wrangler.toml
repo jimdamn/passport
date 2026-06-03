@@ -1,0 +1,43 @@
+name = "krowdkraft-passport"
+pages_build_output_dir = "ui/dist"
+compatibility_date = "2024-06-14"
+compatibility_flags = ["nodejs_compat"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "krowdkraft-passport"
+database_id = "c2621221-e1c5-45e5-980c-5dddf38aaa9b"
+
+[[kv_namespaces]]
+binding = "PASSPORT_CONFIG"
+id = "ee180c4b25fa4b0795e6afe0dd09a9c1"
+
+[[services]]
+binding = "KKAUTH"
+service = "kkauth"
+
+[[services]]
+binding = "KKCREDITS"
+service = "kkcredits"
+
+[[services]]
+binding = "KKGAME"
+service = "kkgame"
+
+[[r2_buckets]]
+binding = "SITE_ASSETS"
+bucket_name = "site-image-assets"
+
+[vars]
+ENVIRONMENT = "production"
+COOKIE_DOMAIN = ".lakeandlocals.com"
+
+# Secrets — set via: wrangler pages secret put <NAME>
+# INTERNAL_SECRET  — Shared secret for KKAuth internal calls
+# GEO_TOKEN_SECRET — long random string for verifying kk_geo_trust JWT cookies
+#                    Must match the value set in kk-apps-hub and kk-login.
+# KKAUTH_APP_KEY   — API key registered in KKAuth apps table for this Worker (also used as X-App-Key for KKCredits)
+# KKGAME_APP_KEY   — API key registered in KKAuth apps table for this Worker (used as X-App-Key for KKGame)
+# QR_SIGNING_SECRET — HMAC-SHA256 signing secret for standardized QR payloads
+
+
