@@ -477,6 +477,10 @@ authRouter.get('/me', async (c) => {
         credits_balance,
         bd_member_since:          user.bd_member_since ?? null,
         is_admin:                 (c.env.ADMIN_EMAILS ?? 'gottabuylocal@gmail.com').split(',').map(e => e.trim().toLowerCase()).includes((kk.email ?? user.email).toLowerCase()),
+        active_persona:           kk.active_persona           ?? 'anonymous',
+        business_id:              kk.business_id              ?? null,
+        business_status:          kk.business_status          ?? null,
+        business_name:            kk.business_name            ?? null,
       },
     },
   });

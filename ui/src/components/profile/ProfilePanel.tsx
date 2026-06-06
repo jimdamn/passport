@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Camera } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTenant } from '../../context/TenantContext';
 import { getMe } from '../../api/auth';
@@ -107,6 +108,7 @@ export default function ProfilePanel({ open, onClose, onSaved }: Props) {
   const { user, updateUser } = useAuth();
   const { tenant } = useTenant();
   const qc = useQueryClient();
+  const navigate = useNavigate();
 
   const [form, setForm] = useState({
     display_name: '', location: '', bio: '',
@@ -308,24 +310,26 @@ export default function ProfilePanel({ open, onClose, onSaved }: Props) {
           </button>
         </form>
 
-        <a
-          href="/profile"
-          onClick={onClose}
+        <button
+          onClick={() => {
+            onClose();
+            navigate('/profile');
+          }}
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            marginTop: 8, padding: '13px 20px',
+            marginTop: 8, padding: '13px 20px', width: '100%',
             border: '1px solid var(--border)', borderRadius: 'var(--r-sm)',
             fontFamily: 'var(--font-sans)', fontSize: '0.9rem', fontWeight: 600,
-            color: 'var(--green)', textDecoration: 'none',
-            background: 'var(--white)', transition: 'border-color 0.15s, background 0.15s',
+            color: 'var(--green)',
+            background: 'var(--white)', cursor: 'pointer', transition: 'border-color 0.15s, background 0.15s',
           }}
           onMouseEnter={e => {
-            (e.currentTarget as HTMLAnchorElement).style.borderColor = 'var(--sage)';
-            (e.currentTarget as HTMLAnchorElement).style.background  = 'var(--cream)';
+            (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--sage)';
+            (e.currentTarget as HTMLButtonElement).style.background  = 'var(--cream)';
           }}
           onMouseLeave={e => {
-            (e.currentTarget as HTMLAnchorElement).style.borderColor = 'var(--border)';
-            (e.currentTarget as HTMLAnchorElement).style.background  = 'var(--white)';
+            (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border)';
+            (e.currentTarget as HTMLButtonElement).style.background  = 'var(--white)';
           }}
         >
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -333,7 +337,7 @@ export default function ProfilePanel({ open, onClose, onSaved }: Props) {
             <circle cx="12" cy="7" r="4"/>
           </svg>
           Account Details
-        </a>
+        </button>
       </aside>
     </>
   );
