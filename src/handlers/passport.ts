@@ -98,7 +98,7 @@ export async function scanPlaque(c: AppContext) {
 
   // 3. Optional User Authentication check
   const authHeader = c.req.header('Authorization');
-  let userId: string | null = null;
+  let userId: number | null = null;
   let userEmail: string | null = null;
   let userDisplayName: string | null = null;
 
@@ -117,18 +117,18 @@ export async function scanPlaque(c: AppContext) {
       );
       if (authRes.ok) {
         const authJson = await authRes.json<{ data: { payload: KKAuthPayload; profile: KKAuthProfile } }>();
-        userId = authJson.data.payload.sub;
+        userId = Number(authJson.data.payload.sub);
         userEmail = authJson.data.payload.email;
         userDisplayName = authJson.data.payload.name ?? userEmail.split('@')[0];
 
         // Ensure user exists locally in D1
         const localUser = await c.env.DB.prepare(
-          'SELECT id FROM users WHERE id = ? AND tenant_id = ?'
+          'SELECT kkauth_uid FROM users WHERE kkauth_uid = ? AND tenant_id = ?'
         ).bind(userId, tenant.id).first<any>();
 
         if (!localUser) {
           await c.env.DB.prepare(`
-            INSERT INTO users (id, tenant_id, email, display_name, created_at, updated_at)
+            INSERT INTO users (kkauth_uid, tenant_id, email, display_name, created_at, updated_at)
             VALUES (?, ?, ?, ?, unixepoch(), unixepoch())
           `).bind(userId, tenant.id, userEmail, userDisplayName).run();
         }
@@ -223,7 +223,7 @@ export async function scanPlaque(c: AppContext) {
 
     // Record game action in KKGame via recordGameAction helper
     const gameResult = await recordGameAction(c.env, {
-      user_id: Number(userId),
+      user_id: userId,
       action_id: 'passport_scan',
       source_app: 'passport',
       network_id: 'lake-and-locals',
@@ -381,7 +381,7 @@ export async function getStamps(c: AppContext) {
     JOIN passport_plaques p ON s.plaque_id = p.id
     WHERE s.user_id = ? AND p.tenant_id = ?
     ORDER BY s.created_at DESC
-  `).bind(user.sub, tenant.id).all<any>();
+  `).bind(Number(user.sub), tenant.id).all<any>();
 
   // 2. Fetch earned badges from KKCredits
   let badges: any[] = [];

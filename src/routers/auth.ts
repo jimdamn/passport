@@ -101,7 +101,7 @@ async function verifyTokenFull(
  * Returns the Exchange user row.
  */
 async function findOrCreateUser(
-  kkAuthUserId: string,
+  kkAuthUserId: number,
   tenantId: string,
   email: string,
   displayName: string,
@@ -110,37 +110,20 @@ async function findOrCreateUser(
   env: Env
 ): Promise<any> {
   let user = await env.DB.prepare(
-    'SELECT * FROM users WHERE id = ? AND tenant_id = ?'
+    'SELECT * FROM users WHERE kkauth_uid = ? AND tenant_id = ?'
   ).bind(kkAuthUserId, tenantId).first<any>();
-
-  // Fallback: user may exist under an old UUID (pre-KKAuth retrofit).
-  // Migrate their id to the canonical KKAuth integer id so future lookups work.
-  if (!user) {
-    const legacy = await env.DB.prepare(
-      'SELECT * FROM users WHERE email = ? AND tenant_id = ?'
-    ).bind(email, tenantId).first<any>();
-
-    if (legacy && legacy.id !== kkAuthUserId) {
-      await env.DB.prepare(
-        'UPDATE users SET id = ?, updated_at = unixepoch() WHERE id = ? AND tenant_id = ?'
-      ).bind(kkAuthUserId, legacy.id, tenantId).run();
-      user = await env.DB.prepare(
-        'SELECT * FROM users WHERE id = ? AND tenant_id = ?'
-      ).bind(kkAuthUserId, tenantId).first<any>();
-    }
-  }
 
   if (!user) {
     // New user — create Exchange record
     const name = displayName || email.split('@')[0];
     await env.DB.prepare(`
       INSERT INTO users
-        (id, tenant_id, bd_uid, email, display_name, bd_member_since, is_active, created_at, updated_at)
+        (kkauth_uid, tenant_id, bd_uid, email, display_name, bd_member_since, is_active, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, 1, unixepoch(), unixepoch())
     `).bind(kkAuthUserId, tenantId, bdUid, email, name, bdMemberSince).run();
 
     user = await env.DB.prepare(
-      'SELECT * FROM users WHERE id = ? AND tenant_id = ?'
+      'SELECT * FROM users WHERE kkauth_uid = ? AND tenant_id = ?'
     ).bind(kkAuthUserId, tenantId).first<any>();
   }
 
@@ -156,7 +139,7 @@ function publicUser(user: any, profile?: KKAuthProfile, adminEmails?: string) {
   const admins = adminEmails ?? 'gottabuylocal@gmail.com';
   const is_admin = admins.split(',').map(e => e.trim().toLowerCase()).includes(user.email.toLowerCase());
   return {
-    id: user.id,
+    id: user.kkauth_uid,
     email: user.email,
     display_name: profile?.display_name ?? user.display_name,
     avatar_url: profile?.avatar_url ?? user.avatar_url ?? null,
@@ -255,17 +238,17 @@ authRouter.post('/otp/verify', async (c) => {
 
   // Find or create Exchange user
   let user = await findOrCreateUser(
-    payload.sub, tenant_id, email, resolvedName, null, null, c.env
+    Number(payload.sub), tenant_id, email, resolvedName, null, null, c.env
   );
 
   // Update location if provided and user is new or location not set
   if (location && (!user.location)) {
     await c.env.DB.prepare(
-      'UPDATE users SET location = ?, updated_at = unixepoch() WHERE id = ? AND tenant_id = ?'
-    ).bind(location, payload.sub, tenant_id).run();
+      'UPDATE users SET location = ?, updated_at = unixepoch() WHERE kkauth_uid = ? AND tenant_id = ?'
+    ).bind(location, Number(payload.sub), tenant_id).run();
     user = await c.env.DB.prepare(
-      'SELECT * FROM users WHERE id = ? AND tenant_id = ?'
-    ).bind(payload.sub, tenant_id).first<any>();
+      'SELECT * FROM users WHERE kkauth_uid = ? AND tenant_id = ?'
+    ).bind(Number(payload.sub), tenant_id).first<any>();
   }
 
   // Forward KKAuth's Set-Cookie (refresh token) to the browser, rewritten
@@ -331,17 +314,17 @@ authRouter.post('/sso', async (c) => {
 
   // Find or create Exchange user; link bd_uid and bd_member_since
   let user = await findOrCreateUser(
-    payload.sub, tenant_id, email, resolvedName, uid, bd_member_since ?? null, c.env
+    Number(payload.sub), tenant_id, email, resolvedName, uid, bd_member_since ?? null, c.env
   );
 
   // Update BD fields if user already existed
   if (user.bd_uid !== uid) {
     await c.env.DB.prepare(
-      'UPDATE users SET bd_uid = ?, bd_member_since = ?, avatar_url = COALESCE(?, avatar_url), updated_at = unixepoch() WHERE id = ? AND tenant_id = ?'
-    ).bind(uid, bd_member_since ?? null, avatar_url ?? null, payload.sub, tenant_id).run();
+      'UPDATE users SET bd_uid = ?, bd_member_since = ?, avatar_url = COALESCE(?, avatar_url), updated_at = unixepoch() WHERE kkauth_uid = ? AND tenant_id = ?'
+    ).bind(uid, bd_member_since ?? null, avatar_url ?? null, Number(payload.sub), tenant_id).run();
     user = await c.env.DB.prepare(
-      'SELECT * FROM users WHERE id = ? AND tenant_id = ?'
-    ).bind(payload.sub, tenant_id).first<any>();
+      'SELECT * FROM users WHERE kkauth_uid = ? AND tenant_id = ?'
+    ).bind(Number(payload.sub), tenant_id).first<any>();
   }
 
   // Forward KKAuth's Set-Cookie to the browser, rewritten for the Exchange domain.
@@ -437,12 +420,12 @@ authRouter.get('/me', async (c) => {
 
   // Fetch Exchange-specific fields from D1 (credits, trades, ratings, bd_*)
   let user = await c.env.DB.prepare(
-    'SELECT * FROM users WHERE id = ? AND tenant_id = ? AND is_active = 1'
-  ).bind(String(kk.id), tenantId).first<any>();
+    'SELECT * FROM users WHERE kkauth_uid = ? AND tenant_id = ? AND is_active = 1'
+  ).bind(Number(kk.id), tenantId).first<any>();
 
   if (!user) {
     user = await findOrCreateUser(
-      String(kk.id),
+      Number(kk.id),
       tenantId,
       kk.email,
       kk.display_name || kk.email.split('@')[0],
@@ -468,9 +451,9 @@ authRouter.get('/me', async (c) => {
 
   if (syncFields.length > 0) {
     syncFields.push('updated_at = unixepoch()');
-    syncBinds.push(String(kk.id), tenantId);
+    syncBinds.push(Number(kk.id), tenantId);
     await c.env.DB.prepare(
-      `UPDATE users SET ${syncFields.join(', ')} WHERE id = ? AND tenant_id = ?`
+      `UPDATE users SET ${syncFields.join(', ')} WHERE kkauth_uid = ? AND tenant_id = ?`
     ).bind(...syncBinds).run();
   }
 
@@ -563,15 +546,15 @@ authRouter.put('/me', async (c) => {
 
   if (cacheFields.length > 0) {
     cacheFields.push('updated_at = unixepoch()');
-    cacheBinds.push(payload.sub, tenantId);
+    cacheBinds.push(Number(payload.sub), tenantId);
     await c.env.DB.prepare(
-      `UPDATE users SET ${cacheFields.join(', ')} WHERE id = ? AND tenant_id = ?`
+      `UPDATE users SET ${cacheFields.join(', ')} WHERE kkauth_uid = ? AND tenant_id = ?`
     ).bind(...cacheBinds).run();
   }
 
   const user = await c.env.DB.prepare(
-    'SELECT * FROM users WHERE id = ? AND tenant_id = ?'
-  ).bind(payload.sub, tenantId).first<any>();
+    'SELECT * FROM users WHERE kkauth_uid = ? AND tenant_id = ?'
+  ).bind(Number(payload.sub), tenantId).first<any>();
 
   return c.json({ data: { user: publicUser(user, undefined, c.env.ADMIN_EMAILS) } });
 });
@@ -682,8 +665,8 @@ authRouter.post('/profile/avatar', async (c) => {
   // Sync avatar_url to the Exchange user record for this tenant
   if (avatarUrl) {
     await c.env.DB.prepare(
-      "UPDATE users SET avatar_url = ?, updated_at = unixepoch() WHERE id = ? AND tenant_id = ?"
-    ).bind(avatarUrl, payload.sub, tenantId).run();
+      "UPDATE users SET avatar_url = ?, updated_at = unixepoch() WHERE kkauth_uid = ? AND tenant_id = ?"
+    ).bind(avatarUrl, Number(payload.sub), tenantId).run();
   }
 
   return c.json({ data: { avatar_url: avatarUrl } });
@@ -877,5 +860,36 @@ authRouter.post('/profile/admin/merchants/:id/review', async (c) => {
 
   return c.json(kkBody);
 });
+
+// GET /api/auth/persona
+authRouter.get('/persona', async (c) => {
+  const authHeader = c.req.header('Authorization');
+  if (!authHeader) throw new HTTPException(401, { message: 'Authorization required' });
+
+  const res = await c.env.KKAUTH.fetch('https://kkauth/me/persona', {
+    headers: { 'Authorization': authHeader },
+  });
+  const json = await res.json<any>();
+  return c.json(json, res.status as any);
+});
+
+// PUT /api/auth/persona
+authRouter.put('/persona', async (c) => {
+  const authHeader = c.req.header('Authorization');
+  if (!authHeader) throw new HTTPException(401, { message: 'Authorization required' });
+
+  const body = await c.req.json().catch(() => ({}));
+  const res = await c.env.KKAUTH.fetch('https://kkauth/me/persona', {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': authHeader,
+    },
+    body: JSON.stringify(body),
+  });
+  const json = await res.json<any>();
+  return c.json(json, res.status as any);
+});
+
 
 

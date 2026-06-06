@@ -18,6 +18,7 @@ export interface User {
   business_status?: 'pending' | 'verified' | 'rejected' | null;
   business_name?: string | null;
   is_admin?: boolean;
+  active_persona?: 'anonymous' | 'personal' | 'business';
 }
 
 export interface Tenant {

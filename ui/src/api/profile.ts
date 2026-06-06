@@ -16,6 +16,11 @@ export async function updateProfile(tenantId: string, updates: ProfileUpdate) {
   return api.put<ApiResponse<{ user: User }>>(`/auth/me?tenant_id=${tenantId}`, updates);
 }
 
+export async function updatePersona(persona: 'anonymous' | 'personal' | 'business') {
+  return api.put<ApiResponse<{ active_persona: string }>>('/auth/persona', { active_persona: persona });
+}
+
+
 export async function updateLocation(updates: LocationUpdate) {
   return api.patch<{ data: { profile: {
     home_zip_location: string | null;

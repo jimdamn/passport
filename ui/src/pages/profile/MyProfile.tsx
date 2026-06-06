@@ -12,6 +12,8 @@ import StatsPanel, { type StatsPanelType } from '../../components/profile/StatsP
 import BadgeStrip, { type Badge } from '../../components/ui/BadgeStrip';
 import QrDrawer from '../../components/ui/QrDrawer';
 import MerchantQrDrawer from '../../components/ui/MerchantQrDrawer';
+import { PersonaSelector } from '../../components/PersonaSelector';
+import { updatePersona } from '../../api/profile';
 
 // Badge definitions mirrored client-side (server is authoritative; this is for /profile self-view)
 const BADGE_DEFS: Badge[] = [
@@ -175,6 +177,23 @@ export default function MyProfile() {
             My QR Code 📱
           </button>
         </div>
+      </div>
+
+      {/* ── Persona Selector card ── */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <h3 style={{ margin: '0 0 12px', fontSize: '1.05rem', fontFamily: 'var(--font-serif)', color: 'var(--green)', fontWeight: 'bold' }}>
+          Active Persona
+        </h3>
+        <PersonaSelector
+          currentPersona={user.active_persona ?? 'anonymous'}
+          businessVerified={user.business_status === 'verified'}
+          onSwitch={async (persona) => {
+            const res = await updatePersona(persona);
+            if (res.data) {
+              updateUser({ active_persona: persona });
+            }
+          }}
+        />
       </div>
 
       {/* ── Stats grid ── */}

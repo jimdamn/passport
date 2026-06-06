@@ -1,5 +1,5 @@
 -- ============================================================
--- KrowdKraft Passport  --  D1 Schema v1.0
+-- KrowdKraft Passport  --  D1 Schema v1.1
 -- ============================================================
 -- PRAGMA journal_mode = WAL;
 -- PRAGMA foreign_keys = ON;
@@ -17,7 +17,8 @@ CREATE TABLE IF NOT EXISTS tenants (
 
 -- Users
 CREATE TABLE IF NOT EXISTS users (
-  id               TEXT PRIMARY KEY,
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  kkauth_uid       INTEGER NOT NULL,
   tenant_id        TEXT NOT NULL REFERENCES tenants(id),
   bd_uid           TEXT,
   email            TEXT NOT NULL,
@@ -30,12 +31,14 @@ CREATE TABLE IF NOT EXISTS users (
   bd_member_since  INTEGER,
   created_at       INTEGER NOT NULL DEFAULT (unixepoch()),
   updated_at       INTEGER NOT NULL DEFAULT (unixepoch()),
-  UNIQUE (tenant_id, email)
+  UNIQUE (kkauth_uid, tenant_id),
+  UNIQUE (email, tenant_id)
 );
 
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_tenants_hostname   ON tenants(hostname);
 CREATE INDEX IF NOT EXISTS idx_users_tenant_email ON users(tenant_id, email);
+CREATE INDEX IF NOT EXISTS idx_users_kkauth_uid   ON users(kkauth_uid);
 
 -- ============================================================
 -- PASSPORT PROJECT SPECIFIC TABLES
@@ -72,7 +75,7 @@ CREATE TABLE IF NOT EXISTS passport_prizes (
 CREATE TABLE IF NOT EXISTS passport_scans (
   id          TEXT PRIMARY KEY,
   plaque_id   TEXT NOT NULL REFERENCES passport_plaques(id),
-  user_id     TEXT,
+  user_id     INTEGER REFERENCES users(kkauth_uid),
   guest_ip    TEXT,
   credits_won INTEGER NOT NULL DEFAULT 0,
   created_at  INTEGER NOT NULL DEFAULT (unixepoch())
@@ -95,3 +98,25 @@ CREATE TABLE IF NOT EXISTS passport_claims (
 CREATE INDEX IF NOT EXISTS idx_scans_cooldown ON passport_scans(user_id, plaque_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_claims_lookup  ON passport_claims(token_hash, status);
 CREATE INDEX IF NOT EXISTS idx_plaques_tenant ON passport_plaques(tenant_id, is_active);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- MIGRATION PATTERN FOR LOCAL AND REMOTE DATA PRESERVATION
+-- (Run these SQL commands sequentially to transition schemas without dropping databases)
+--
+-- 1. Migrate users table structure and copy data:
+--    ALTER TABLE users RENAME TO users_old;
+--    [Create users table as defined above]
+--    INSERT INTO users (kkauth_uid, tenant_id, bd_uid, email, display_name, avatar_url, bio, location, is_active, bd_member_since, created_at, updated_at)
+--    SELECT CAST(id AS INTEGER), tenant_id, bd_uid, email, display_name, avatar_url, bio, location, is_active, bd_member_since, created_at, updated_at FROM users_old;
+--    DROP TABLE users_old;
+--    CREATE INDEX IF NOT EXISTS idx_users_tenant_email ON users(tenant_id, email);
+--    CREATE INDEX IF NOT EXISTS idx_users_kkauth_uid ON users(kkauth_uid);
+--
+-- 2. Migrate passport_scans table structure and copy data:
+--    ALTER TABLE passport_scans RENAME TO scans_old;
+--    [Create passport_scans table as defined above]
+--    INSERT INTO passport_scans (id, plaque_id, user_id, guest_ip, credits_won, created_at)
+--    SELECT id, plaque_id, CAST(user_id AS INTEGER), guest_ip, credits_won, created_at FROM scans_old;
+--    DROP TABLE scans_old;
+--    CREATE INDEX IF NOT EXISTS idx_scans_cooldown ON passport_scans(user_id, plaque_id, created_at);
+-- ─────────────────────────────────────────────────────────────────────────────

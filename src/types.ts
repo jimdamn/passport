@@ -42,6 +42,13 @@ export interface KKAuthProfile {
   display_name?: string | null;
   location?: string | null;
   bio?: string | null;
+  active_persona?: 'anonymous' | 'personal' | 'business';
+  personal_persona?: {
+    facebook_url: string | null;
+    x_handle: string | null;
+    linkedin_url: string | null;
+    website_url: string | null;
+  } | null;
 }
 
 export interface Tenant {
@@ -97,7 +104,8 @@ export interface Category {
 }
 
 export interface User {
-  id: string;          // KKAuth user_id as string
+  id: number;          // local auto-increment PK
+  kkauth_uid: number;  // KKAuth user_id as integer
   tenant_id: string;
   bd_uid: string | null;
   email: string;
@@ -184,6 +192,13 @@ declare module 'hono' {
       business_status: 'pending' | 'verified' | 'rejected' | null;
       business_name: string | null;
       is_admin?: boolean;
+      active_persona: 'anonymous' | 'personal' | 'business';
+      personal_persona: {
+        facebook_url: string | null;
+        x_handle: string | null;
+        linkedin_url: string | null;
+        website_url: string | null;
+      } | null;
     };
   }
 }

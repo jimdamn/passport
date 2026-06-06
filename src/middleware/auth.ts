@@ -50,23 +50,23 @@ export const requireAuth = createMiddleware<{ Bindings: Env }>(async (c, next) =
   }
 
   const tenant = c.get('tenant');
-  const kkAuthUserId = payload.sub;
+  const kkAuthUserId = Number(payload.sub);
 
   // Find or create Exchange user record for this (kkauth_user_id, tenant_id) pair
   let user = await c.env.DB.prepare(
-    'SELECT * FROM users WHERE id = ? AND tenant_id = ?'
+    'SELECT * FROM users WHERE kkauth_uid = ? AND tenant_id = ?'
   ).bind(kkAuthUserId, tenant.id).first<any>();
 
   if (!user) {
     const displayName = payload.name ?? payload.email.split('@')[0];
     await c.env.DB.prepare(`
       INSERT INTO users
-        (id, tenant_id, bd_uid, email, display_name, is_active, created_at, updated_at)
+        (kkauth_uid, tenant_id, bd_uid, email, display_name, is_active, created_at, updated_at)
       VALUES (?, ?, NULL, ?, ?, 1, unixepoch(), unixepoch())
     `).bind(kkAuthUserId, tenant.id, payload.email, displayName).run();
 
     user = await c.env.DB.prepare(
-      'SELECT * FROM users WHERE id = ? AND tenant_id = ?'
+      'SELECT * FROM users WHERE kkauth_uid = ? AND tenant_id = ?'
     ).bind(kkAuthUserId, tenant.id).first<any>();
   }
 
@@ -78,7 +78,7 @@ export const requireAuth = createMiddleware<{ Bindings: Env }>(async (c, next) =
   const isAdmin = adminEmails.split(',').map(e => e.trim().toLowerCase()).includes(payload.email.toLowerCase());
 
   c.set('user', {
-    sub: kkAuthUserId,
+    sub: String(kkAuthUserId),
     email: payload.email,
     name: payload.name,
     bd_member: payload.bd_member,
@@ -92,6 +92,8 @@ export const requireAuth = createMiddleware<{ Bindings: Env }>(async (c, next) =
     business_status: profile.business_status ?? null,
     business_name: profile.business_name ?? null,
     is_admin: isAdmin,
+    active_persona: profile.active_persona ?? 'anonymous',
+    personal_persona: profile.personal_persona ?? null,
   });
 
   await next();
