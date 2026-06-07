@@ -13,7 +13,9 @@ import BadgeStrip, { type Badge } from '../../components/ui/BadgeStrip';
 import QrDrawer from '../../components/ui/QrDrawer';
 import MerchantQrDrawer from '../../components/ui/MerchantQrDrawer';
 import { PersonaSelector } from '../../components/PersonaSelector';
-import { updatePersona } from '../../api/profile';
+import { AnonymousPersonaDrawer } from '../../components/profile/AnonymousPersonaDrawer';
+import { PersonalPersonaDrawer } from '../../components/profile/PersonalPersonaDrawer';
+import { BusinessPersonaDrawer } from '../../components/profile/BusinessPersonaDrawer';
 
 // Badge definitions mirrored client-side (server is authoritative; this is for /profile self-view)
 const BADGE_DEFS: Badge[] = [
@@ -60,6 +62,7 @@ export default function MyProfile() {
   const hasAutoOpened = useRef(false);
   const [qrOpen, setQrOpen] = useState(false);
   const [merchantQrOpen, setMerchantQrOpen] = useState(false);
+  const [personaDrawer, setPersonaDrawer] = useState<'anonymous' | 'personal' | 'business' | null>(null);
 
   const { data: meData, isLoading } = useQuery({
     queryKey: ['me', tenant?.id],
@@ -187,12 +190,7 @@ export default function MyProfile() {
         <PersonaSelector
           currentPersona={user.active_persona ?? 'anonymous'}
           businessVerified={user.business_status === 'verified'}
-          onSwitch={async (persona) => {
-            const res = await updatePersona(persona);
-            if (res.data) {
-              updateUser({ active_persona: persona });
-            }
-          }}
+          onManage={(p) => setPersonaDrawer(p)}
         />
       </div>
 
@@ -208,6 +206,30 @@ export default function MyProfile() {
         open={statsPanel !== null}
         type={statsPanel}
         onClose={() => setStatsPanel(null)}
+      />
+
+      <AnonymousPersonaDrawer
+        open={personaDrawer === 'anonymous'}
+        currentPersona={user.active_persona ?? 'anonymous'}
+        tenantId={tenant!.id}
+        onClose={() => setPersonaDrawer(null)}
+        onSwitch={() => { updateUser({ active_persona: 'anonymous' }); setPersonaDrawer(null); }}
+      />
+      <PersonalPersonaDrawer
+        open={personaDrawer === 'personal'}
+        currentPersona={user.active_persona ?? 'anonymous'}
+        tenantId={tenant!.id}
+        displayName={profile.display_name}
+        onClose={() => setPersonaDrawer(null)}
+        onSwitch={() => { updateUser({ active_persona: 'personal' }); setPersonaDrawer(null); }}
+      />
+      <BusinessPersonaDrawer
+        open={personaDrawer === 'business'}
+        currentPersona={user.active_persona ?? 'anonymous'}
+        businessStatus={user.business_status}
+        businessName={user.business_name}
+        onClose={() => setPersonaDrawer(null)}
+        onSwitch={() => { updateUser({ active_persona: 'business' }); setPersonaDrawer(null); }}
       />
 
       <QrDrawer

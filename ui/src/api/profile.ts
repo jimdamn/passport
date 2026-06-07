@@ -20,6 +20,29 @@ export async function updatePersona(persona: 'anonymous' | 'personal' | 'busines
   return api.put<ApiResponse<{ active_persona: string }>>('/auth/persona', { active_persona: persona });
 }
 
+export async function getPersonalPersona(tenantId: string) {
+  return api.get<{ data: { facebook_url: string|null; x_handle: string|null; linkedin_url: string|null; website_url: string|null } }>(
+    `/auth/personal-persona?tenant_id=${tenantId}`
+  );
+}
+
+export async function updatePersonalPersona(tenantId: string, data: {
+  facebook_url?: string | null;
+  x_handle?: string | null;
+  linkedin_url?: string | null;
+  website_url?: string | null;
+}) {
+  return api.put<{ data: typeof data }>(`/auth/personal-persona?tenant_id=${tenantId}`, data);
+}
+
+export async function getAnonymousPersona(tenantId: string) {
+  return api.get<{ data: { display_name: string } }>(`/auth/anonymous-persona?tenant_id=${tenantId}`);
+}
+
+export async function updateAnonymousPersona(tenantId: string, display_name: string) {
+  return api.put<{ data: { display_name: string } }>(`/auth/anonymous-persona?tenant_id=${tenantId}`, { display_name });
+}
+
 
 export async function updateLocation(updates: LocationUpdate) {
   return api.patch<{ data: { profile: {

@@ -1,42 +1,21 @@
-import { useState } from 'react';
 
 export interface PersonaSelectorProps {
   currentPersona: 'anonymous' | 'personal' | 'business';
   businessVerified: boolean;
-  onSwitch: (persona: 'anonymous' | 'personal' | 'business') => Promise<void>;
+  onManage: (persona: 'anonymous' | 'personal' | 'business') => void;
 }
 
 export function PersonaSelector({
   currentPersona,
   businessVerified,
-  onSwitch,
+  onManage,
 }: PersonaSelectorProps) {
-  const [loadingPersona, setLoadingPersona] = useState<'anonymous' | 'personal' | 'business' | null>(null);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  const handleSwitch = async (persona: 'anonymous' | 'personal' | 'business') => {
-    if (persona === currentPersona) return;
-    if (persona === 'business' && !businessVerified) return;
-    if (loadingPersona) return;
-
-    setLoadingPersona(persona);
-    setErrorMsg(null);
-
-    try {
-      await onSwitch(persona);
-    } catch (err: any) {
-      setErrorMsg(err?.message || 'Failed to switch persona');
-    } finally {
-      setLoadingPersona(null);
-    }
-  };
-
   const options = [
     {
       type: 'anonymous' as const,
       icon: '👤',
       label: 'Anonymous',
-      sub: 'Posts without your name',
+      sub: 'Posts without revealing your name',
       disabled: false,
     },
     {
@@ -50,7 +29,7 @@ export function PersonaSelector({
       type: 'business' as const,
       icon: '🏪',
       label: 'Business',
-      sub: 'Posts as your business',
+      sub: 'Posts as your business name',
       disabled: !businessVerified,
       disabledText: 'Requires verified business',
     },
@@ -82,11 +61,11 @@ export function PersonaSelector({
           min-height: 120px;
           justify-content: center;
           box-sizing: border-box;
+          position: relative;
         }
         .persona-card.active {
           background-color: var(--dark, #1e3320);
           color: var(--amber, #e8b84b);
-          cursor: default;
         }
         .persona-card.inactive {
           background-color: var(--offwhite, #f4f7f4);
@@ -123,20 +102,6 @@ export function PersonaSelector({
           margin-top: 6px;
           font-weight: 500;
         }
-        .persona-status-text {
-          font-size: 0.85rem;
-          margin-top: 12px;
-          text-align: center;
-          min-height: 1.2rem;
-        }
-        .persona-loading-text {
-          color: var(--forest, #507850);
-          font-style: italic;
-        }
-        .persona-error-text {
-          color: #b94a4a;
-          font-weight: 500;
-        }
         @media (max-width: 640px) {
           .persona-selector-grid {
             grid-template-columns: 1fr;
@@ -167,7 +132,6 @@ export function PersonaSelector({
       <div className="persona-selector-grid">
         {options.map((opt) => {
           const isActive = currentPersona === opt.type;
-          const isCurrentlyLoading = loadingPersona === opt.type;
           const cardClass = isActive
             ? 'persona-card active'
             : opt.disabled
@@ -178,29 +142,32 @@ export function PersonaSelector({
             <div
               key={opt.type}
               className={`${cardClass} ${opt.disabled ? 'disabled' : ''}`}
-              onClick={() => handleSwitch(opt.type)}
+              onClick={() => {
+                if (opt.disabled) return;
+                onManage(opt.type);
+              }}
             >
+              {isActive && (
+                <span style={{
+                  position: 'absolute', top: 6, right: 6,
+                  background: 'var(--amber)', color: 'var(--white)',
+                  fontFamily: 'var(--font-sans)', fontSize: '0.6rem', fontWeight: 700,
+                  textTransform: 'uppercase', letterSpacing: '0.05em',
+                  padding: '2px 6px', borderRadius: 'var(--r-pill)',
+                }}>Active</span>
+              )}
               <div className="persona-icon">{opt.icon}</div>
               <div className="persona-details">
                 <div className="persona-label">
-                  {opt.label} {isCurrentlyLoading && '...'}
+                  {opt.label}
                 </div>
-                <div className="persona-sub">{opt.sub}</div>
-                {opt.disabled && opt.disabledText && (
-                  <div className="persona-disabled-text">{opt.disabledText}</div>
-                )}
+                <div className="persona-sub">
+                  {opt.disabled && opt.disabledText ? opt.disabledText : opt.sub}
+                </div>
               </div>
             </div>
           );
         })}
-      </div>
-      <div className="persona-status-text">
-        {loadingPersona && (
-          <span className="persona-loading-text">Switching...</span>
-        )}
-        {errorMsg && (
-          <span className="persona-error-text">{errorMsg}</span>
-        )}
       </div>
     </div>
   );
