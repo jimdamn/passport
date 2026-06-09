@@ -7,6 +7,7 @@ import { resolveTenant } from '../../src/middleware/tenant';
 import { requireAuth } from '../../src/middleware/auth';
 import { authRouter } from '../../src/routers/auth';
 import { scanPlaque, registerClaim, getStamps } from '../../src/handlers/passport';
+import { getBalance, getBalanceOnly } from '../../src/handlers/credits';
 
 import { logger } from '../../src/lib/logger';
 
@@ -67,6 +68,8 @@ tenantApp.use('*', resolveTenant);
 tenantApp.use('*', requireAuth);
 
 tenantApp.get('/passport/stamps', getStamps);
+tenantApp.get('/credits/balance', getBalance);
+tenantApp.get('/credits/balance-only', getBalanceOnly);
 
 // Public Passport Scan & Claims APIs (Tenant-scoped, Guest-friendly)
 app.post('/api/t/:tenant/passport/scan', resolveTenant, scanPlaque);
