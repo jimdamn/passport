@@ -895,5 +895,66 @@ authRouter.put('/persona', async (c) => {
   return c.json(json, res.status as any);
 });
 
+// GET /api/auth/personal-persona
+authRouter.get('/personal-persona', async (c) => {
+  const authHeader = c.req.header('Authorization');
+  if (!authHeader) throw new HTTPException(401, { message: 'Authorization required' });
+
+  const res = await c.env.KKAUTH.fetch('https://kkauth/me/personal-persona', {
+    headers: { 'Authorization': authHeader },
+  });
+  const json = await res.json<any>();
+  return c.json(json, res.status as any);
+});
+
+// PUT /api/auth/personal-persona
+authRouter.put('/personal-persona', async (c) => {
+  const authHeader = c.req.header('Authorization');
+  if (!authHeader) throw new HTTPException(401, { message: 'Authorization required' });
+
+  const body = await c.req.json().catch(() => ({}));
+  const res = await c.env.KKAUTH.fetch('https://kkauth/me/personal-persona', {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': authHeader,
+    },
+    body: JSON.stringify(body),
+  });
+  const json = await res.json<any>();
+  return c.json(json, res.status as any);
+});
+
+// GET /api/auth/anonymous-persona
+authRouter.get('/anonymous-persona', async (c) => {
+  const authHeader = c.req.header('Authorization');
+  if (!authHeader) throw new HTTPException(401, { message: 'Authorization required' });
+
+  const res = await c.env.KKAUTH.fetch('https://kkauth/me/anonymous-persona', {
+    headers: { 'Authorization': authHeader },
+  });
+  const json = await res.json<any>();
+  return c.json(json, res.status as any);
+});
+
+// PUT /api/auth/anonymous-persona
+authRouter.put('/anonymous-persona', async (c) => {
+  const authHeader = c.req.header('Authorization');
+  if (!authHeader) throw new HTTPException(401, { message: 'Authorization required' });
+
+  const body = await c.req.json().catch(() => ({}));
+  const res = await c.env.KKAUTH.fetch('https://kkauth/me/anonymous-persona', {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': authHeader,
+    },
+    body: JSON.stringify(body),
+  });
+  const json = await res.json<any>();
+  return c.json(json, res.status as any);
+});
+
+
 
 
