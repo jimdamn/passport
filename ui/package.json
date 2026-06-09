@@ -13,7 +13,8 @@
     "lucide-react": "^0.427.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "^6.26.1"
+    "react-router-dom": "^6.26.1",
+    "kk-shared-ui": "file:../../kk-shared-ui"
   },
   "devDependencies": {
     "@types/react": "^18.3.3",
