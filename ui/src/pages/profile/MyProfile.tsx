@@ -12,10 +12,9 @@ import StatsPanel, { type StatsPanelType } from '../../components/profile/StatsP
 import BadgeStrip, { type Badge } from '../../components/ui/BadgeStrip';
 import QrDrawer from '../../components/ui/QrDrawer';
 import MerchantQrDrawer from '../../components/ui/MerchantQrDrawer';
-import { PersonaSelector } from '../../components/PersonaSelector';
-import { AnonymousPersonaDrawer } from '../../components/profile/AnonymousPersonaDrawer';
-import { PersonalPersonaDrawer } from '../../components/profile/PersonalPersonaDrawer';
-import { BusinessPersonaDrawer } from '../../components/profile/BusinessPersonaDrawer';
+import { PersonaSelector, AnonymousPersonaDrawer, PersonalPersonaDrawer, BusinessPersonaDrawer } from 'kk-shared-ui';
+import { getPersonalPersona, updatePersonalPersona, getAnonymousPersona, updateAnonymousPersona, updatePersona } from '../../api/profile';
+
 
 // Badge definitions mirrored client-side (server is authoritative; this is for /profile self-view)
 const BADGE_DEFS: Badge[] = [
@@ -211,17 +210,21 @@ export default function MyProfile() {
       <AnonymousPersonaDrawer
         open={personaDrawer === 'anonymous'}
         currentPersona={user.active_persona ?? 'anonymous'}
-        tenantId={tenant!.id}
         onClose={() => setPersonaDrawer(null)}
-        onSwitch={() => { updateUser({ active_persona: 'anonymous' }); setPersonaDrawer(null); }}
+        onSwitchSuccess={() => { updateUser({ active_persona: 'anonymous' }); setPersonaDrawer(null); }}
+        getAnonymousPersona={() => getAnonymousPersona(tenant!.id)}
+        updateAnonymousPersona={(name) => updateAnonymousPersona(tenant!.id, name)}
+        updatePersona={updatePersona}
       />
       <PersonalPersonaDrawer
         open={personaDrawer === 'personal'}
         currentPersona={user.active_persona ?? 'anonymous'}
-        tenantId={tenant!.id}
         displayName={profile.display_name}
         onClose={() => setPersonaDrawer(null)}
-        onSwitch={() => { updateUser({ active_persona: 'personal' }); setPersonaDrawer(null); }}
+        onSwitchSuccess={() => { updateUser({ active_persona: 'personal' }); setPersonaDrawer(null); }}
+        getPersonalPersona={() => getPersonalPersona(tenant!.id)}
+        updatePersonalPersona={(data) => updatePersonalPersona(tenant!.id, data)}
+        updatePersona={updatePersona}
       />
       <BusinessPersonaDrawer
         open={personaDrawer === 'business'}
@@ -229,7 +232,9 @@ export default function MyProfile() {
         businessStatus={user.business_status}
         businessName={user.business_name}
         onClose={() => setPersonaDrawer(null)}
-        onSwitch={() => { updateUser({ active_persona: 'business' }); setPersonaDrawer(null); }}
+        onSwitchSuccess={() => { updateUser({ active_persona: 'business' }); setPersonaDrawer(null); }}
+        updatePersona={updatePersona}
+        onApplyMerchant={() => { navigate('/profile/apply-merchant'); setPersonaDrawer(null); }}
       />
 
       <QrDrawer
