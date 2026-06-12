@@ -17,6 +17,7 @@ import AdminPlaques from './pages/profile/AdminPlaques';
 import AdminPrizes from './pages/profile/AdminPrizes';
 
 import PublicProfile from './pages/profile/PublicProfile';
+import RedeemClaim from './pages/RedeemClaim';
 import Help from './pages/Help';
 import EmbedDrawer from './pages/EmbedDrawer';
 import Explore from './pages/Explore';
@@ -48,6 +49,7 @@ export default function App() {
         <Route path="/profile/admin/test-plaque" element={<AdminTestPlaque />} />
         <Route path="/profile/admin/plaques" element={<AdminPlaques />} />
         <Route path="/profile/admin/prizes" element={<AdminPrizes />} />
+        <Route path="/redeem" element={<RedeemClaim />} />
         <Route path="/members/:id" element={<PublicProfile />} />
         <Route path="/help" element={<Help />} />
         <Route path="*" element={<Navigate to="/" replace />} />

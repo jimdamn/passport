@@ -284,6 +284,9 @@ export default function MyProfile() {
             <Link to="/profile/admin/prizes" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
               Prize Pools
             </Link>
+            <Link to="/redeem" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
+              Redeem a Claim
+            </Link>
             <Link to="/profile/admin/test-plaque" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
               Test Plaque
             </Link>

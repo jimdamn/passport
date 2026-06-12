@@ -14,6 +14,7 @@ import {
   listPlaques, createPlaque, updatePlaque, deletePlaque,
   listPrizes, createPrize, updatePrize, deletePrize,
 } from '../../src/handlers/admin';
+import { lookupClaim, confirmClaim } from '../../src/handlers/redeem';
 
 import { logger } from '../../src/lib/logger';
 
@@ -82,6 +83,8 @@ tenantApp.get('/admin/prizes', listPrizes);
 tenantApp.post('/admin/prizes', createPrize);
 tenantApp.put('/admin/prizes/:id', updatePrize);
 tenantApp.delete('/admin/prizes/:id', deletePrize);
+tenantApp.post('/redeem/lookup', lookupClaim);
+tenantApp.post('/redeem/confirm', confirmClaim);
 
 // Public Passport Scan & Claims APIs (Tenant-scoped, Guest-friendly)
 app.post('/api/t/:tenant/passport/scan', resolveTenant, scanPlaque);
