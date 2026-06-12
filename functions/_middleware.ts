@@ -254,7 +254,10 @@ function geoGatePage(brandName: string): Response {
     </div>`;
   return new Response(pageShell(brandName, body), {
     status: 200,
-    headers: { 'Content-Type': 'text/html;charset=UTF-8' },
+    headers: {
+      'Content-Type': 'text/html;charset=UTF-8',
+      'Cache-Control': 'no-cache',
+    },
   });
 }
 
@@ -299,6 +302,21 @@ export const onRequest: PagesFunction<Env & { GEO_TOKEN_SECRET: string }> = asyn
   // Valid trust token (or API call) — proceed to the actual response
   const response = await context.next();
 
+  // Hashed assets from an old deployment must 404, never fall back to the SPA
+  // shell. Serving HTML as a .js response (with nosniff) blocks the module and
+  // blanks the app for any browser holding a stale shell; a clean 404 lets the
+  // client recover as soon as it revalidates the shell.
+  if (isStaticAsset || isSiteAsset) {
+    const assetType = response.headers.get('content-type') ?? '';
+    if (assetType.includes('text/html')) {
+      return new Response('Not found', {
+        status: 404,
+        headers: { 'Cache-Control': 'no-store' },
+      });
+    }
+    return response;
+  }
+
   if (verifiedPayload && verifiedPayload.type === 'local_verified') {
     const secret = context.env.GEO_TOKEN_SECRET;
     const cookieDomain = context.env.COOKIE_DOMAIN || '.lakeandlocals.com';
@@ -309,6 +327,11 @@ export const onRequest: PagesFunction<Env & { GEO_TOKEN_SECRET: string }> = asyn
   // Only rewrite HTML (the SPA shell)
   const contentType = response.headers.get('content-type') ?? '';
   if (!contentType.includes('text/html')) return response;
+
+  // The shell references hashed asset names that change on every deploy —
+  // browsers must revalidate it each visit or they request dead assets and
+  // the app goes blank.
+  response.headers.set('Cache-Control', 'no-cache');
 
   // Rewrite OG / Twitter meta tags with tenant branding
   const { brandName, siteUrl } = await resolveTenantMeta(hostname, context.env);
