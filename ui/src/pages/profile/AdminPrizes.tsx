@@ -344,6 +344,11 @@ export default function AdminPrizes() {
                           <Timer size={10} /> Paced
                         </span>
                       )}
+                      {pr.merchant_id && (
+                        <span style={{ fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', padding: '2px 6px', borderRadius: 'var(--r-sm)', background: 'rgba(80,120,80,0.12)', color: 'var(--sage, #507850)' }}>
+                          Merchant{!isActive ? ' — needs review' : ''}
+                        </span>
+                      )}
                       {!isActive && (
                         <span style={{ fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', padding: '2px 6px', borderRadius: 'var(--r-sm)', background: 'rgba(0,0,0,0.06)', color: 'var(--muted)' }}>
                           Inactive

@@ -76,6 +76,7 @@ export interface AdminPrize {
   is_active: number;
   plaque_id: string | null;
   plaque_name: string | null;
+  merchant_id: string | null;
   is_paced: number;
   drops_total: number;
   drops_won: number;

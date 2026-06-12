@@ -328,13 +328,18 @@ export default function MyProfile() {
           <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--muted)', fontFamily: 'var(--font-sans)', lineHeight: 1.45 }}>
             Your business <strong>{user.business_name}</strong> is live! It is fully integrated with the Explore network directory.
           </p>
-          <button
-            onClick={() => setMerchantQrOpen(true)}
-            className="btn btn-green btn-sm"
-            style={{ marginTop: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}
-          >
-            <span>📱</span> Display Check-in QR Code
-          </button>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
+            <Link to="/merchant" className="btn btn-amber btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, textDecoration: 'none' }}>
+              <span>🎁</span> Merchant Dashboard
+            </Link>
+            <button
+              onClick={() => setMerchantQrOpen(true)}
+              className="btn btn-green btn-sm"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            >
+              <span>📱</span> Display Check-in QR Code
+            </button>
+          </div>
         </div>
       )}
 

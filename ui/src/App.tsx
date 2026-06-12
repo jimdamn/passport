@@ -18,6 +18,7 @@ import AdminPrizes from './pages/profile/AdminPrizes';
 
 import PublicProfile from './pages/profile/PublicProfile';
 import RedeemClaim from './pages/RedeemClaim';
+import MerchantDashboard from './pages/MerchantDashboard';
 import Help from './pages/Help';
 import EmbedDrawer from './pages/EmbedDrawer';
 import Explore from './pages/Explore';
@@ -50,6 +51,7 @@ export default function App() {
         <Route path="/profile/admin/plaques" element={<AdminPlaques />} />
         <Route path="/profile/admin/prizes" element={<AdminPrizes />} />
         <Route path="/redeem" element={<RedeemClaim />} />
+        <Route path="/merchant" element={<MerchantDashboard />} />
         <Route path="/members/:id" element={<PublicProfile />} />
         <Route path="/help" element={<Help />} />
         <Route path="*" element={<Navigate to="/" replace />} />
