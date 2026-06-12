@@ -4,7 +4,7 @@ import {
   getMerchantDeals, createMerchantDeal, updateMerchantDeal, deleteMerchantDeal,
   CLAIM_WINDOW_PRESETS, claimWindowLabel, type MerchantDeal, type DealInput,
 } from '../../api/deals';
-import { Plus, Pencil, Trash2, Flame, BadgePercent } from 'lucide-react';
+import { Plus, Pencil, Trash2, Flame, Tag } from 'lucide-react';
 import { Alert } from '../ui/Alert';
 
 interface FormState {
@@ -140,7 +140,7 @@ export default function DealsManager() {
     <div style={{ marginBottom: 28 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
         <h2 style={{ margin: 0, fontSize: '1.1rem', fontFamily: 'var(--font-serif)', color: 'var(--green)', display: 'flex', alignItems: 'center', gap: 6 }}>
-          <BadgePercent size={17} /> My Kredit Deals
+          <Tag size={17} /> My Kredit Deals
         </h2>
         <button onClick={openCreate} className="btn btn-amber btn-sm" style={{ display: 'flex', alignItems: 'center', gap: 6, minHeight: 34 }}>
           <Plus size={14} /> Add Deal

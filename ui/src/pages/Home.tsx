@@ -3,8 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTenant } from '../context/TenantContext';
 import { getDeals, claimWindowLabel, type Deal } from '../api/deals';
-import { getBalanceOnly } from '../api/credits';
-import { Map, BadgePercent, Award, Coins, Flame, Store } from 'lucide-react';
+import { Map, Tag, Award, Flame, Store } from 'lucide-react';
 
 export default function Home() {
   const { user } = useAuth();
@@ -19,20 +18,12 @@ export default function Home() {
     : null;
 
   const [deals, setDeals] = useState<Deal[]>([]);
-  const [balance, setBalance] = useState<number | null>(null);
 
   useEffect(() => {
     getDeals(tenantSlug)
       .then(res => setDeals(res.data || []))
       .catch(() => { /* home still renders without deals */ });
   }, [tenantSlug]);
-
-  useEffect(() => {
-    if (!user) return;
-    getBalanceOnly(tenantSlug)
-      .then(res => setBalance(res.data.balance))
-      .catch(() => { /* balance pill simply stays hidden */ });
-  }, [user, tenantSlug]);
 
   useEffect(() => {
     // Load and init Passport SDK dynamically
@@ -85,7 +76,7 @@ export default function Home() {
       to: '/explore',
     },
     {
-      icon: <BadgePercent size={28} style={{ color: 'var(--amber)' }} />,
+      icon: <Tag size={28} style={{ color: 'var(--amber)' }} />,
       title: 'Deals',
       blurb: deals.length > 0
         ? `${deals.length} live deal${deals.length === 1 ? '' : 's'} — spend your kredits at local businesses.`
@@ -102,17 +93,9 @@ export default function Home() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-        <h1 className="page-title" style={{ marginBottom: 0 }}>
-          {user ? `Welcome back, ${user.display_name.split(' ')[0]}.` : `${tenant?.config.brand_name ?? 'Lake & Locals'} Passport`}
-        </h1>
-        {user && balance !== null && (
-          <span className="credits-pill" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.85rem', fontWeight: 700 }}>
-            <Coins size={15} /> {balance} kredits
-          </span>
-        )}
-      </div>
-      <div style={{ marginBottom: 20 }} />
+      <h1 className="page-title">
+        {user ? `Welcome back, ${user.display_name.split(' ')[0]}.` : `${tenant?.config.brand_name ?? 'Lake & Locals'} Passport`}
+      </h1>
 
       {!user && (
         <div className="card" style={{ marginBottom: 24 }}>

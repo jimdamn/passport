@@ -6,7 +6,7 @@ import {
   getAdminDeals, adminUpdateDeal, adminDeleteDeal, claimWindowLabel,
   type MerchantDeal,
 } from '../../api/deals';
-import { ArrowLeft, Flame, Trash2, BadgePercent, CheckCircle, PauseCircle, RefreshCw, Store } from 'lucide-react';
+import { ArrowLeft, Flame, Trash2, Tag, CheckCircle, PauseCircle, RefreshCw, Store } from 'lucide-react';
 import { Alert } from '../../components/ui/Alert';
 import { Spinner } from '../../components/ui/Spinner';
 
@@ -141,7 +141,7 @@ export default function AdminDeals() {
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, flexWrap: 'wrap', gap: 12 }}>
         <h1 style={{ margin: 0, fontSize: '1.5rem', fontFamily: 'var(--font-serif)', color: 'var(--green)', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <BadgePercent size={22} /> Deal Review
+          <Tag size={22} /> Deal Review
         </h1>
         <button onClick={fetchDeals} className="btn btn-secondary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: 6, minHeight: 34 }}>
           <RefreshCw size={14} /> Refresh

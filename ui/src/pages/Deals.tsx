@@ -7,7 +7,7 @@ import {
   type Deal, type MyDealClaim, type DealPurchase,
 } from '../api/deals';
 import { getBalanceOnly } from '../api/credits';
-import { Flame, Clock, Coins, Store, CheckCircle, XCircle, RotateCw, Ticket, BadgePercent } from 'lucide-react';
+import { Flame, Clock, Coins, Store, CheckCircle, XCircle, RotateCw, Ticket, Tag } from 'lucide-react';
 import { Alert } from '../components/ui/Alert';
 import { Spinner } from '../components/ui/Spinner';
 
@@ -175,7 +175,7 @@ export default function Deals() {
     <div className="main-content" style={{ maxWidth: 800, margin: '0 auto', paddingTop: 20, paddingBottom: 80 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, flexWrap: 'wrap', gap: 12 }}>
         <h1 style={{ margin: 0, fontSize: '1.5rem', fontFamily: 'var(--font-serif)', color: 'var(--green)', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <BadgePercent size={22} /> Deals
+          <Tag size={22} /> Deals
         </h1>
         {user && balance !== null && (
           <span className="credits-pill" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.85rem', fontWeight: 700 }}>
@@ -206,7 +206,7 @@ export default function Deals() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {deals.length === 0 ? (
             <div className="card" style={{ padding: 32, textAlign: 'center', background: 'var(--white)' }}>
-              <BadgePercent size={28} style={{ color: 'var(--amber)', marginBottom: 8 }} />
+              <Tag size={28} style={{ color: 'var(--amber)', marginBottom: 8 }} />
               <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.85rem' }}>
                 No deals available right now — check back soon. Local businesses post
                 new deals here, and hot deals can appear any time.
