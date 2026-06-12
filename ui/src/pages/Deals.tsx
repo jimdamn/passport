@@ -7,7 +7,7 @@ import {
   type Deal, type MyDealClaim, type DealPurchase,
 } from '../api/deals';
 import { getBalanceOnly } from '../api/credits';
-import { Flame, Clock, Coins, Store, CheckCircle, XCircle, RotateCw, Ticket, Tag } from 'lucide-react';
+import { Flame, Clock, Store, CheckCircle, XCircle, RotateCw, Ticket, Tag } from 'lucide-react';
 import { Alert } from '../components/ui/Alert';
 import { Spinner } from '../components/ui/Spinner';
 
@@ -178,8 +178,9 @@ export default function Deals() {
           <Tag size={22} /> Deals
         </h1>
         {user && balance !== null && (
-          <span className="credits-pill" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.85rem', fontWeight: 700 }}>
-            <Coins size={15} /> {balance} kredits
+          <span className="topbar-credits" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <span>💰</span>
+            <span>{balance.toLocaleString()}</span>
           </span>
         )}
       </div>
