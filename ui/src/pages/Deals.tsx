@@ -7,7 +7,7 @@ import {
   type Deal, type MyDealClaim, type DealPurchase,
 } from '../api/deals';
 import { getBalanceOnly } from '../api/credits';
-import { Flame, Clock, Store, CheckCircle, XCircle, RotateCw, Ticket, Tag } from 'lucide-react';
+import { Flame, Clock, Store, CheckCircle, XCircle, RotateCw, Ticket, Tag, Tags } from 'lucide-react';
 import { Alert } from '../components/ui/Alert';
 import { Spinner } from '../components/ui/Spinner';
 
@@ -283,7 +283,7 @@ export default function Deals() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {mine.length === 0 ? (
             <div className="card" style={{ padding: 32, textAlign: 'center', background: 'var(--white)' }}>
-              <Ticket size={28} style={{ color: 'var(--amber)', marginBottom: 8 }} />
+              <Tags size={28} style={{ color: 'var(--amber)', marginBottom: 8 }} />
               <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.85rem' }}>
                 You haven't claimed any deals yet. Grab one from the marketplace —
                 your kredits are automatically returned if you don't use it in time.
