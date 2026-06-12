@@ -113,7 +113,11 @@ CREATE INDEX IF NOT EXISTS idx_plaques_tenant ON passport_plaques(tenant_id, is_
 --    CREATE INDEX IF NOT EXISTS idx_users_tenant_email ON users(tenant_id, email);
 --    CREATE INDEX IF NOT EXISTS idx_users_kkauth_uid ON users(kkauth_uid);
 --
--- 2. Migrate passport_scans table structure and copy data:
+-- 2. If the database was created before raw_code was removed from passport_claims
+--    (claim codes must never be stored in plaintext), run:
+--    ALTER TABLE passport_claims DROP COLUMN raw_code;
+--
+-- 3. Migrate passport_scans table structure and copy data:
 --    ALTER TABLE passport_scans RENAME TO scans_old;
 --    [Create passport_scans table as defined above]
 --    INSERT INTO passport_scans (id, plaque_id, user_id, guest_ip, credits_won, created_at)

@@ -39,5 +39,6 @@ COOKIE_DOMAIN = ".lakeandlocals.com"
 # KKAUTH_APP_KEY   — API key registered in KKAuth apps table for this Worker (also used as X-App-Key for KKCredits)
 # KKGAME_APP_KEY   — API key registered in KKAuth apps table for this Worker (used as X-App-Key for KKGame)
 # QR_SIGNING_SECRET — HMAC-SHA256 signing secret for standardized QR payloads
+# RESEND_API_KEY   — Resend API key for guest claim-code emails (optional; claim emails skip if unset)
 
 

@@ -12,6 +12,7 @@ export interface Env {
   ENVIRONMENT: string;
   ADMIN_EMAILS?: string;
   QR_SIGNING_SECRET: string;
+  RESEND_API_KEY?: string;   // Resend API key for guest claim emails (optional — emails skip silently if unset)
 }
 
 

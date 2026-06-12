@@ -4,6 +4,7 @@ import type { Env, KKAuthPayload, KKAuthProfile } from '../types';
 import { nanoid } from 'nanoid';
 import { hmacHex, timingSafeEqual } from '../lib/hmac';
 import { recordGameAction } from '../lib/game';
+import { sendClaimEmail } from '../lib/email';
 
 type AppContext = Context<{ Bindings: Env }>;
 
@@ -65,27 +66,35 @@ export async function scanPlaque(c: AppContext) {
   }
 
   // 2. Geofence & Location Validation (Pillar 1: Geofenced Shield)
-  // We perform soft checks against incoming device lat/lon if provided,
-  // and we can cross-reference with Cloudflare Edge geolocation headers (cf.latitude / cf.longitude)
-  let locationVerified = true;
-  let distanceMeters = 0;
-
-  if (lat !== undefined && lon !== undefined) {
-    const distKm = getDistance(lat, lon, plaque.lat, plaque.lon);
-    distanceMeters = distKm * 1000;
-    // Soft gate: 500 meters from registered plaque location
-    if (distanceMeters > 500) {
-      locationVerified = false;
-    }
+  // Device coordinates are required — the ScanPortal UI always sends them, so a
+  // request without coords is a hand-crafted call trying to skip the geofence.
+  if (
+    typeof lat !== 'number' || typeof lon !== 'number' ||
+    !isFinite(lat) || !isFinite(lon) ||
+    Math.abs(lat) > 90 || Math.abs(lon) > 180
+  ) {
+    throw new HTTPException(400, {
+      message: 'Location verification is required to collect stamps. Please enable location access and re-scan.',
+    });
   }
 
-  // Soft edge geolocation fallbacks — cf.latitude/longitude are strings
+  let locationVerified = true;
+
+  // Primary gate: device GPS must be within 500 meters of the plaque
+  const distanceMeters = getDistance(lat, lon, plaque.lat, plaque.lon) * 1000;
+  if (distanceMeters > 500) {
+    locationVerified = false;
+  }
+
+  // Secondary cross-check: Cloudflare edge geolocation (cf.latitude/longitude
+  // are strings). IP geolocation on mobile carriers can be off by 100+ km, so
+  // this only catches clearly-remote spoofing — the 500m device gate above is
+  // the real check.
   const cfLat = parseFloat(String(c.req.raw.cf?.latitude ?? ''));
   const cfLon = parseFloat(String(c.req.raw.cf?.longitude ?? ''));
   if (!isNaN(cfLat) && !isNaN(cfLon)) {
     const edgeDistKm = getDistance(cfLat, cfLon, plaque.lat, plaque.lon);
-    // If edge location is thousands of miles away, flags as not verified (IP spoofing/scanning from home)
-    if (edgeDistKm > 100) {
+    if (edgeDistKm > 300) {
       locationVerified = false;
     }
   }
@@ -348,25 +357,25 @@ export async function registerClaim(c: AppContext) {
     WHERE token_hash = ?
   `).bind(contact_info.trim(), tokenHash).run();
 
-  // Send an automated email with Resend API (optional platform notification flow)
-  // Inside KKAuth proxy we'd send SMS or direct email.
+  // Email the guest their claim code directly via Resend (non-fatal on failure —
+  // the code was already shown on screen at scan time).
   try {
-    // If it looks like an email, we could trigger a Resend transaction
-    if (contact_info.includes('@')) {
-      const verifyLink = `https://${tenant.hostname}/auth/login?claim=${claim_code.trim()}`;
-      await c.env.KKAUTH.fetch(new Request('https://kkauth/internal/send-claim-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-App-Key': c.env.KKAUTH_APP_KEY },
-        body: JSON.stringify({
-          email: contact_info.trim(),
-          prize_name: 'Your Passport Reward',
-          verify_link: verifyLink,
-        }),
-      }));
+    if (contact_info.includes('@') && c.env.RESEND_API_KEY) {
+      const prize = await c.env.DB.prepare(
+        'SELECT name FROM passport_prizes WHERE id = ?'
+      ).bind(claim.prize_id).first<{ name: string }>();
+
+      await sendClaimEmail({
+        to: contact_info.trim(),
+        claimCode: claim_code.trim(),
+        prizeName: prize?.name ?? 'Your Passport Reward',
+        brandName: tenant.config.brand_name || 'Lake & Locals',
+        loginUrl: `https://${tenant.hostname}/auth/login`,
+        resendApiKey: c.env.RESEND_API_KEY,
+      });
     }
   } catch (err) {
-    // Non-fatal, registration still succeeded
-    console.error('[registerClaim] Verification link notify failed:', err);
+    console.error('[registerClaim] Claim email failed:', err);
   }
 
   return c.json({
