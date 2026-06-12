@@ -114,6 +114,7 @@ CREATE TABLE IF NOT EXISTS passport_claims (
   tenant_id    TEXT NOT NULL REFERENCES tenants(id),
   plaque_id    TEXT NOT NULL REFERENCES passport_plaques(id),
   prize_id     TEXT NOT NULL REFERENCES passport_prizes(id),
+  scan_id      TEXT,
   contact_info TEXT,
   status       TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'claimed', 'expired')),
   expires_at   INTEGER NOT NULL,
@@ -150,6 +151,9 @@ CREATE INDEX IF NOT EXISTS idx_plaques_tenant ON passport_plaques(tenant_id, is_
 --    ALTER TABLE passport_prizes ADD COLUMN merchant_id TEXT;
 --    ALTER TABLE passport_prizes ADD COLUMN is_paced INTEGER NOT NULL DEFAULT 0;
 --    [Create passport_prize_drops table + idx_drops_pending as defined above]
+--
+-- 2c. If the database predates claim deposits (June 2026), run:
+--    ALTER TABLE passport_claims ADD COLUMN scan_id TEXT;
 --
 -- 3. Migrate passport_scans table structure and copy data:
 --    ALTER TABLE passport_scans RENAME TO scans_old;

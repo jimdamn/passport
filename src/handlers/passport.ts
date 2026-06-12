@@ -300,9 +300,9 @@ export async function scanPlaque(c: AppContext) {
       memberClaimCode = `LL-${nanoid(8).toUpperCase()}`;
       const memberTokenHash = await sha256(memberClaimCode);
       await c.env.DB.prepare(`
-        INSERT INTO passport_claims (token_hash, tenant_id, plaque_id, prize_id, contact_info, status, expires_at, created_at)
-        VALUES (?, ?, ?, ?, ?, 'pending', unixepoch() + ?, unixepoch())
-      `).bind(memberTokenHash, tenant.id, plaque_id, rolledPrize.id, userEmail, 7 * 86400).run();
+        INSERT INTO passport_claims (token_hash, tenant_id, plaque_id, prize_id, scan_id, contact_info, status, expires_at, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, 'pending', unixepoch() + ?, unixepoch())
+      `).bind(memberTokenHash, tenant.id, plaque_id, rolledPrize.id, scanId, userEmail, 7 * 86400).run();
     }
 
     // Record game action in KKGame via recordGameAction helper
@@ -355,9 +355,9 @@ export async function scanPlaque(c: AppContext) {
     // Only the hash is stored — keeping the raw code in the same row would
     // defeat the point of hashing it.
     await c.env.DB.prepare(`
-      INSERT INTO passport_claims (token_hash, tenant_id, plaque_id, prize_id, status, expires_at, created_at)
-      VALUES (?, ?, ?, ?, 'pending', unixepoch() + ?, unixepoch())
-    `).bind(tokenHash, tenant.id, plaque_id, rolledPrize.id, CLAIM_TTL_SECONDS).run();
+      INSERT INTO passport_claims (token_hash, tenant_id, plaque_id, prize_id, scan_id, status, expires_at, created_at)
+      VALUES (?, ?, ?, ?, ?, 'pending', unixepoch() + ?, unixepoch())
+    `).bind(tokenHash, tenant.id, plaque_id, rolledPrize.id, scanId, CLAIM_TTL_SECONDS).run();
 
     // Log the guest scan log
     await c.env.DB.prepare(`
@@ -403,7 +403,7 @@ export async function registerClaim(c: AppContext) {
     throw new HTTPException(400, { message: 'claim_code and contact_info are required.' });
   }
 
-  const tokenHash = await sha256(claim_code.trim());
+  const tokenHash = await sha256(claim_code.trim().toUpperCase());
 
   // Find pending claim
   const claim = await c.env.DB.prepare(`
@@ -443,10 +443,108 @@ export async function registerClaim(c: AppContext) {
     console.error('[registerClaim] Claim email failed:', err);
   }
 
+  const emailed = contact_info.includes('@');
   return c.json({
     data: {
       registered: true,
-      message: `Success! We've locked in your win. An OTP claim confirmation has been queued for ${contact_info}.`,
+      emailed,
+      message: emailed
+        ? `Done! We emailed your claim code to ${contact_info}.`
+        : `Done! Your win is saved under ${contact_info}.`,
+    },
+  });
+}
+
+/**
+ * POST /api/t/:tenant/passport/claims/attach  (requires auth)
+ * Deposits a guest claim into the signed-in user's account:
+ * - kredits prizes → credits/badges awarded, claim closed, stamp moved into their passport
+ * - physical prizes → claim linked to their email; still redeemed in person via the code
+ */
+export async function attachClaim(c: AppContext) {
+  const tenant = c.get('tenant');
+  const user = c.get('user') as { sub: string; email: string };
+  const body = await c.req.json<{ claim_code: string }>().catch(() => ({} as any));
+
+  if (!body.claim_code) {
+    throw new HTTPException(400, { message: 'claim_code is required.' });
+  }
+
+  const tokenHash = await sha256(body.claim_code.trim().toUpperCase());
+  const claim = await c.env.DB.prepare(`
+    SELECT cl.*, p.name AS prize_name, p.prize_type, p.value AS prize_value, p.details AS prize_details
+    FROM passport_claims cl
+    JOIN passport_prizes p ON p.id = cl.prize_id
+    WHERE cl.token_hash = ? AND cl.tenant_id = ?
+  `).bind(tokenHash, tenant.id).first<any>();
+
+  if (!claim) {
+    throw new HTTPException(404, { message: "That claim code doesn't match anything — double-check it and try again." });
+  }
+  if (claim.status === 'claimed') {
+    throw new HTTPException(409, { message: 'This claim code has already been used.' });
+  }
+  if (claim.expires_at <= Math.floor(Date.now() / 1000)) {
+    throw new HTTPException(409, { message: 'This claim code has expired.' });
+  }
+
+  const userId = Number(user.sub);
+  const isKredits = claim.prize_type.startsWith('kredits');
+
+  // Move the original guest scan into the user's passport so the stamp shows
+  // up in their history and the per-plaque cooldown follows them.
+  if (claim.scan_id) {
+    await c.env.DB.prepare(
+      'UPDATE passport_scans SET user_id = ? WHERE id = ? AND user_id IS NULL'
+    ).bind(userId, claim.scan_id).run();
+  }
+
+  if (isKredits) {
+    // Close the claim atomically so the same code can't be deposited twice.
+    const closed = await c.env.DB.prepare(`
+      UPDATE passport_claims SET status = 'claimed', contact_info = ?
+      WHERE token_hash = ? AND status = 'pending' AND expires_at > unixepoch()
+    `).bind(user.email, tokenHash).run();
+    if (closed.meta.changes === 0) {
+      throw new HTTPException(409, { message: 'This claim code has already been used or expired.' });
+    }
+
+    const gameResult = await recordGameAction(c.env, {
+      user_id: userId,
+      action_id: 'passport_scan',
+      source_app: 'passport',
+      network_id: 'lake-and-locals',
+      tenant_id: tenant.id,
+      ref_type: 'plaque',
+      ref_id: claim.plaque_id,
+    });
+
+    return c.json({
+      data: {
+        deposited: true,
+        prize: { name: claim.prize_name, prize_type: claim.prize_type, value: claim.prize_value },
+        user: {
+          balance: gameResult?.credits_balance ?? 0,
+          new_badges: gameResult?.new_badges ?? [],
+        },
+        message: `Deposited! ${claim.prize_name} is now in your account, and the stamp is in your passport.`,
+      },
+    });
+  }
+
+  // Physical prize: link it to this account (email becomes the contact on the
+  // claim) but keep it pending — it's redeemed in person with the code.
+  await c.env.DB.prepare(`
+    UPDATE passport_claims SET contact_info = ?
+    WHERE token_hash = ? AND status = 'pending'
+  `).bind(user.email, tokenHash).run();
+
+  return c.json({
+    data: {
+      deposited: false,
+      linked: true,
+      prize: { name: claim.prize_name, prize_type: claim.prize_type, value: claim.prize_value },
+      message: `${claim.prize_name} is now linked to your account. Show your claim code in person to collect it.`,
     },
   });
 }

@@ -6,7 +6,7 @@ import type { Env } from '../../src/types';
 import { resolveTenant } from '../../src/middleware/tenant';
 import { requireAuth } from '../../src/middleware/auth';
 import { authRouter } from '../../src/routers/auth';
-import { scanPlaque, registerClaim, getStamps } from '../../src/handlers/passport';
+import { scanPlaque, registerClaim, attachClaim, getStamps } from '../../src/handlers/passport';
 import { getBalance, getBalanceOnly } from '../../src/handlers/credits';
 import { getMember } from '../../src/handlers/members';
 import {
@@ -72,6 +72,7 @@ tenantApp.use('*', resolveTenant);
 tenantApp.use('*', requireAuth);
 
 tenantApp.get('/passport/stamps', getStamps);
+tenantApp.post('/passport/claims/attach', attachClaim);
 tenantApp.get('/credits/balance', getBalance);
 tenantApp.get('/credits/balance-only', getBalanceOnly);
 tenantApp.post('/admin/test-plaque', createTestPlaque);

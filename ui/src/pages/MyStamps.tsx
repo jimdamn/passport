@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTenant } from '../context/TenantContext';
 import { Lock } from 'lucide-react';
@@ -150,20 +150,69 @@ function ExampleDisclaimer() {
 export default function MyStamps() {
   const { user, token } = useAuth();
   const { tenant } = useTenant();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<'stamps' | 'badges'>('stamps');
-  
+
   // Real data state
   const [realScans, setRealScans] = useState<any[]>([]);
   const [realBadges, setRealBadges] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+
+  // Claim deposit state (guest win → account)
+  const claimFromUrl = searchParams.get('claim') || '';
+  const [claimCode, setClaimCode] = useState<string>(claimFromUrl);
+  const [depositing, setDepositing] = useState<boolean>(false);
+  const [depositResult, setDepositResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const autoDeposited = useRef(false);
 
   const creditsName = tenant?.config.credits_name ?? 'KrowdKredits';
 
   useEffect(() => {
     if (user && token && tenant) {
       fetchStampsData();
+    } else if (!user) {
+      // Signed-out visitors shouldn't sit on the spinner forever
+      setLoading(false);
     }
   }, [user, token, tenant]);
+
+  // Auto-deposit when arriving from the win screen or claim email (?claim=LL-XXXX)
+  useEffect(() => {
+    if (user && token && tenant && claimFromUrl && !autoDeposited.current) {
+      autoDeposited.current = true;
+      depositClaim(claimFromUrl);
+    }
+  }, [user, token, tenant, claimFromUrl]);
+
+  const depositClaim = async (code: string) => {
+    const trimmed = code.trim().toUpperCase();
+    if (!trimmed) return;
+
+    setDepositing(true);
+    setDepositResult(null);
+    try {
+      const res = await fetch(`/api/t/${tenant?.id}/passport/claims/attach`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ claim_code: trimmed }),
+      });
+      const json = (await res.json()) as { data?: { message: string }; error?: string };
+      if (!res.ok) throw new Error(json.error ?? 'Could not deposit that claim code.');
+
+      setDepositResult({ ok: true, message: json.data?.message ?? 'Deposited!' });
+      setClaimCode('');
+      // Clear the URL param so a refresh doesn't retry, then reload stamps
+      if (claimFromUrl) setSearchParams({}, { replace: true });
+      fetchStampsData();
+    } catch (err: any) {
+      setDepositResult({ ok: false, message: err.message || 'Could not deposit that claim code.' });
+    } finally {
+      setDepositing(false);
+    }
+  };
 
   const fetchStampsData = async () => {
     try {
@@ -192,15 +241,22 @@ export default function MyStamps() {
   }
 
   if (!user) {
+    const loginTo = claimFromUrl
+      ? `/auth/login?return_to=${encodeURIComponent(`/my-stamps?claim=${claimFromUrl}`)}`
+      : '/auth/login';
 
     return (
       <div style={{ maxWidth: 480, margin: '40px auto', textAlign: 'center', padding: '0 16px' }}>
         <div style={{ fontSize: '3rem', marginBottom: 16 }}>🗺️</div>
         <h2 style={{ fontFamily: 'var(--font-serif)', color: 'var(--green)', marginBottom: 10 }}>My Passport Stamps</h2>
         <p style={{ fontFamily: 'var(--font-sans)', color: 'var(--muted)', marginBottom: 20, fontSize: '0.9rem', lineHeight: 1.5 }}>
-          Sign in to view your collected stamps, track your exploration milestones, and view earned badges.
+          {claimFromUrl
+            ? `You have a winning claim code ready to deposit! Sign in (or create your free passport) and we'll add it to your account automatically.`
+            : 'Sign in to view your collected stamps, track your exploration milestones, and view earned badges.'}
         </p>
-        <Link to="/auth/login" className="btn btn-primary btn-block">Sign In</Link>
+        <Link to={loginTo} className="btn btn-primary btn-block">
+          {claimFromUrl ? 'Sign In & Deposit My Win' : 'Sign In'}
+        </Link>
       </div>
     );
   }
@@ -238,6 +294,43 @@ export default function MyStamps() {
         <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.88rem', color: 'var(--muted)', margin: 0 }}>
           Track your regional exploration, collected stamps, and earned milestones.
         </p>
+      </div>
+
+      {/* Claim Code Deposit */}
+      <div className="card" style={{ padding: '16px 16px', marginBottom: 24 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+          <span style={{ fontSize: '1.2rem' }}>🎟️</span>
+          <h3 style={{ fontFamily: 'var(--font-serif)', color: 'var(--green)', fontSize: '1rem', margin: 0 }}>
+            Have a claim code?
+          </h3>
+        </div>
+        <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.8rem', color: 'var(--muted)', margin: '0 0 12px 0', lineHeight: 1.4 }}>
+          Won before you had an account? Enter the code from your win screen or email — {creditsName} deposit instantly, and physical prizes get linked to your name.
+        </p>
+        <form
+          onSubmit={(e) => { e.preventDefault(); depositClaim(claimCode); }}
+          style={{ display: 'flex', gap: 8 }}
+        >
+          <input
+            type="text"
+            className="form-input"
+            placeholder="LL-XXXXXXXX"
+            value={claimCode}
+            onChange={(e) => setClaimCode(e.target.value.toUpperCase())}
+            style={{ flex: 1, fontFamily: 'monospace', textTransform: 'uppercase', letterSpacing: '0.05em', minHeight: 40 }}
+          />
+          <button type="submit" className="btn btn-amber" disabled={depositing || !claimCode.trim()} style={{ minHeight: 40, whiteSpace: 'nowrap' }}>
+            {depositing ? 'Depositing...' : 'Deposit'}
+          </button>
+        </form>
+        {depositResult && (
+          <div
+            className={`alert ${depositResult.ok ? 'alert-success' : 'alert-error'}`}
+            style={{ marginTop: 12, marginBottom: 0, fontSize: '0.82rem' }}
+          >
+            {depositResult.ok ? '✓ ' : ''}{depositResult.message}
+          </div>
+        )}
       </div>
 
       {/* Example Disclaimer */}

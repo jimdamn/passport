@@ -16,6 +16,7 @@ interface PrizeData {
   prize_type: string;
   value: number;
   details: string | null;
+  claim_token?: string | null;
 }
 
 export default function ScanPortal() {
@@ -34,6 +35,9 @@ export default function ScanPortal() {
   const [geoCoords, setGeoCoords] = useState<{ lat: number; lon: number } | null>(null);
   const [geoDenied, setGeoDenied] = useState<boolean>(false);
   const [geoPrompting, setGeoPrompting] = useState<boolean>(true);
+  // Set when location was unavailable — we still try the scan, because event
+  // plaques (street events, t-shirt QRs) don't need coordinates at all.
+  const [geoFailed, setGeoFailed] = useState<boolean>(false);
 
   // Roll result states
   const [plaque, setPlaque] = useState<PlaqueData | null>(null);
@@ -52,10 +56,12 @@ export default function ScanPortal() {
   const requestLocation = () => {
     setGeoPrompting(true);
     setGeoDenied(false);
+    setGeoFailed(false);
 
     if (!navigator.geolocation) {
-      setErrorMessage("Your browser doesn't support geocoding, which is required to verify physical presence.");
-      setStatus('error');
+      // No geolocation API at all — still attempt the scan (event QRs work without it)
+      setGeoPrompting(false);
+      setGeoFailed(true);
       return;
     }
 
@@ -68,8 +74,11 @@ export default function ScanPortal() {
         setGeoPrompting(false);
       },
       (error) => {
-        console.warn('Geolocation access denied:', error);
-        setGeoDenied(true);
+        console.warn('Geolocation unavailable:', error);
+        // Don't block the scan — event plaques don't need coordinates. If this
+        // turns out to be a regular plaque, the server tells us and we show
+        // the location card then.
+        setGeoFailed(true);
         setGeoPrompting(false);
       },
       { enableHighAccuracy: true, timeout: 10000 }
@@ -85,12 +94,12 @@ export default function ScanPortal() {
     requestLocation();
   }, [plaqueId, sig]);
 
-  // Execute scan when coords are available
+  // Execute scan once location resolves (granted or failed)
   useEffect(() => {
-    if (geoCoords && plaqueId) {
+    if ((geoCoords || geoFailed) && plaqueId) {
       performScan();
     }
-  }, [geoCoords]);
+  }, [geoCoords, geoFailed]);
 
   const performScan = async () => {
     setStatus('scanning');
@@ -103,15 +112,16 @@ export default function ScanPortal() {
         headers['Authorization'] = `Bearer ${token}`;
       }
 
+      const payload: Record<string, unknown> = { plaque_id: plaqueId, sig };
+      if (geoCoords) {
+        payload.lat = geoCoords.lat;
+        payload.lon = geoCoords.lon;
+      }
+
       const res = await fetch(`/api/t/${tenant?.id}/passport/scan`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({
-          plaque_id: plaqueId,
-          sig,
-          lat: geoCoords?.lat,
-          lon: geoCoords?.lon,
-        }),
+        body: JSON.stringify(payload),
       });
 
       const json = (await res.json()) as {
@@ -126,6 +136,13 @@ export default function ScanPortal() {
       };
 
       if (!res.ok) {
+        // Regular plaques require coordinates — if we scanned without them
+        // (location denied/unavailable), show the location card instead of an error.
+        if (res.status === 400 && !geoCoords && (json.error ?? '').includes('Location verification')) {
+          setStatus('idle');
+          setGeoDenied(true);
+          return;
+        }
         throw new Error(json.error ?? 'An unexpected error occurred during the scan.');
       }
 
@@ -216,9 +233,9 @@ export default function ScanPortal() {
       {geoDenied && (
         <div className="card" style={{ padding: '30px 20px', textAlign: 'center' }}>
           <div style={{ fontSize: '3rem', marginBottom: 16 }}>🔒</div>
-          <h2 style={{ fontFamily: 'var(--font-serif)', color: 'var(--error)', marginBottom: 10 }}>Location Required</h2>
+          <h2 style={{ fontFamily: 'var(--font-serif)', color: 'var(--error)', marginBottom: 10 }}>Location Needed for This Stamp</h2>
           <p style={{ fontFamily: 'var(--font-sans)', color: 'var(--muted)', fontSize: '0.88rem', lineHeight: 1.6, marginBottom: 20 }}>
-            KrowdKraft operates as a hyper-local trust network. To collect stamps and claim rewards in the wild, we must check that you are physically standing at the location. We do not track or save your continuous location history.
+            This stamp is tied to a physical place, so we need to confirm you're standing there. Your location is checked once for this scan only — we never track or store where you go.
           </p>
           <button className="btn btn-primary btn-block" onClick={requestLocation}>
             <MapPin size={18} /> Enable Location Verification
@@ -232,7 +249,7 @@ export default function ScanPortal() {
           <div style={{ fontSize: '3.5rem', marginBottom: 16 }}>⚡</div>
           <h2 style={{ fontFamily: 'var(--font-serif)', color: 'var(--green)', marginBottom: 8 }}>Rolling the Stamp...</h2>
           <p style={{ fontFamily: 'var(--font-sans)', color: 'var(--muted)', fontSize: '0.88rem', marginBottom: 20 }}>
-            Contacting the regional credits matrix vault. Hold tight!
+            Checking today's prize pool. Hold tight!
           </p>
           <Spinner size="md" />
         </div>
@@ -337,11 +354,26 @@ export default function ScanPortal() {
             )}
             {prize.details && (
               <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.82rem', color: 'var(--muted)', background: 'var(--cream)', padding: '8px 12px', borderRadius: 'var(--r-sm)', margin: '10px 0 0 0', wordBreak: 'break-all' }}>
-                Coupon Code: <strong>{prize.details}</strong>
+                {prize.details}
               </p>
             )}
+            {prize.claim_token && (
+              <div style={{ background: 'var(--cream)', border: '1px dashed var(--amber)', borderRadius: 'var(--r-md)', padding: '12px 14px', margin: '14px 0 0 0' }}>
+                <span style={{ fontSize: '0.68rem', textTransform: 'uppercase', color: 'var(--muted)', fontWeight: 'bold', display: 'block', marginBottom: 2 }}>
+                  Your claim code — show this to collect your prize
+                </span>
+                <span style={{ fontFamily: 'monospace', fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--green)', letterSpacing: '0.05em' }}>
+                  {prize.claim_token}
+                </span>
+                <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.72rem', color: 'var(--muted)', margin: '4px 0 0 0' }}>
+                  Take a screenshot — you'll show this code in person within 7 days to pick up your prize.
+                </p>
+              </div>
+            )}
             <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.85rem', color: 'var(--muted)', margin: '12px 0 0 0', lineHeight: 1.4 }}>
-              Thanks for supporting our independent main street stores! The prize has been linked to your regional wallet.
+              {prize.claim_token
+                ? 'Thanks for supporting our independent main street stores!'
+                : 'Thanks for supporting our independent main street stores! Your reward has been added to your account.'}
             </p>
           </div>
 
@@ -419,13 +451,13 @@ export default function ScanPortal() {
             {!claimRegistered ? (
               <form onSubmit={handleRegisterClaim} style={{ borderTop: '1px solid var(--border)', paddingTop: 16 }}>
                 <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.8rem', color: 'var(--muted)', marginBottom: 14, lineHeight: 1.4 }}>
-                  Enter your email or phone below. We'll lock this stamp into your temporary parade slot and queue a secure claim OTP so you don't lose your rewards!
+                  Your claim code is below. Enter your email and we'll send you a copy so it's safe in your inbox.
                 </p>
                 <div className="form-group" style={{ marginBottom: 12 }}>
                   <input
-                    type="text"
+                    type="email"
                     className="form-input"
-                    placeholder="Enter email or phone number"
+                    placeholder="you@example.com"
                     value={contactInfo}
                     onChange={(e) => setContactInfo(e.target.value)}
                     required
@@ -433,22 +465,22 @@ export default function ScanPortal() {
                   />
                 </div>
                 <button type="submit" className="btn btn-amber btn-block" disabled={registeringClaim} style={{ minHeight: 40, fontSize: '0.9rem' }}>
-                  {registeringClaim ? 'Securing Reward...' : 'Secure My Stamp & Credits'}
+                  {registeringClaim ? 'Sending...' : 'Email Me My Claim Code'}
                 </button>
               </form>
             ) : (
               <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16, textAlign: 'center' }}>
                 <div style={{ color: 'var(--success)', fontWeight: 'bold', fontSize: '0.9rem', marginBottom: 6 }}>
-                  ✓ Reward Slot Secured!
+                  ✓ Claim Code Sent!
                 </div>
                 <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.78rem', color: 'var(--muted)', margin: 0, lineHeight: 1.4 }}>
-                  We've secured your claim token: <strong>{claimToken}</strong>. A verification link has been queued for <strong>{contactInfo}</strong>. Simply click it later to complete your free profile and deposit your earnings!
+                  We emailed your claim code <strong>{claimToken}</strong> to <strong>{contactInfo}</strong>. It's good for 7 days.
                 </p>
               </div>
             )}
           </div>
 
-          {/* Fallback Screenshot Box */}
+          {/* Claim Code Box */}
           <div style={{
             background: 'var(--white)',
             border: '1px dashed var(--border)',
@@ -458,18 +490,35 @@ export default function ScanPortal() {
             marginBottom: 20,
           }}>
             <span style={{ fontSize: '0.68rem', textTransform: 'uppercase', color: 'var(--muted)', fontWeight: 'bold', display: 'block', marginBottom: 2 }}>
-              Fallback Claim Code
+              Your Claim Code
             </span>
-            <span style={{ fontFamily: 'monospace', fontSize: '1.1rem', fontWeight: 'bold', color: 'var(--green)', letterSpacing: '0.05em' }}>
+            <span style={{ fontFamily: 'monospace', fontSize: '1.3rem', fontWeight: 'bold', color: 'var(--green)', letterSpacing: '0.08em' }}>
               {claimToken}
             </span>
             <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.72rem', color: 'var(--muted)', margin: '4px 0 0 0' }}>
-              Take a screenshot of this card as a backup.
+              {prize.prize_type.startsWith('kredits')
+                ? 'Take a screenshot. This code deposits your win into your free passport.'
+                : 'Take a screenshot. Show this code in person within 7 days to collect your prize.'}
             </p>
           </div>
 
+          {/* Conversion CTA — turn the win into an account */}
+          <Link
+            to={`/auth/login?return_to=${encodeURIComponent(`/my-stamps?claim=${claimToken}`)}`}
+            className="btn btn-primary btn-block"
+            style={{ marginBottom: 12, minHeight: 44 }}
+          >
+            🛂 Create My Free Passport & Deposit This Win
+          </Link>
+          <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.75rem', color: 'var(--muted)', textAlign: 'center', margin: '0 0 16px 0', lineHeight: 1.4 }}>
+            Takes under a minute — just your email, no password. Your {creditsName} and stamp land in your passport automatically.
+          </p>
+
           <div style={{ textAlign: 'center' }}>
-            <Link to="/auth/login" style={{ fontSize: '0.85rem', fontWeight: 'bold', textDecoration: 'underline' }}>
+            <Link
+              to={`/auth/login?return_to=${encodeURIComponent(`/my-stamps?claim=${claimToken}`)}`}
+              style={{ fontSize: '0.85rem', fontWeight: 'bold', textDecoration: 'underline' }}
+            >
               Already have an account? Sign In
             </Link>
           </div>
