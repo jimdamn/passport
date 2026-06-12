@@ -9,7 +9,11 @@ import { authRouter } from '../../src/routers/auth';
 import { scanPlaque, registerClaim, getStamps } from '../../src/handlers/passport';
 import { getBalance, getBalanceOnly } from '../../src/handlers/credits';
 import { getMember } from '../../src/handlers/members';
-import { createTestPlaque, removeTestPlaque } from '../../src/handlers/admin';
+import {
+  createTestPlaque, removeTestPlaque,
+  listPlaques, createPlaque, updatePlaque, deletePlaque,
+  listPrizes, createPrize, updatePrize, deletePrize,
+} from '../../src/handlers/admin';
 
 import { logger } from '../../src/lib/logger';
 
@@ -70,6 +74,14 @@ tenantApp.get('/credits/balance', getBalance);
 tenantApp.get('/credits/balance-only', getBalanceOnly);
 tenantApp.post('/admin/test-plaque', createTestPlaque);
 tenantApp.delete('/admin/test-plaque', removeTestPlaque);
+tenantApp.get('/admin/plaques', listPlaques);
+tenantApp.post('/admin/plaques', createPlaque);
+tenantApp.put('/admin/plaques/:id', updatePlaque);
+tenantApp.delete('/admin/plaques/:id', deletePlaque);
+tenantApp.get('/admin/prizes', listPrizes);
+tenantApp.post('/admin/prizes', createPrize);
+tenantApp.put('/admin/prizes/:id', updatePrize);
+tenantApp.delete('/admin/prizes/:id', deletePrize);
 
 // Public Passport Scan & Claims APIs (Tenant-scoped, Guest-friendly)
 app.post('/api/t/:tenant/passport/scan', resolveTenant, scanPlaque);

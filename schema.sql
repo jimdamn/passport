@@ -45,6 +45,8 @@ CREATE INDEX IF NOT EXISTS idx_users_kkauth_uid   ON users(kkauth_uid);
 -- ============================================================
 
 -- Scannable Plaque Locations (Physical Stations)
+-- is_event = 1: a roving "event plaque" (e.g. QR on a t-shirt). Event plaques
+-- skip the geofence check entirely and honor the optional start/end window.
 CREATE TABLE IF NOT EXISTS passport_plaques (
   id            TEXT PRIMARY KEY,
   tenant_id     TEXT NOT NULL REFERENCES tenants(id),
@@ -55,10 +57,17 @@ CREATE TABLE IF NOT EXISTS passport_plaques (
   lon           REAL NOT NULL,
   category      TEXT NOT NULL CHECK (category IN ('dining', 'shopping', 'farmfood', 'recreation', 'attractions', 'lodging')),
   is_active     INTEGER NOT NULL DEFAULT 1,
+  is_event      INTEGER NOT NULL DEFAULT 0,
+  event_start   INTEGER,
+  event_end     INTEGER,
   created_at    INTEGER NOT NULL DEFAULT (unixepoch())
 );
 
 -- Configurable Prize Matrix per Plaque / Tenant
+-- plaque_id NULL = available at every plaque in the tenant; set = scoped to one
+-- plaque (e.g. an event pool). merchant_id NULL = house prize; set = funded by
+-- that merchant. is_paced = 1: stock is released via hidden timed drops in
+-- passport_prize_drops instead of the probability roll.
 CREATE TABLE IF NOT EXISTS passport_prizes (
   id            TEXT PRIMARY KEY,
   tenant_id     TEXT NOT NULL REFERENCES tenants(id),
@@ -68,8 +77,24 @@ CREATE TABLE IF NOT EXISTS passport_prizes (
   details       TEXT,
   probability   REAL NOT NULL,
   quantity_left INTEGER NOT NULL DEFAULT -1,
-  is_active     INTEGER NOT NULL DEFAULT 1
+  is_active     INTEGER NOT NULL DEFAULT 1,
+  plaque_id     TEXT,
+  merchant_id   TEXT,
+  is_paced      INTEGER NOT NULL DEFAULT 0
 );
+
+-- Timed prize drops (event pacing)
+-- Each row is one unit of a paced prize with a hidden random release time
+-- inside the event window. The first eligible scan at/after drop_at wins it —
+-- this spreads wins across the event and guarantees the pool empties.
+CREATE TABLE IF NOT EXISTS passport_prize_drops (
+  id          TEXT PRIMARY KEY,
+  prize_id    TEXT NOT NULL REFERENCES passport_prizes(id),
+  drop_at     INTEGER NOT NULL,
+  won_scan_id TEXT,
+  created_at  INTEGER NOT NULL DEFAULT (unixepoch())
+);
+CREATE INDEX IF NOT EXISTS idx_drops_pending ON passport_prize_drops(prize_id, won_scan_id, drop_at);
 
 -- Scan Record & Cooldown Ledger
 CREATE TABLE IF NOT EXISTS passport_scans (
@@ -116,6 +141,15 @@ CREATE INDEX IF NOT EXISTS idx_plaques_tenant ON passport_plaques(tenant_id, is_
 -- 2. If the database was created before raw_code was removed from passport_claims
 --    (claim codes must never be stored in plaintext), run:
 --    ALTER TABLE passport_claims DROP COLUMN raw_code;
+--
+-- 2b. If the database predates events / scoped prizes (June 2026), run:
+--    ALTER TABLE passport_plaques ADD COLUMN is_event INTEGER NOT NULL DEFAULT 0;
+--    ALTER TABLE passport_plaques ADD COLUMN event_start INTEGER;
+--    ALTER TABLE passport_plaques ADD COLUMN event_end INTEGER;
+--    ALTER TABLE passport_prizes ADD COLUMN plaque_id TEXT;
+--    ALTER TABLE passport_prizes ADD COLUMN merchant_id TEXT;
+--    ALTER TABLE passport_prizes ADD COLUMN is_paced INTEGER NOT NULL DEFAULT 0;
+--    [Create passport_prize_drops table + idx_drops_pending as defined above]
 --
 -- 3. Migrate passport_scans table structure and copy data:
 --    ALTER TABLE passport_scans RENAME TO scans_old;

@@ -13,6 +13,8 @@ import MyProfile from './pages/profile/MyProfile';
 import ApplyMerchant from './pages/profile/ApplyMerchant';
 import AdminMerchants from './pages/profile/AdminMerchants';
 import AdminTestPlaque from './pages/profile/AdminTestPlaque';
+import AdminPlaques from './pages/profile/AdminPlaques';
+import AdminPrizes from './pages/profile/AdminPrizes';
 
 import PublicProfile from './pages/profile/PublicProfile';
 import Help from './pages/Help';
@@ -44,6 +46,8 @@ export default function App() {
         <Route path="/profile/apply-merchant" element={<ApplyMerchant />} />
         <Route path="/profile/admin/merchants" element={<AdminMerchants />} />
         <Route path="/profile/admin/test-plaque" element={<AdminTestPlaque />} />
+        <Route path="/profile/admin/plaques" element={<AdminPlaques />} />
+        <Route path="/profile/admin/prizes" element={<AdminPrizes />} />
         <Route path="/members/:id" element={<PublicProfile />} />
         <Route path="/help" element={<Help />} />
         <Route path="*" element={<Navigate to="/" replace />} />

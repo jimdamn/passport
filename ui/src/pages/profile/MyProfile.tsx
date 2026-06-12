@@ -278,6 +278,12 @@ export default function MyProfile() {
             <Link to="/profile/admin/merchants" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
               Review Merchant Applications
             </Link>
+            <Link to="/profile/admin/plaques" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
+              Plaques & Events
+            </Link>
+            <Link to="/profile/admin/prizes" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
+              Prize Pools
+            </Link>
             <Link to="/profile/admin/test-plaque" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
               Test Plaque
             </Link>

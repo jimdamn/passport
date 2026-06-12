@@ -66,43 +66,56 @@ export async function scanPlaque(c: AppContext) {
   }
 
   // 2. Geofence & Location Validation (Pillar 1: Geofenced Shield)
-  // Device coordinates are required — the ScanPortal UI always sends them, so a
-  // request without coords is a hand-crafted call trying to skip the geofence.
-  if (
-    typeof lat !== 'number' || typeof lon !== 'number' ||
-    !isFinite(lat) || !isFinite(lon) ||
-    Math.abs(lat) > 90 || Math.abs(lon) > 180
-  ) {
-    throw new HTTPException(400, {
-      message: 'Location verification is required to collect stamps. Please enable location access and re-scan.',
-    });
-  }
+  // Event plaques (e.g. a QR on a t-shirt at a street event) are roving — they
+  // skip the geofence entirely and instead honor an optional time window. The
+  // QR signature and per-person cooldown still protect them.
+  if (plaque.is_event) {
+    const now = Math.floor(Date.now() / 1000);
+    if (plaque.event_start && now < plaque.event_start) {
+      throw new HTTPException(403, { message: `${plaque.name} hasn't started yet — come back soon!` });
+    }
+    if (plaque.event_end && now > plaque.event_end) {
+      throw new HTTPException(403, { message: `${plaque.name} has ended. Thanks for playing — keep an eye out for the next one!` });
+    }
+  } else {
+    // Device coordinates are required — the ScanPortal UI always sends them, so a
+    // request without coords is a hand-crafted call trying to skip the geofence.
+    if (
+      typeof lat !== 'number' || typeof lon !== 'number' ||
+      !isFinite(lat) || !isFinite(lon) ||
+      Math.abs(lat) > 90 || Math.abs(lon) > 180
+    ) {
+      throw new HTTPException(400, {
+        message: 'Location verification is required to collect stamps. Please enable location access and re-scan.',
+      });
+    }
 
-  let locationVerified = true;
+    let locationVerified = true;
 
-  // Primary gate: device GPS must be within 500 meters of the plaque
-  const distanceMeters = getDistance(lat, lon, plaque.lat, plaque.lon) * 1000;
-  if (distanceMeters > 500) {
-    locationVerified = false;
-  }
-
-  // Secondary cross-check: Cloudflare edge geolocation (cf.latitude/longitude
-  // are strings). IP geolocation on mobile carriers can be off by 100+ km, so
-  // this only catches clearly-remote spoofing — the 500m device gate above is
-  // the real check.
-  const cfLat = parseFloat(String(c.req.raw.cf?.latitude ?? ''));
-  const cfLon = parseFloat(String(c.req.raw.cf?.longitude ?? ''));
-  if (!isNaN(cfLat) && !isNaN(cfLon)) {
-    const edgeDistKm = getDistance(cfLat, cfLon, plaque.lat, plaque.lon);
-    if (edgeDistKm > 300) {
+    // Primary gate: device GPS must be within 500 meters of the plaque
+    const distanceMeters = getDistance(lat, lon, plaque.lat, plaque.lon) * 1000;
+    if (distanceMeters > 500) {
       locationVerified = false;
     }
-  }
 
-  if (!locationVerified) {
-    throw new HTTPException(403, {
-      message: `Geofence check failed. To collect this stamp, you must physically visit ${plaque.location_name || 'the merchant station'}.`,
-    });
+    // Secondary cross-check: Cloudflare edge geolocation (cf.latitude/longitude
+    // are strings). IP geolocation on mobile carriers can be off by 100+ km, so
+    // this only catches clearly-remote spoofing — the 500m device gate above is
+    // the real check.
+    const cfLat = parseFloat(String(c.req.raw.cf?.latitude ?? ''));
+    const cfLon = parseFloat(String(c.req.raw.cf?.longitude ?? ''));
+    if (!isNaN(cfLat) && !isNaN(cfLon)) {
+      const edgeDistKm = getDistance(cfLat, cfLon, plaque.lat, plaque.lon);
+      if (edgeDistKm > 300) {
+        locationVerified = false;
+      }
+    }
+
+    if (!locationVerified) {
+      throw new HTTPException(403, {
+        message: `Geofence check failed. To collect this stamp, you must physically visit ${plaque.location_name || 'the merchant station'}.`,
+      });
+    }
   }
 
   // 3. Optional User Authentication check
@@ -179,10 +192,50 @@ export async function scanPlaque(c: AppContext) {
     }
   }
 
-  // 5. Draw Probability-Weighted Prize from matrix
+  const scanId = nanoid();
+
+  // 5a. Paced prize drops take priority (event pacing): each unit of a paced
+  // prize has a hidden random release time; the first eligible scan at/after
+  // it wins. The conditional UPDATE makes the claim atomic under concurrency.
+  let rolledPrize: {
+    id: string;
+    name: string;
+    prize_type: string;
+    value: number;
+    details: string;
+    probability: number;
+    quantity_left: number;
+  } | undefined;
+
+  const maturedDrop = await c.env.DB.prepare(`
+    SELECT d.id AS drop_id, p.id, p.name, p.prize_type, p.value, p.details, p.probability, p.quantity_left
+    FROM passport_prize_drops d
+    JOIN passport_prizes p ON p.id = d.prize_id
+    WHERE p.tenant_id = ? AND p.is_active = 1 AND p.is_paced = 1
+      AND (p.plaque_id IS NULL OR p.plaque_id = ?)
+      AND d.drop_at <= unixepoch() AND d.won_scan_id IS NULL
+    ORDER BY d.drop_at ASC
+    LIMIT 1
+  `).bind(tenant.id, plaque_id).first<any>();
+
+  if (maturedDrop) {
+    const claimed = await c.env.DB.prepare(
+      'UPDATE passport_prize_drops SET won_scan_id = ? WHERE id = ? AND won_scan_id IS NULL'
+    ).bind(scanId, maturedDrop.drop_id).run();
+    if (claimed.meta.changes === 1) {
+      await c.env.DB.prepare(
+        'UPDATE passport_prizes SET quantity_left = quantity_left - 1 WHERE id = ? AND quantity_left > 0'
+      ).bind(maturedDrop.id).run();
+      const { drop_id: _dropId, ...prize } = maturedDrop;
+      rolledPrize = prize;
+    }
+  }
+
+  // 5b. Otherwise, draw a probability-weighted prize from the matrix.
+  // Prizes scoped to a plaque (plaque_id set) only appear at that plaque.
   const prizes = await c.env.DB.prepare(
-    'SELECT * FROM passport_prizes WHERE tenant_id = ? AND is_active = 1'
-  ).bind(tenant.id).all<{
+    'SELECT * FROM passport_prizes WHERE tenant_id = ? AND is_active = 1 AND is_paced = 0 AND (plaque_id IS NULL OR plaque_id = ?)'
+  ).bind(tenant.id, plaque_id).all<{
     id: string;
     name: string;
     prize_type: string;
@@ -192,46 +245,45 @@ export async function scanPlaque(c: AppContext) {
     quantity_left: number;
   }>();
 
-  // Probability rolling loop
-  let rolledPrize = prizes.results.find(p => p.prize_type === 'kredits_base');
-  const roll = Math.random();
-  let cumulativeProb = 0;
-
-  // We filter out prizes that have run out of stock
-  const availablePrizes = prizes.results.filter(p => p.quantity_left !== 0);
-
-  for (const prize of availablePrizes) {
-    if (prize.prize_type === 'kredits_base') continue; // baseline is default fallback
-    cumulativeProb += prize.probability;
-    if (roll < cumulativeProb) {
-      rolledPrize = prize;
-      break;
-    }
-  }
-
   if (!rolledPrize) {
-    throw new HTTPException(500, { message: 'Failed to draw prize. Please try again.' });
-  }
+    rolledPrize = prizes.results.find(p => p.prize_type === 'kredits_base');
+    const roll = Math.random();
+    let cumulativeProb = 0;
 
-  // Decrement stock atomically for limited prizes (quantity_left = -1 means
-  // unlimited). The conditional WHERE closes the race where two concurrent
-  // scans both claim the last unit and push stock to -1 (= unlimited).
-  if (rolledPrize.quantity_left > 0) {
-    const decr = await c.env.DB.prepare(
-      'UPDATE passport_prizes SET quantity_left = quantity_left - 1 WHERE id = ? AND quantity_left > 0'
-    ).bind(rolledPrize.id).run();
+    // We filter out prizes that have run out of stock
+    const availablePrizes = prizes.results.filter(p => p.quantity_left !== 0);
 
-    if (decr.meta.changes === 0) {
-      // Lost the race — fall back to the baseline prize
-      const baseline = prizes.results.find(p => p.prize_type === 'kredits_base');
-      if (!baseline) {
-        throw new HTTPException(500, { message: 'Failed to draw prize. Please try again.' });
+    for (const prize of availablePrizes) {
+      if (prize.prize_type === 'kredits_base') continue; // baseline is default fallback
+      cumulativeProb += prize.probability;
+      if (roll < cumulativeProb) {
+        rolledPrize = prize;
+        break;
       }
-      rolledPrize = baseline;
+    }
+
+    if (!rolledPrize) {
+      throw new HTTPException(500, { message: 'Failed to draw prize. Please try again.' });
+    }
+
+    // Decrement stock atomically for limited prizes (quantity_left = -1 means
+    // unlimited). The conditional WHERE closes the race where two concurrent
+    // scans both claim the last unit and push stock to -1 (= unlimited).
+    if (rolledPrize.quantity_left > 0) {
+      const decr = await c.env.DB.prepare(
+        'UPDATE passport_prizes SET quantity_left = quantity_left - 1 WHERE id = ? AND quantity_left > 0'
+      ).bind(rolledPrize.id).run();
+
+      if (decr.meta.changes === 0) {
+        // Lost the race — fall back to the baseline prize
+        const baseline = prizes.results.find(p => p.prize_type === 'kredits_base');
+        if (!baseline) {
+          throw new HTTPException(500, { message: 'Failed to draw prize. Please try again.' });
+        }
+        rolledPrize = baseline;
+      }
     }
   }
-
-  const scanId = nanoid();
 
   // 6. Handle payouts instantly if logged in, or generate deferred claim token for guests
   if (userId) {
@@ -240,6 +292,18 @@ export async function scanPlaque(c: AppContext) {
       INSERT INTO passport_scans (id, plaque_id, user_id, guest_ip, credits_won, created_at)
       VALUES (?, ?, ?, ?, ?, unixepoch())
     `).bind(scanId, plaque_id, userId, clientIp, rolledPrize.value).run();
+
+    // Physical prizes (cash, coupons, gifts) need a claim code even for
+    // logged-in users — it's what they show at redemption time.
+    let memberClaimCode: string | null = null;
+    if (!rolledPrize.prize_type.startsWith('kredits')) {
+      memberClaimCode = `LL-${nanoid(8).toUpperCase()}`;
+      const memberTokenHash = await sha256(memberClaimCode);
+      await c.env.DB.prepare(`
+        INSERT INTO passport_claims (token_hash, tenant_id, plaque_id, prize_id, contact_info, status, expires_at, created_at)
+        VALUES (?, ?, ?, ?, ?, 'pending', unixepoch() + ?, unixepoch())
+      `).bind(memberTokenHash, tenant.id, plaque_id, rolledPrize.id, userEmail, 7 * 86400).run();
+    }
 
     // Record game action in KKGame via recordGameAction helper
     const gameResult = await recordGameAction(c.env, {
@@ -271,6 +335,7 @@ export async function scanPlaque(c: AppContext) {
           prize_type: rolledPrize.prize_type,
           value: rolledPrize.value,
           details: rolledPrize.details,
+          claim_token: memberClaimCode,
         },
         user: {
           balance: freshBalance,
