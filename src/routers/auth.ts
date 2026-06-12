@@ -614,7 +614,10 @@ authRouter.patch('/profile/location', async (c) => {
   const res = await c.env.KKAUTH.fetch(
     new Request(`https://kkauth/internal/profile/${payload.sub}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Internal-Secret': c.env.INTERNAL_SECRET || '',
+      },
       body: JSON.stringify(body),
     })
   );
@@ -654,7 +657,10 @@ authRouter.post('/profile/avatar', async (c) => {
   const res = await c.env.KKAUTH.fetch(
     new Request(`https://kkauth/internal/profile/${payload.sub}/avatar`, {
       method: 'POST',
-      headers: { 'Content-Type': contentType },
+      headers: {
+        'Content-Type': contentType,
+        'X-Internal-Secret': c.env.INTERNAL_SECRET || '',
+      },
       body: imageBody,
     })
   );
@@ -715,19 +721,16 @@ authRouter.post('/profile/apply-merchant', async (c) => {
 // GET /api/auth/me/qr-code — proxy authenticated QR code to KKAuth
 // ─────────────────────────────────────────────────────────────
 authRouter.get('/me/qr-code', async (c) => {
-  const token = c.req.query('token');
-  const authHeader = c.req.header('Authorization');
-  let auth = authHeader;
-  if (!auth && token) {
-    auth = `Bearer ${token}`;
-  }
+  // Authorization header only — never accept tokens in the query string
+  // (they leak into logs and browser history).
+  const auth = c.req.header('Authorization');
   if (!auth) {
     throw new HTTPException(401, { message: 'Authorization required' });
   }
 
   // Fetch QR code from KKAuth directly
   const res = await c.env.KKAUTH.fetch(
-    new Request('https://kkauth/me/qr-code' + (token ? `?token=${token}` : ''), {
+    new Request('https://kkauth/me/qr-code', {
       headers: { 'Authorization': auth },
     })
   );
@@ -751,19 +754,15 @@ authRouter.get('/me/qr-code', async (c) => {
 // GET /api/auth/merchant/qr-code — proxy authenticated merchant QR code to KKAuth
 // ─────────────────────────────────────────────────────────────
 authRouter.get('/merchant/qr-code', async (c) => {
-  const token = c.req.query('token');
-  const authHeader = c.req.header('Authorization');
-  let auth = authHeader;
-  if (!auth && token) {
-    auth = `Bearer ${token}`;
-  }
+  // Authorization header only — never accept tokens in the query string.
+  const auth = c.req.header('Authorization');
   if (!auth) {
     throw new HTTPException(401, { message: 'Authorization required' });
   }
 
   // Fetch Merchant QR code from KKAuth directly
   const res = await c.env.KKAUTH.fetch(
-    new Request('https://kkauth/me/merchant-qr-code' + (token ? `?token=${token}` : ''), {
+    new Request('https://kkauth/me/merchant-qr-code', {
       headers: { 'Authorization': auth },
     })
   );
@@ -884,6 +883,66 @@ authRouter.put('/persona', async (c) => {
 
   const body = await c.req.json().catch(() => ({}));
   const res = await c.env.KKAUTH.fetch('https://kkauth/me/persona', {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': authHeader,
+    },
+    body: JSON.stringify(body),
+  });
+  const json = await res.json<any>();
+  return c.json(json, res.status as any);
+});
+
+// GET /api/auth/personal-persona
+authRouter.get('/personal-persona', async (c) => {
+  const authHeader = c.req.header('Authorization');
+  if (!authHeader) throw new HTTPException(401, { message: 'Authorization required' });
+
+  const res = await c.env.KKAUTH.fetch('https://kkauth/me/personal-persona', {
+    headers: { 'Authorization': authHeader },
+  });
+  const json = await res.json<any>();
+  return c.json(json, res.status as any);
+});
+
+// PUT /api/auth/personal-persona
+authRouter.put('/personal-persona', async (c) => {
+  const authHeader = c.req.header('Authorization');
+  if (!authHeader) throw new HTTPException(401, { message: 'Authorization required' });
+
+  const body = await c.req.json().catch(() => ({}));
+  const res = await c.env.KKAUTH.fetch('https://kkauth/me/personal-persona', {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': authHeader,
+    },
+    body: JSON.stringify(body),
+  });
+  const json = await res.json<any>();
+  return c.json(json, res.status as any);
+});
+
+// GET /api/auth/anonymous-persona
+authRouter.get('/anonymous-persona', async (c) => {
+  const authHeader = c.req.header('Authorization');
+  if (!authHeader) throw new HTTPException(401, { message: 'Authorization required' });
+
+  const res = await c.env.KKAUTH.fetch('https://kkauth/me/anonymous-persona', {
+    headers: { 'Authorization': authHeader },
+  });
+  const json = await res.json<any>();
+  return c.json(json, res.status as any);
+});
+
+// PUT /api/auth/anonymous-persona
+authRouter.put('/anonymous-persona', async (c) => {
+  const authHeader = c.req.header('Authorization');
+  if (!authHeader) throw new HTTPException(401, { message: 'Authorization required' });
+
+  const body = await c.req.json().catch(() => ({}));
+  const res = await c.env.KKAUTH.fetch('https://kkauth/me/anonymous-persona', {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',

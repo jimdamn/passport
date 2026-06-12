@@ -12,8 +12,10 @@ import { HTTPException } from 'hono/http-exception';
 import type { Env, KKAuthPayload, KKAuthProfile } from '../types';
 
 export const requireAuth = createMiddleware<{ Bindings: Env }>(async (c, next) => {
+  // Authorization header only — tokens in query strings leak into logs,
+  // browser history, and Referer headers.
   const authHeader = c.req.header('Authorization');
-  const token = authHeader?.replace('Bearer ', '').trim() || c.req.query('token');
+  const token = authHeader?.replace('Bearer ', '').trim();
   if (!token) throw new HTTPException(401, { message: 'Authorization required' });
 
   // Verify token via KKAuth Service Binding — response includes profile fields

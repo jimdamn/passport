@@ -23,6 +23,9 @@ export default function ScanPortal() {
   const { tenant } = useTenant();
   const [searchParams] = useSearchParams();
   const plaqueId = searchParams.get('plaque') || searchParams.get('id');
+  // HMAC signature baked into the printed QR link — the backend rejects
+  // scans without it, so a hand-typed plaque id can't mint stamps.
+  const sig = searchParams.get('sig');
 
   const [status, setStatus] = useState<'idle' | 'scanning' | 'success' | 'guest_win' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState<string>('');
@@ -74,13 +77,13 @@ export default function ScanPortal() {
   };
 
   useEffect(() => {
-    if (!plaqueId) {
-      setErrorMessage('No QR code ID was detected in the scan link. Please check your QR code.');
+    if (!plaqueId || !sig) {
+      setErrorMessage('This scan link is incomplete or invalid. Please re-scan the QR code with your camera.');
       setStatus('error');
       return;
     }
     requestLocation();
-  }, [plaqueId]);
+  }, [plaqueId, sig]);
 
   // Execute scan when coords are available
   useEffect(() => {
@@ -105,6 +108,7 @@ export default function ScanPortal() {
         headers,
         body: JSON.stringify({
           plaque_id: plaqueId,
+          sig,
           lat: geoCoords?.lat,
           lon: geoCoords?.lon,
         }),

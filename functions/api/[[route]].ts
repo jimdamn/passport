@@ -7,13 +7,31 @@ import { resolveTenant } from '../../src/middleware/tenant';
 import { requireAuth } from '../../src/middleware/auth';
 import { authRouter } from '../../src/routers/auth';
 import { scanPlaque, registerClaim, getStamps } from '../../src/handlers/passport';
+import { getBalance, getBalanceOnly } from '../../src/handlers/credits';
+import { getMember } from '../../src/handlers/members';
 
 import { logger } from '../../src/lib/logger';
 
 const app = new Hono<{ Bindings: Env }>();
 
+// Allowlist only — reflecting arbitrary origins with credentials:true would
+// let any site make authenticated cookie-bearing requests to this API.
 app.use('*', cors({
-  origin: (origin) => origin || '*',
+  origin: (origin) => {
+    if (!origin) return origin;
+    try {
+      const { hostname } = new URL(origin);
+      const allowed =
+        hostname === 'localhost' ||
+        hostname === '127.0.0.1' ||
+        hostname.endsWith('.pages.dev') ||
+        hostname === 'lakeandlocals.com' ||
+        hostname.endsWith('.lakeandlocals.com');
+      return allowed ? origin : '';
+    } catch {
+      return '';
+    }
+  },
   credentials: true,
   allowHeaders: ['Content-Type', 'Authorization', 'X-App-Key'],
   allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -35,29 +53,9 @@ app.get('/api/t/:tenant', async (c) => {
 
   const tenant = { ...tenantRow, config: JSON.parse(tenantRow.config || '{}') };
 
-  const { results: nicheRows } = await c.env.DB.prepare(`
-    SELECT n.*,
-      json_group_array(json_object(
-        'id', cat.id, 'slug', cat.slug, 'name', cat.name,
-        'icon', cat.icon, 'sort_order', cat.sort_order
-      )) as categories_json
-    FROM niches n
-    LEFT JOIN categories cat ON cat.niche_id = n.id
-    WHERE n.tenant_id = ? AND n.is_active = 1
-    GROUP BY n.id
-    ORDER BY n.sort_order ASC
-  `).bind(tenantId).all<any>();
-
-  const niches = (nicheRows || []).map(row => ({
-    ...row,
-    config: JSON.parse(row.config || '{}'),
-    categories: JSON.parse(row.categories_json || '[]')
-      .filter((cat: any) => cat.id !== null)
-      .sort((a: any, b: any) => a.sort_order - b.sort_order),
-    categories_json: undefined,
-  }));
-
-  return c.json({ data: { tenant, niches } });
+  // Passport has no niches/categories tables — return an empty list so the
+  // shared TenantContext shape stays compatible with the other apps.
+  return c.json({ data: { tenant, niches: [] } });
 });
 
 
@@ -67,14 +65,19 @@ tenantApp.use('*', resolveTenant);
 tenantApp.use('*', requireAuth);
 
 tenantApp.get('/passport/stamps', getStamps);
+tenantApp.get('/credits/balance', getBalance);
+tenantApp.get('/credits/balance-only', getBalanceOnly);
 
 // Public Passport Scan & Claims APIs (Tenant-scoped, Guest-friendly)
 app.post('/api/t/:tenant/passport/scan', resolveTenant, scanPlaque);
 app.post('/api/t/:tenant/passport/claims/register', resolveTenant, registerClaim);
+app.get('/api/t/:tenant/members/:id', resolveTenant, getMember);
 app.get('/api/t/:tenant/passport/members', resolveTenant, async (c) => {
   const tenant = c.get('tenant');
+  // kkauth_uid is the public user id across all KrowdKraft apps — never expose
+  // the local AUTOINCREMENT row id.
   const members = await c.env.DB.prepare(`
-    SELECT id, display_name, location, bio, avatar_url, bd_member_since, created_at
+    SELECT kkauth_uid as id, display_name, location, bio, avatar_url, bd_member_since, created_at
     FROM users
     WHERE tenant_id = ? AND is_active = 1 AND bd_uid IS NOT NULL
     ORDER BY created_at DESC

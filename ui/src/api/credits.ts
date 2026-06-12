@@ -18,8 +18,3 @@ export async function getBalanceOnly(tenant: string) {
   );
 }
 
-export async function boostOffer(tenant: string, offer_id: string) {
-  return api.post<ApiResponse<{ boosted: boolean; expires_at: number }>>(
-    `/t/${tenant}/credits/boost`, { offer_id }
-  );
-}

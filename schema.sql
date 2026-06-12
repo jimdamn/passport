@@ -82,12 +82,13 @@ CREATE TABLE IF NOT EXISTS passport_scans (
 );
 
 -- Deferred Claims System (Claim Tokens)
+-- Only the SHA-256 hash of the claim code is stored; the raw code is shown
+-- once to the guest at scan time and never persisted.
 CREATE TABLE IF NOT EXISTS passport_claims (
   token_hash   TEXT PRIMARY KEY,
   tenant_id    TEXT NOT NULL REFERENCES tenants(id),
   plaque_id    TEXT NOT NULL REFERENCES passport_plaques(id),
   prize_id     TEXT NOT NULL REFERENCES passport_prizes(id),
-  raw_code     TEXT NOT NULL,
   contact_info TEXT,
   status       TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'claimed', 'expired')),
   expires_at   INTEGER NOT NULL,

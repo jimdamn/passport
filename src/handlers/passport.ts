@@ -79,10 +79,10 @@ export async function scanPlaque(c: AppContext) {
     }
   }
 
-  // Soft edge geolocation fallbacks
-  const cfLat = c.req.raw.cf?.latitude;
-  const cfLon = c.req.raw.cf?.longitude;
-  if (cfLat && cfLon && typeof cfLat === 'number' && typeof cfLon === 'number') {
+  // Soft edge geolocation fallbacks — cf.latitude/longitude are strings
+  const cfLat = parseFloat(String(c.req.raw.cf?.latitude ?? ''));
+  const cfLon = parseFloat(String(c.req.raw.cf?.longitude ?? ''));
+  if (!isNaN(cfLat) && !isNaN(cfLon)) {
     const edgeDistKm = getDistance(cfLat, cfLon, plaque.lat, plaque.lon);
     // If edge location is thousands of miles away, flags as not verified (IP spoofing/scanning from home)
     if (edgeDistKm > 100) {
@@ -204,11 +204,22 @@ export async function scanPlaque(c: AppContext) {
     throw new HTTPException(500, { message: 'Failed to draw prize. Please try again.' });
   }
 
-  // Decr quantity if limited
+  // Decrement stock atomically for limited prizes (quantity_left = -1 means
+  // unlimited). The conditional WHERE closes the race where two concurrent
+  // scans both claim the last unit and push stock to -1 (= unlimited).
   if (rolledPrize.quantity_left > 0) {
-    await c.env.DB.prepare(
-      'UPDATE passport_prizes SET quantity_left = quantity_left - 1 WHERE id = ?'
+    const decr = await c.env.DB.prepare(
+      'UPDATE passport_prizes SET quantity_left = quantity_left - 1 WHERE id = ? AND quantity_left > 0'
     ).bind(rolledPrize.id).run();
+
+    if (decr.meta.changes === 0) {
+      // Lost the race — fall back to the baseline prize
+      const baseline = prizes.results.find(p => p.prize_type === 'kredits_base');
+      if (!baseline) {
+        throw new HTTPException(500, { message: 'Failed to draw prize. Please try again.' });
+      }
+      rolledPrize = baseline;
+    }
   }
 
   const scanId = nanoid();
@@ -267,10 +278,12 @@ export async function scanPlaque(c: AppContext) {
     const tokenHash = await sha256(rawClaimCode);
     const CLAIM_TTL_SECONDS = 7 * 86400; // 7 days expiration
 
+    // Only the hash is stored — keeping the raw code in the same row would
+    // defeat the point of hashing it.
     await c.env.DB.prepare(`
-      INSERT INTO passport_claims (token_hash, tenant_id, plaque_id, prize_id, raw_code, status, expires_at, created_at)
-      VALUES (?, ?, ?, ?, ?, 'pending', unixepoch() + ?, unixepoch())
-    `).bind(tokenHash, tenant.id, plaque_id, rolledPrize.id, rawClaimCode, CLAIM_TTL_SECONDS).run();
+      INSERT INTO passport_claims (token_hash, tenant_id, plaque_id, prize_id, status, expires_at, created_at)
+      VALUES (?, ?, ?, ?, 'pending', unixepoch() + ?, unixepoch())
+    `).bind(tokenHash, tenant.id, plaque_id, rolledPrize.id, CLAIM_TTL_SECONDS).run();
 
     // Log the guest scan log
     await c.env.DB.prepare(`
@@ -328,10 +341,10 @@ export async function registerClaim(c: AppContext) {
     throw new HTTPException(404, { message: 'Claim code is invalid, already claimed, or expired.' });
   }
 
-  // Update claim with contact info
+  // Update claim with contact info (passport_claims has no updated_at column)
   await c.env.DB.prepare(`
-    UPDATE passport_claims 
-    SET contact_info = ?, updated_at = unixepoch() 
+    UPDATE passport_claims
+    SET contact_info = ?
     WHERE token_hash = ?
   `).bind(contact_info.trim(), tokenHash).run();
 

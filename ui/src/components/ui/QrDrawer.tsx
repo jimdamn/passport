@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { X, Compass, AlertCircle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTenant } from '../../context/TenantContext';
@@ -22,6 +22,7 @@ interface Props {
 export default function QrDrawer({ open, onClose }: Props) {
   const { user } = useAuth();
   const { tenant } = useTenant();
+  const [qrSrc, setQrSrc] = useState<string | null>(null);
 
   const creditsName = tenant?.config.credits_name ?? 'KrowdKredits';
 
@@ -31,12 +32,31 @@ export default function QrDrawer({ open, onClose }: Props) {
     return () => { document.body.style.overflow = ''; };
   }, [open]);
 
-  if (!user) return null;
+  // Fetch the QR SVG with the Authorization header (never put the token in a
+  // URL — query strings end up in logs and browser history) and render it
+  // via a blob object URL.
+  useEffect(() => {
+    if (!open) return;
+    let objectUrl: string | null = null;
+    const token = getToken();
+    fetch('/api/auth/me/qr-code', {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    })
+      .then(res => (res.ok ? res.blob() : null))
+      .then(blob => {
+        if (blob) {
+          objectUrl = URL.createObjectURL(blob);
+          setQrSrc(objectUrl);
+        }
+      })
+      .catch(() => setQrSrc(null));
+    return () => {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      setQrSrc(null);
+    };
+  }, [open]);
 
-  // The dynamic QR Code SVG is fetched directly from our secure authenticated API endpoint.
-  // This endpoint verifies user session credentials automatically, providing absolute protection.
-  const token = getToken();
-  const qrCodeUrl = `/api/auth/me/qr-code?token=${token}`;
+  if (!user) return null;
 
   return (
     <>
@@ -155,9 +175,9 @@ export default function QrDrawer({ open, onClose }: Props) {
             marginBottom: 20,
             overflow: 'hidden',
           }}>
-            {open && (
+            {open && qrSrc && (
               <img
-                src={qrCodeUrl}
+                src={qrSrc}
                 alt="My Personal QR Code"
                 style={{
                   width: '100%',

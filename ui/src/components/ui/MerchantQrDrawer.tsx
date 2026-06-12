@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { X, Compass, AlertCircle, Printer, Download } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTenant } from '../../context/TenantContext';
@@ -12,6 +12,7 @@ interface Props {
 export default function MerchantQrDrawer({ open, onClose }: Props) {
   const { user } = useAuth();
   const { tenant } = useTenant();
+  const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
 
   const creditsName = tenant?.config.credits_name ?? 'KrowdKredits';
 
@@ -21,12 +22,34 @@ export default function MerchantQrDrawer({ open, onClose }: Props) {
     return () => { document.body.style.overflow = ''; };
   }, [open]);
 
+  // Fetch the QR SVG with the Authorization header (never put the token in a
+  // URL — query strings end up in logs and browser history). The blob object
+  // URL also serves the print flyer and the download link.
+  useEffect(() => {
+    if (!open) return;
+    let objectUrl: string | null = null;
+    const token = getToken();
+    fetch('/api/auth/merchant/qr-code', {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    })
+      .then(res => (res.ok ? res.blob() : null))
+      .then(blob => {
+        if (blob) {
+          objectUrl = URL.createObjectURL(blob);
+          setQrCodeUrl(objectUrl);
+        }
+      })
+      .catch(() => setQrCodeUrl(null));
+    return () => {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      setQrCodeUrl(null);
+    };
+  }, [open]);
+
   if (!user || !user.business_id) return null;
 
-  const token = getToken();
-  const qrCodeUrl = `/api/auth/merchant/qr-code?token=${token}`;
-
   const handlePrint = () => {
+    if (!qrCodeUrl) return;
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
     printWindow.document.write(`
@@ -219,7 +242,7 @@ export default function MerchantQrDrawer({ open, onClose }: Props) {
             marginBottom: 20,
             overflow: 'hidden',
           }}>
-            {open && (
+            {open && qrCodeUrl && (
               <img
                 src={qrCodeUrl}
                 alt="Business Check-in QR Code"
@@ -286,7 +309,7 @@ export default function MerchantQrDrawer({ open, onClose }: Props) {
               <Printer size={16} /> Print Flyer
             </button>
             <a
-              href={qrCodeUrl}
+              href={qrCodeUrl ?? '#'}
               download={`qr-code-${user.business_name || 'business'}.svg`}
               className="btn btn-secondary"
               target="_blank"

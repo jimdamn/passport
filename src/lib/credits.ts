@@ -1,22 +1,19 @@
 /**
  * Credits integration — KKCredits API
  *
- * All credit operations go through the KKCredits Worker. The Exchange no longer
- * maintains its own credits ledger. KKCredits is the source of truth for balances
- * and supply tracking. The Exchange users table caches credits_balance for display.
- *
- * award/spend both update the local cache after a successful KKCredits call.
+ * All credit operations go through the KKCredits Worker. KKCredits is the
+ * source of truth for balances and supply tracking; Passport keeps no local
+ * credits ledger or cache.
  */
 
 import type { Env } from '../types';
 
-const SOURCE_APP = 'exchange';
+const SOURCE_APP = 'passport';
 const NETWORK_ID = 'lake-and-locals';
 
 /**
  * Award credits to a user via KKCredits.
  * Applies the halving multiplier unless applyHalving is false.
- * Updates the Exchange user cache after a successful award.
  */
 export async function awardCredits(
   env: Env,
@@ -65,7 +62,6 @@ export async function awardCredits(
 /**
  * Spend (debit) credits from a user via KKCredits.
  * Requires the user's Bearer token — KKCredits enforces that JWT sub matches user_id.
- * Updates the Exchange user cache after a successful spend.
  */
 export async function spendCredits(
   env: Env,
