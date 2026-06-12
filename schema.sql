@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS users (
   bio              TEXT,
   location         TEXT,
   is_active        INTEGER NOT NULL DEFAULT 1,
+  welcome_credited INTEGER NOT NULL DEFAULT 0,
   merged_into      TEXT,
   bd_member_since  INTEGER,
   created_at       INTEGER NOT NULL DEFAULT (unixepoch()),

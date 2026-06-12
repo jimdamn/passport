@@ -96,9 +96,9 @@ async function verifyTokenFull(
 }
 
 /**
- * Find or create an Exchange user for a given (kkauth_user_id, tenant_id).
+ * Find or create a Passport user for a given (kkauth_user_id, tenant_id).
  * Awards welcome credits on first login if configured.
- * Returns the Exchange user row.
+ * Returns the Passport user row.
  */
 async function findOrCreateUser(
   kkAuthUserId: number,
@@ -114,7 +114,7 @@ async function findOrCreateUser(
   ).bind(kkAuthUserId, tenantId).first<any>();
 
   if (!user) {
-    // New user — create Exchange record
+    // New user — create Passport record
     const name = displayName || email.split('@')[0];
     await env.DB.prepare(`
       INSERT INTO users
@@ -125,6 +125,35 @@ async function findOrCreateUser(
     user = await env.DB.prepare(
       'SELECT * FROM users WHERE kkauth_uid = ? AND tenant_id = ?'
     ).bind(kkAuthUserId, tenantId).first<any>();
+  }
+
+  // Welcome credits — retried on every login until delivered, so a KKCredits
+  // outage at signup can never permanently cost a user their bonus. The
+  // ('welcome', kkauth_uid) ref is shared with the Exchange, so KKCredits
+  // dedupes across apps: one welcome bonus per identity, never two.
+  if (user && !user.welcome_credited) {
+    try {
+      const tenantRow = await env.DB.prepare(
+        'SELECT config FROM tenants WHERE id = ?'
+      ).bind(tenantId).first<any>();
+      const welcomeCredits = JSON.parse(tenantRow?.config || '{}').welcome_credits ?? 0;
+
+      if (welcomeCredits > 0) {
+        await awardCredits(
+          env, tenantId, String(kkAuthUserId),
+          welcomeCredits,
+          'Welcome bonus',
+          'welcome', String(kkAuthUserId)
+        );
+      }
+      await env.DB.prepare(
+        'UPDATE users SET welcome_credited = 1, updated_at = unixepoch() WHERE kkauth_uid = ? AND tenant_id = ?'
+      ).bind(kkAuthUserId, tenantId).run();
+      user.welcome_credited = 1;
+    } catch (err) {
+      // Credit award failure must not block login — flag stays 0 for retry.
+      console.error('[findOrCreateUser] welcome credits failed:', err instanceof Error ? err.message : err);
+    }
   }
 
   return user;
