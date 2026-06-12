@@ -22,6 +22,8 @@ import MerchantDashboard from './pages/MerchantDashboard';
 import Help from './pages/Help';
 import EmbedDrawer from './pages/EmbedDrawer';
 import Explore from './pages/Explore';
+import Deals from './pages/Deals';
+import AdminDeals from './pages/profile/AdminDeals';
 
 export default function App() {
   const { isLoading } = useAuth();
@@ -42,6 +44,7 @@ export default function App() {
         <Route path="/auth/sso" element={<SSOLanding />} />
         <Route path="/auth/login" element={<LoginPage />} />
         <Route path="/explore" element={<Explore />} />
+        <Route path="/deals" element={<Deals />} />
         <Route path="/my-stamps" element={<MyStamps />} />
         <Route path="/scan" element={<ScanPortal />} />
         <Route path="/profile" element={<MyProfile />} />
@@ -50,6 +53,7 @@ export default function App() {
         <Route path="/profile/admin/test-plaque" element={<AdminTestPlaque />} />
         <Route path="/profile/admin/plaques" element={<AdminPlaques />} />
         <Route path="/profile/admin/prizes" element={<AdminPrizes />} />
+        <Route path="/profile/admin/deals" element={<AdminDeals />} />
         <Route path="/redeem" element={<RedeemClaim />} />
         <Route path="/merchant" element={<MerchantDashboard />} />
         <Route path="/members/:id" element={<PublicProfile />} />

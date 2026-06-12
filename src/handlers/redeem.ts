@@ -21,14 +21,17 @@ function requireRedeemer(c: AppContext): { isAdmin: boolean; merchantId: string 
   throw new HTTPException(403, { message: 'Only admins and verified merchants can redeem claims.' });
 }
 
-async function findClaim(c: AppContext, claimCode: unknown) {
+// A code can belong to a prize win (passport_claims) or a purchased deal
+// (passport_deal_claims) — both are checked so the merchant /redeem screen
+// works the same for either kind.
+async function findClaim(c: AppContext, claimCode: unknown): Promise<{ kind: 'prize' | 'deal'; claim: any }> {
   if (typeof claimCode !== 'string' || !claimCode.trim()) {
     throw new HTTPException(400, { message: 'claim_code is required.' });
   }
   const tenant = c.get('tenant');
   const tokenHash = await sha256(claimCode.trim().toUpperCase());
 
-  const claim = await c.env.DB.prepare(`
+  const prizeClaim = await c.env.DB.prepare(`
     SELECT cl.token_hash, cl.contact_info, cl.status, cl.expires_at, cl.created_at,
            pr.id AS prize_id, pr.name AS prize_name, pr.prize_type, pr.value, pr.details, pr.merchant_id,
            pl.name AS plaque_name, pl.location_name
@@ -37,31 +40,52 @@ async function findClaim(c: AppContext, claimCode: unknown) {
     JOIN passport_plaques pl ON pl.id = cl.plaque_id
     WHERE cl.token_hash = ? AND cl.tenant_id = ?
   `).bind(tokenHash, tenant.id).first<any>();
+  if (prizeClaim) return { kind: 'prize', claim: prizeClaim };
 
-  if (!claim) {
-    throw new HTTPException(404, { message: 'No claim found for that code. Double-check it was typed exactly as shown (e.g. LL-AB12CD34).' });
-  }
-  return claim;
+  const dealClaim = await c.env.DB.prepare(`
+    SELECT cl.token_hash, cl.status, cl.expires_at, cl.created_at, cl.kredits_paid,
+           d.title AS prize_name, d.details, d.merchant_id, d.merchant_name,
+           u.display_name AS buyer_name, u.email AS buyer_email
+    FROM passport_deal_claims cl
+    JOIN passport_deals d ON d.id = cl.deal_id
+    LEFT JOIN users u ON u.kkauth_uid = cl.user_id AND u.tenant_id = cl.tenant_id
+    WHERE cl.token_hash = ? AND cl.tenant_id = ?
+  `).bind(tokenHash, tenant.id).first<any>();
+  if (dealClaim) return { kind: 'deal', claim: dealClaim };
+
+  throw new HTTPException(404, { message: 'No claim found for that code. Double-check it was typed exactly as shown (e.g. LL-AB12CD34).' });
 }
 
-function claimPayload(claim: any) {
+function claimPayload(kind: 'prize' | 'deal', claim: any) {
   const now = Math.floor(Date.now() / 1000);
-  const expired = claim.status === 'expired' || (claim.status === 'pending' && claim.expires_at <= now);
+  const expired = claim.status === 'expired' || claim.status === 'refunded'
+    || (claim.status === 'pending' && claim.expires_at <= now);
   return {
-    status: expired && claim.status === 'pending' ? 'expired' : claim.status,
+    kind,
+    status: expired && claim.status === 'pending' ? 'expired' : (claim.status === 'refunded' ? 'expired' : claim.status),
     redeemable: claim.status === 'pending' && !expired,
     prize: {
       name: claim.prize_name,
-      prize_type: claim.prize_type,
-      value: claim.value,
+      prize_type: kind === 'deal' ? 'kredit_deal' : claim.prize_type,
+      value: kind === 'deal' ? claim.kredits_paid : claim.value,
       details: claim.details,
     },
-    plaque_name: claim.plaque_name,
-    location_name: claim.location_name,
-    contact_info: claim.contact_info,
+    plaque_name: kind === 'deal' ? (claim.merchant_name ?? 'Kredit Deal') : claim.plaque_name,
+    location_name: kind === 'deal' ? 'Purchased with KrowdKredits' : claim.location_name,
+    contact_info: kind === 'deal' ? (claim.buyer_name ?? claim.buyer_email ?? null) : claim.contact_info,
     created_at: claim.created_at,
     expires_at: claim.expires_at,
   };
+}
+
+function requireOwnClaim(redeemer: { isAdmin: boolean; merchantId: string | null }, claim: any, kind: 'prize' | 'deal') {
+  if (!redeemer.isAdmin && claim.merchant_id !== redeemer.merchantId) {
+    throw new HTTPException(403, {
+      message: kind === 'deal'
+        ? 'This deal belongs to another merchant, so it can’t be redeemed here.'
+        : 'This claim is for another merchant’s prize, so it can’t be redeemed here.',
+    });
+  }
 }
 
 /**
@@ -71,13 +95,11 @@ function claimPayload(claim: any) {
 export async function lookupClaim(c: AppContext) {
   const redeemer = requireRedeemer(c);
   const body = await c.req.json<any>().catch(() => ({}));
-  const claim = await findClaim(c, body.claim_code);
+  const { kind, claim } = await findClaim(c, body.claim_code);
 
-  if (!redeemer.isAdmin && claim.merchant_id !== redeemer.merchantId) {
-    throw new HTTPException(403, { message: 'This claim is for another merchant’s prize, so it can’t be redeemed here.' });
-  }
+  requireOwnClaim(redeemer, claim, kind);
 
-  return c.json({ data: claimPayload(claim) });
+  return c.json({ data: claimPayload(kind, claim) });
 }
 
 /**
@@ -89,20 +111,24 @@ export async function confirmClaim(c: AppContext) {
   const redeemer = requireRedeemer(c);
   const tenant = c.get('tenant');
   const body = await c.req.json<any>().catch(() => ({}));
-  const claim = await findClaim(c, body.claim_code);
+  const { kind, claim } = await findClaim(c, body.claim_code);
 
-  if (!redeemer.isAdmin && claim.merchant_id !== redeemer.merchantId) {
-    throw new HTTPException(403, { message: 'This claim is for another merchant’s prize, so it can’t be redeemed here.' });
-  }
+  requireOwnClaim(redeemer, claim, kind);
 
-  const result = await c.env.DB.prepare(`
-    UPDATE passport_claims
-    SET status = 'claimed'
-    WHERE token_hash = ? AND tenant_id = ? AND status = 'pending' AND expires_at > unixepoch()
-  `).bind(claim.token_hash, tenant.id).run();
+  const result = kind === 'deal'
+    ? await c.env.DB.prepare(`
+        UPDATE passport_deal_claims
+        SET status = 'claimed', claimed_at = unixepoch()
+        WHERE token_hash = ? AND tenant_id = ? AND status = 'pending' AND expires_at > unixepoch()
+      `).bind(claim.token_hash, tenant.id).run()
+    : await c.env.DB.prepare(`
+        UPDATE passport_claims
+        SET status = 'claimed'
+        WHERE token_hash = ? AND tenant_id = ? AND status = 'pending' AND expires_at > unixepoch()
+      `).bind(claim.token_hash, tenant.id).run();
 
   if (result.meta.changes !== 1) {
-    const payload = claimPayload(claim);
+    const payload = claimPayload(kind, claim);
     throw new HTTPException(409, {
       message: payload.status === 'claimed'
         ? 'This claim was already redeemed.'
@@ -110,5 +136,5 @@ export async function confirmClaim(c: AppContext) {
     });
   }
 
-  return c.json({ data: { ...claimPayload(claim), status: 'claimed', redeemable: false } });
+  return c.json({ data: { ...claimPayload(kind, claim), status: 'claimed', redeemable: false } });
 }

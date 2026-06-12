@@ -9,6 +9,7 @@ import {
 import { ArrowLeft, Plus, Pencil, Trash2, Gift, BadgeCheck, Clock, CheckCircle, XCircle, RefreshCw } from 'lucide-react';
 import { Alert } from '../components/ui/Alert';
 import { Spinner } from '../components/ui/Spinner';
+import DealsManager from '../components/merchant/DealsManager';
 
 interface FormState {
   name: string;
@@ -349,6 +350,9 @@ export default function MerchantDashboard() {
           })
         )}
       </div>
+
+      {/* Kredit deals marketplace */}
+      <DealsManager />
 
       {/* Recent wins */}
       <h2 style={{ margin: '0 0 12px', fontSize: '1.1rem', fontFamily: 'var(--font-serif)', color: 'var(--green)' }}>Recent Wins of Your Prizes</h2>

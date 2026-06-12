@@ -60,6 +60,49 @@ export async function awardCredits(
 }
 
 /**
+ * Refund credits to a user via KKCredits.
+ * apply_halving is false so the user gets back the exact amount they spent,
+ * and the (ref_type, ref_id) idempotency key guarantees a refund can never
+ * double-fire even if the sweep retries.
+ */
+export async function refundCredits(
+  env: Env,
+  userId: number,
+  amount: number,
+  reason: string,
+  refType: string,
+  refId: string
+): Promise<{ balance: number }> {
+  const res = await env.KKCREDITS.fetch(
+    new Request('https://kkcredits/award', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-App-Key': env.KKAUTH_APP_KEY,
+      },
+      body: JSON.stringify({
+        user_id: userId,
+        amount,
+        reason,
+        source_app: SOURCE_APP,
+        network_id: NETWORK_ID,
+        ref_type: refType,
+        ref_id: refId,
+        apply_halving: false,
+      }),
+    })
+  );
+
+  if (!res.ok) {
+    const body = await res.json<{ error?: string }>().catch(() => ({} as { error?: string }));
+    throw new Error(body.error ?? `KKCredits refund failed: ${res.status}`);
+  }
+
+  const json = await res.json<{ data: { balance: number } }>();
+  return { balance: json.data.balance };
+}
+
+/**
  * Spend (debit) credits from a user via KKCredits.
  * Requires the user's Bearer token — KKCredits enforces that JWT sub matches user_id.
  */

@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Map, Award, User, LayoutGrid } from 'lucide-react';
+import { Map, Award, User, LayoutGrid, BadgePercent } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 export default function BottomNav() {
@@ -20,6 +20,15 @@ export default function BottomNav() {
       >
         <Map size={20} />
         <span>Explore</span>
+      </Link>
+
+      <Link
+        to="/deals"
+        className={`bottom-nav-tab ${isActive('/deals') ? 'active' : ''}`}
+        aria-label="Deals"
+      >
+        <BadgePercent size={20} />
+        <span>Deals</span>
       </Link>
 
       <Link

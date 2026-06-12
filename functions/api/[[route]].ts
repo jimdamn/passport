@@ -16,6 +16,11 @@ import {
 } from '../../src/handlers/admin';
 import { lookupClaim, confirmClaim } from '../../src/handlers/redeem';
 import { listMyPrizes, createMyPrize, updateMyPrize, deleteMyPrize, listMyClaims } from '../../src/handlers/merchant';
+import {
+  listDeals, purchaseDeal, listMyDealClaims, regenerateDealClaimCode,
+  listMerchantDeals, createMerchantDeal, updateMerchantDeal, deleteMerchantDeal,
+  adminListDeals, adminUpdateDeal, adminDeleteDeal, internalSweep,
+} from '../../src/handlers/deals';
 
 import { logger } from '../../src/lib/logger';
 
@@ -92,9 +97,23 @@ tenantApp.post('/merchant/prizes', createMyPrize);
 tenantApp.put('/merchant/prizes/:id', updateMyPrize);
 tenantApp.delete('/merchant/prizes/:id', deleteMyPrize);
 tenantApp.get('/merchant/claims', listMyClaims);
+tenantApp.post('/deals/:id/claim', purchaseDeal);
+tenantApp.get('/deals/mine', listMyDealClaims);
+tenantApp.post('/deals/claims/:id/code', regenerateDealClaimCode);
+tenantApp.get('/merchant/deals', listMerchantDeals);
+tenantApp.post('/merchant/deals', createMerchantDeal);
+tenantApp.put('/merchant/deals/:id', updateMerchantDeal);
+tenantApp.delete('/merchant/deals/:id', deleteMerchantDeal);
+tenantApp.get('/admin/deals', adminListDeals);
+tenantApp.put('/admin/deals/:id', adminUpdateDeal);
+tenantApp.delete('/admin/deals/:id', adminDeleteDeal);
+
+// Cron backstop for deal-claim expiry (X-Internal-Secret protected)
+app.post('/api/internal/deals/sweep', internalSweep);
 
 // Public Passport Scan & Claims APIs (Tenant-scoped, Guest-friendly)
 app.post('/api/t/:tenant/passport/scan', resolveTenant, scanPlaque);
+app.get('/api/t/:tenant/deals', resolveTenant, listDeals);
 app.post('/api/t/:tenant/passport/claims/register', resolveTenant, registerClaim);
 app.get('/api/t/:tenant/members/:id', resolveTenant, getMember);
 app.get('/api/t/:tenant/passport/members', resolveTenant, async (c) => {
