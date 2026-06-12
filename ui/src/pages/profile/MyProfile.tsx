@@ -274,9 +274,14 @@ export default function MyProfile() {
           <p style={{ margin: '0 0 12px', fontSize: '0.82rem', color: 'var(--muted)', fontFamily: 'var(--font-sans)' }}>
             You have administrator privileges. Manage local network configurations and review pending merchant applications.
           </p>
-          <Link to="/profile/admin/merchants" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
-            Review Merchant Applications
-          </Link>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <Link to="/profile/admin/merchants" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
+              Review Merchant Applications
+            </Link>
+            <Link to="/profile/admin/test-plaque" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
+              Test Plaque
+            </Link>
+          </div>
         </div>
       )}
 

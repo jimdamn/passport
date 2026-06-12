@@ -12,6 +12,7 @@ import ScanPortal from './pages/ScanPortal';
 import MyProfile from './pages/profile/MyProfile';
 import ApplyMerchant from './pages/profile/ApplyMerchant';
 import AdminMerchants from './pages/profile/AdminMerchants';
+import AdminTestPlaque from './pages/profile/AdminTestPlaque';
 
 import PublicProfile from './pages/profile/PublicProfile';
 import Help from './pages/Help';
@@ -42,6 +43,7 @@ export default function App() {
         <Route path="/profile" element={<MyProfile />} />
         <Route path="/profile/apply-merchant" element={<ApplyMerchant />} />
         <Route path="/profile/admin/merchants" element={<AdminMerchants />} />
+        <Route path="/profile/admin/test-plaque" element={<AdminTestPlaque />} />
         <Route path="/members/:id" element={<PublicProfile />} />
         <Route path="/help" element={<Help />} />
         <Route path="*" element={<Navigate to="/" replace />} />
