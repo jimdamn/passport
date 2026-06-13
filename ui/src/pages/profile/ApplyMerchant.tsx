@@ -32,6 +32,7 @@ export default function ApplyMerchant() {
     lat: '',
     lon: '',
     hide_address: false,
+    hide_phone: false,
   });
 
   const [locationMethod, setLocationMethod] = useState<'zip' | 'gps' | 'search'>('zip');
@@ -168,6 +169,7 @@ export default function ApplyMerchant() {
         lat: form.lat ? parseFloat(form.lat) : undefined,
         lon: form.lon ? parseFloat(form.lon) : undefined,
         hide_address: form.hide_address || undefined,
+        hide_phone: form.hide_phone || undefined,
       });
 
       setSuccess(true);
@@ -432,6 +434,16 @@ export default function ApplyMerchant() {
                 disabled={pending}
                 style={{ minHeight: 38 }}
               />
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={form.hide_phone}
+                  onChange={e => setForm(f => ({ ...f, hide_phone: e.target.checked }))}
+                  disabled={pending}
+                  style={{ accentColor: 'var(--green)' }}
+                />
+                <span style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>Keep phone number private</span>
+              </label>
             </div>
 
             {/* Website */}
