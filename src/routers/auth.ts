@@ -21,6 +21,8 @@ import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import type { Env, KKAuthPayload, KKAuthProfile } from '../types';
 import { awardCredits, fetchBalance } from '../lib/credits';
+import { hmacHex } from '../lib/hmac';
+import { generateQrSvg } from '../lib/qr';
 
 export const authRouter = new Hono<{ Bindings: Env }>();
 
@@ -812,16 +814,15 @@ authRouter.get('/me/qr-code', async (c) => {
 });
 
 // ─────────────────────────────────────────────────────────────
-// GET /api/auth/merchant/qr-code — proxy authenticated merchant QR code to KKAuth
+// GET /api/auth/merchant/qr-code — generate signed merchant check-in QR code
 // ─────────────────────────────────────────────────────────────
 authRouter.get('/merchant/qr-code', async (c) => {
-  // Authorization header only — never accept tokens in the query string.
   const auth = c.req.header('Authorization');
   if (!auth) {
     throw new HTTPException(401, { message: 'Authorization required' });
   }
 
-  // Fetch Merchant QR code from KKAuth directly
+  // Get business ID from KKAuth
   const res = await c.env.KKAUTH.fetch(
     new Request('https://kkauth/me/merchant-qr-code', {
       headers: { 'Authorization': auth },
@@ -833,8 +834,15 @@ authRouter.get('/merchant/qr-code', async (c) => {
     return new Response(text, { status: res.status, headers: { 'Content-Type': 'application/json' } });
   }
 
-  const body = await res.arrayBuffer();
-  return new Response(body, {
+  const { data: business } = await res.json<{ data: { id: number; name: string } }>();
+
+  // Sign the scan payload — QR_SIGNING_SECRET lives in Passport, not KKAuth
+  const sig = await hmacHex(c.env.QR_SIGNING_SECRET, `/scan:${business.id}`);
+  const domain = c.env.COOKIE_DOMAIN ? c.env.COOKIE_DOMAIN.replace(/^\./, '') : 'lakeandlocals.com';
+  const scanUrl = `https://passport.${domain}/scan?id=${business.id}&sig=${sig}`;
+
+  const svgString = generateQrSvg(scanUrl);
+  return new Response(svgString, {
     status: 200,
     headers: {
       'Content-Type': 'image/svg+xml',
