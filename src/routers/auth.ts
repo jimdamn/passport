@@ -940,8 +940,8 @@ authRouter.post('/profile/admin/merchants/:id/review', async (c) => {
 
       if (tenant) {
         await c.env.DB.prepare(`
-          INSERT OR REPLACE INTO passport_plaques (id, tenant_id, merchant_id, name, location_name, lat, lon, category, is_active)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+          INSERT OR REPLACE INTO passport_plaques (id, tenant_id, merchant_id, name, location_name, lat, lon, category, is_active, skip_geofence)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
         `).bind(
           String(biz.id),
           tenant.id,
@@ -950,7 +950,8 @@ authRouter.post('/profile/admin/merchants/:id/review', async (c) => {
           biz.address || biz.name,
           biz.lat,
           biz.lon,
-          biz.category
+          biz.category,
+          biz.hide_address ? 1 : 0
         ).run();
       }
     }

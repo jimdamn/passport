@@ -77,7 +77,7 @@ export async function scanPlaque(c: AppContext) {
     if (plaque.event_end && now > plaque.event_end) {
       throw new HTTPException(403, { message: `${plaque.name} has ended. Thanks for playing — keep an eye out for the next one!` });
     }
-  } else {
+  } else if (!plaque.skip_geofence) {
     // Device coordinates are required — the ScanPortal UI always sends them, so a
     // request without coords is a hand-crafted call trying to skip the geofence.
     if (
