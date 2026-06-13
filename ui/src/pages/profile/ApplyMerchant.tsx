@@ -13,6 +13,7 @@ const CATEGORIES = [
   { value: 'attractions', label: 'Attractions (Historic sites, Toboggan)' },
   { value: 'lodging', label: 'Lodging & B&Bs (Historic Inns, Hotels)' },
   { value: 'farmfood', label: 'Farm & Fresh (Orchards, Farm stands)' },
+  { value: 'services', label: 'Services (Professionals, Contractors, Specialists)' },
 ];
 
 export default function ApplyMerchant() {
@@ -217,7 +218,7 @@ export default function ApplyMerchant() {
 
           {/* Category Selector */}
           <div className="form-group" style={{ margin: 0 }}>
-            <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600 }}>Directory Category *</label>
+            <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600 }}>Business Type *</label>
             <select
               className="form-select"
               value={form.category}
