@@ -298,7 +298,7 @@ export default function MyProfile() {
       )}
 
       {/* ── Merchant/Business Identity Onboarding & Status ── */}
-      {!user.business_id && (
+      {!isLoading && !user.business_id && (
         <div className="card" style={{ marginBottom: 16, borderColor: 'var(--amber)' }}>
           <p style={{ margin: '0 0 4px', fontWeight: 'bold', fontFamily: 'var(--font-serif)', color: 'var(--green)' }}>
             Own a local business or organization?
