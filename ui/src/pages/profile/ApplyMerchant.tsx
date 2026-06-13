@@ -98,21 +98,44 @@ export default function ApplyMerchant() {
     setGeocodingPending(true);
     setError('');
     try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(addr)}&format=json&limit=1`, {
-        headers: { 'Accept-Language': 'en' }
-      });
-      if (!res.ok) throw new Error('Geocoding service unavailable.');
-      const data = await res.json() as any[];
-      if (!data || data.length === 0) {
-        throw new Error('Address not found. Please refine the street and city details.');
+      // US Census Geocoder — handles rural county road formats well
+      const censusRes = await fetch(
+        `https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?address=${encodeURIComponent(addr)}&benchmark=2020&format=json`
+      );
+      if (censusRes.ok) {
+        const censusData = await censusRes.json() as any;
+        const matches = censusData?.result?.addressMatches;
+        if (matches && matches.length > 0) {
+          const match = matches[0];
+          setForm(f => ({
+            ...f,
+            lat: match.coordinates.y.toString(),
+            lon: match.coordinates.x.toString(),
+          }));
+          setGeocodedDisplayName(match.matchedAddress);
+          return;
+        }
       }
-      const match = data[0];
-      setForm(f => ({
-        ...f,
-        lat: match.lat,
-        lon: match.lon,
-      }));
-      setGeocodedDisplayName(match.display_name);
+
+      // Fallback: Nominatim
+      const nomRes = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(addr)}&format=json&limit=1&countrycodes=us`,
+        { headers: { 'Accept-Language': 'en' } }
+      );
+      if (nomRes.ok) {
+        const nomData = await nomRes.json() as any[];
+        if (nomData && nomData.length > 0) {
+          setForm(f => ({
+            ...f,
+            lat: nomData[0].lat,
+            lon: nomData[0].lon,
+          }));
+          setGeocodedDisplayName(nomData[0].display_name);
+          return;
+        }
+      }
+
+      throw new Error('Address not found. Make sure to include city and state (e.g. 1255 N 170 W, Angola, IN).');
     } catch (err: any) {
       setError(err.message || 'Geocoding search failed. Please try again.');
     } finally {
@@ -315,7 +338,7 @@ export default function ApplyMerchant() {
                     className="form-input"
                     value={searchAddress}
                     onChange={e => setSearchAddress(e.target.value)}
-                    placeholder="e.g. 105 N Wayne St, Angola, IN"
+                    placeholder="e.g. 1255 N 170 W, Angola, IN"
                     style={{ minHeight: 36, margin: 0, flex: 1, fontSize: '0.85rem' }}
                     disabled={pending}
                   />
