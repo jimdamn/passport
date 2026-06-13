@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTenant } from '../context/TenantContext';
 
 import { updateLocation } from '../api/profile';
-import { MapPin, Star, Phone, Globe, Compass, Utensils, ShoppingBag, Trees, Landmark, Hotel, Wheat } from 'lucide-react';
+import { MapPin, Star, Phone, Globe, Compass, Utensils, ShoppingBag, Trees, Landmark, Hotel, Wheat, Briefcase } from 'lucide-react';
 
 interface Business {
   id: string;
@@ -340,7 +340,8 @@ export default function Explore() {
     { slug: 'recreation', name: 'Parks & Trails', Icon: Trees },
     { slug: 'attractions', name: 'Attractions', Icon: Landmark },
     { slug: 'lodging', name: 'Lodging & B&Bs', Icon: Hotel },
-    { slug: 'farmfood', name: 'Farm & Fresh', Icon: Wheat }
+    { slug: 'farmfood', name: 'Farm & Fresh', Icon: Wheat },
+    { slug: 'services', name: 'Services', Icon: Briefcase }
   ];
 
   return (
