@@ -104,6 +104,7 @@ export interface MerchantApplication {
   website?: string;
   lat?: number;
   lon?: number;
+  hide_address?: boolean;
 }
 
 export async function applyMerchant(application: MerchantApplication) {

@@ -31,6 +31,7 @@ export default function ApplyMerchant() {
     website: '',
     lat: '',
     lon: '',
+    hide_address: false,
   });
 
   const [locationMethod, setLocationMethod] = useState<'zip' | 'gps' | 'search'>('zip');
@@ -166,6 +167,7 @@ export default function ApplyMerchant() {
         website: form.website.trim() || undefined,
         lat: form.lat ? parseFloat(form.lat) : undefined,
         lon: form.lon ? parseFloat(form.lon) : undefined,
+        hide_address: form.hide_address || undefined,
       });
 
       setSuccess(true);
@@ -402,6 +404,20 @@ export default function ApplyMerchant() {
               />
             </div>
           </div>
+
+          {/* Home-based business address privacy */}
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', padding: '10px 12px', background: 'var(--cream)', borderRadius: 'var(--r-md)', border: '1px solid var(--border)' }}>
+            <input
+              type="checkbox"
+              checked={form.hide_address}
+              onChange={e => setForm(f => ({ ...f, hide_address: e.target.checked }))}
+              disabled={pending}
+              style={{ marginTop: 2, accentColor: 'var(--green)', flexShrink: 0 }}
+            />
+            <span style={{ fontSize: '0.82rem', color: 'var(--body)', lineHeight: 1.45 }}>
+              <strong>Home-based business</strong> — keep my street address private. Only my city/ZIP will be shown publicly.
+            </span>
+          </label>
 
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
             {/* Phone */}
