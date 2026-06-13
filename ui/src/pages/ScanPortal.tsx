@@ -20,7 +20,7 @@ interface PrizeData {
 }
 
 export default function ScanPortal() {
-  const { token } = useAuth();
+  const { token, isLoading: authLoading } = useAuth();
   const { tenant } = useTenant();
   const [searchParams] = useSearchParams();
   const plaqueId = searchParams.get('plaque') || searchParams.get('id');
@@ -94,12 +94,17 @@ export default function ScanPortal() {
     requestLocation();
   }, [plaqueId, sig]);
 
-  // Execute scan once location resolves (granted or failed)
+  // Execute scan once location resolves (granted or failed) AND the auth token
+  // has finished hydrating. Waiting on !authLoading is critical: the token
+  // refreshes asynchronously on mount, so firing the scan the instant geo
+  // resolves can outrun it and record a logged-in member's winning scan as a
+  // guest (user_id NULL) — credit never lands and they get the claim-code
+  // friction instead of an instant deposit.
   useEffect(() => {
-    if ((geoCoords || geoFailed) && plaqueId) {
+    if ((geoCoords || geoFailed) && plaqueId && !authLoading) {
       performScan();
     }
-  }, [geoCoords, geoFailed]);
+  }, [geoCoords, geoFailed, authLoading]);
 
   const performScan = async () => {
     setStatus('scanning');
