@@ -30,7 +30,7 @@ export async function awardCredits(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-App-Key': env.KKAUTH_APP_KEY,
+        'X-App-Key': env.KKCREDITS_APP_KEY,
       },
       body: JSON.stringify({
         user_id: parseInt(userId, 10),
@@ -78,7 +78,7 @@ export async function refundCredits(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-App-Key': env.KKAUTH_APP_KEY,
+        'X-App-Key': env.KKCREDITS_APP_KEY,
       },
       body: JSON.stringify({
         user_id: userId,
@@ -121,7 +121,7 @@ export async function spendCredits(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-App-Key': env.KKAUTH_APP_KEY,
+        'X-App-Key': env.KKCREDITS_APP_KEY,
         'Authorization': `Bearer ${bearerToken}`,
       },
       body: JSON.stringify({

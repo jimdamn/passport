@@ -127,6 +127,8 @@ export function PersonalPersonaDrawer({
 
       <aside
         aria-label="Personal Persona Settings"
+        aria-hidden={!open}
+        {...(!open ? { inert: '' } : {})}
         style={{
           position: 'fixed',
           top: 0,

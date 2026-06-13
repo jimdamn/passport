@@ -5,8 +5,9 @@ export interface Env {
   SITE_ASSETS: R2Bucket;     // R2 bucket for site images, favicons, and badges
   KKCREDITS: Fetcher;        // Service Binding to KKCredits Worker
   KKGAME: Fetcher;           // Service Binding to KKGAME Worker
-  KKAUTH_APP_KEY: string;    // X-App-Key for KKCredits API calls
-  KKGAME_APP_KEY: string;    // X-App-Key for KKGame API calls
+  KKAUTH_APP_KEY: string;     // app_key for KKAuth (apps table)
+  KKCREDITS_APP_KEY: string;  // X-App-Key for KKCredits API calls
+  KKGAME_APP_KEY: string;     // X-App-Key for KKGame API calls
   INTERNAL_SECRET: string;   // Shared secret for KKAuth internal calls
   COOKIE_DOMAIN: string;     // e.g. .lakeandlocals.com — shared across all KrowdKraft apps
   ENVIRONMENT: string;

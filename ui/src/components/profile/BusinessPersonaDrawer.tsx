@@ -63,6 +63,8 @@ export function BusinessPersonaDrawer({
 
       <aside
         aria-label="Business Persona Settings"
+        aria-hidden={!open}
+        {...(!open ? { inert: '' } : {})}
         style={{
           position: 'fixed',
           top: 0,

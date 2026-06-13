@@ -133,7 +133,14 @@ export default function Topbar() {
       </header>
 
       <div className={`nav-drawer-overlay${drawerOpen ? ' open' : ''}`} onClick={() => setDrawerOpen(false)} />
-      <nav className={`nav-drawer${drawerOpen ? ' open' : ''}`}>
+      {/* inert + aria-hidden when closed: the drawer is still in the DOM (just
+          translated off-canvas), so without this its links stay in the tab
+          order and screen-reader tree on every page. */}
+      <nav
+        className={`nav-drawer${drawerOpen ? ' open' : ''}`}
+        aria-hidden={!drawerOpen}
+        {...(!drawerOpen ? { inert: '' } : {})}
+      >
         <button
           className="nav-drawer-close"
           onClick={() => setDrawerOpen(false)}

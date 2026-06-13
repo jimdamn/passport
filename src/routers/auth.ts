@@ -41,6 +41,17 @@ function rewriteCookie(setCookie: string): string {
   return setCookie.replace(/;\s*Path=[^;]*/gi, '; Path=/');
 }
 
+/**
+ * Forward the visitor's real IP to KKAuth. Service-binding requests carry no
+ * CF-Connecting-IP, so without this header KKAuth's per-IP brute-force
+ * throttle would put every visitor in one shared bucket. Omitted entirely
+ * (never sent empty) when the edge IP is unavailable.
+ */
+function clientIpHeader(c: { req: { header: (name: string) => string | undefined } }): Record<string, string> {
+  const ip = c.req.header('CF-Connecting-IP');
+  return ip ? { 'X-Forwarded-For': ip } : {};
+}
+
 /** Verify a token via KKAuth Service Binding and return the payload. */
 async function verifyToken(token: string, env: Env): Promise<KKAuthPayload> {
   // Service Binding call — stays within Cloudflare network; scheme is ignored by runtime.
@@ -127,36 +138,44 @@ async function findOrCreateUser(
     ).bind(kkAuthUserId, tenantId).first<any>();
   }
 
-  // Welcome credits — retried on every login until delivered, so a KKCredits
-  // outage at signup can never permanently cost a user their bonus. The
-  // ('welcome', kkauth_uid) ref is shared with the Exchange, so KKCredits
-  // dedupes across apps: one welcome bonus per identity, never two.
-  if (user && !user.welcome_credited) {
-    try {
-      const tenantRow = await env.DB.prepare(
-        'SELECT config FROM tenants WHERE id = ?'
-      ).bind(tenantId).first<any>();
-      const welcomeCredits = JSON.parse(tenantRow?.config || '{}').welcome_credits ?? 0;
-
-      if (welcomeCredits > 0) {
-        await awardCredits(
-          env, tenantId, String(kkAuthUserId),
-          welcomeCredits,
-          'Welcome bonus',
-          'welcome', String(kkAuthUserId)
-        );
-      }
-      await env.DB.prepare(
-        'UPDATE users SET welcome_credited = 1, updated_at = unixepoch() WHERE kkauth_uid = ? AND tenant_id = ?'
-      ).bind(kkAuthUserId, tenantId).run();
-      user.welcome_credited = 1;
-    } catch (err) {
-      // Credit award failure must not block login — flag stays 0 for retry.
-      console.error('[findOrCreateUser] welcome credits failed:', err instanceof Error ? err.message : err);
-    }
-  }
+  if (user) await awardWelcomeCredits(user, tenantId, env);
 
   return user;
+}
+
+/**
+ * Award the welcome bonus if it has not landed yet. Retried on every login and
+ * every /me call until delivered, so a KKCredits outage at signup can never
+ * permanently cost a user their bonus. The ('welcome', kkauth_uid) ref is
+ * shared with the Exchange, so KKCredits dedupes across apps: one welcome bonus
+ * per identity, never two. Mutates user.welcome_credited on success.
+ */
+async function awardWelcomeCredits(user: any, tenantId: string, env: Env): Promise<void> {
+  if (!user || user.welcome_credited) return;
+
+  const kkAuthUserId = user.kkauth_uid;
+  try {
+    const tenantRow = await env.DB.prepare(
+      'SELECT config FROM tenants WHERE id = ?'
+    ).bind(tenantId).first<any>();
+    const welcomeCredits = JSON.parse(tenantRow?.config || '{}').welcome_credits ?? 0;
+
+    if (welcomeCredits > 0) {
+      await awardCredits(
+        env, tenantId, String(kkAuthUserId),
+        welcomeCredits,
+        'Welcome bonus',
+        'welcome', String(kkAuthUserId)
+      );
+    }
+    await env.DB.prepare(
+      'UPDATE users SET welcome_credited = 1, updated_at = unixepoch() WHERE kkauth_uid = ? AND tenant_id = ?'
+    ).bind(kkAuthUserId, tenantId).run();
+    user.welcome_credited = 1;
+  } catch (err) {
+    // Credit award failure must not block login — flag stays 0 for retry.
+    console.error('[awardWelcomeCredits] welcome credits failed:', err instanceof Error ? err.message : err);
+  }
 }
 
 /** Shape the public user object returned to the browser. */
@@ -198,7 +217,12 @@ authRouter.post('/otp/request', async (c) => {
     res = await c.env.KKAUTH.fetch(
       new Request('https://kkauth/otp/request', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          // Service-binding requests carry no CF-Connecting-IP, so KKAuth's
+          // per-IP throttle would lump all visitors into one bucket without this.
+          ...clientIpHeader(c),
+        },
         body: JSON.stringify({ email }),
       })
     );
@@ -241,7 +265,10 @@ authRouter.post('/otp/verify', async (c) => {
     res = await c.env.KKAUTH.fetch(
       new Request('https://kkauth/otp/verify', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...clientIpHeader(c),
+        },
         body: JSON.stringify({ email, otp, app_key: c.env.KKAUTH_APP_KEY }),
       })
     );
@@ -381,6 +408,7 @@ authRouter.post('/refresh', async (c) => {
       headers: {
         'Content-Type': 'application/json',
         'Cookie': cookieHeader,
+        ...clientIpHeader(c),
       },
       body: JSON.stringify({}),
     })
@@ -462,6 +490,10 @@ authRouter.get('/me', async (c) => {
       kk.bd_member_since ?? null,
       c.env
     );
+  } else {
+    // Existing user whose welcome bonus never landed (e.g. KKCredits was down
+    // at signup, or they signed in via kk-login which skips findOrCreateUser).
+    await awardWelcomeCredits(user, tenantId, c.env);
   }
 
   // Keep D1 cache in sync so offer/trade join queries stay accurate.

@@ -4,3 +4,4 @@ dist/
 ui/dist/
 .dev.vars
 *.env
+.gstack/

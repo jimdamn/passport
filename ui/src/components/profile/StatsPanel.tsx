@@ -165,6 +165,8 @@ export default function StatsPanel({ open, type, onClose }: Props) {
       {/* Slide-in panel — from the LEFT */}
       <aside
         aria-label={type ? panelTitle(type, creditsName) : 'Stats'}
+        aria-hidden={!open}
+        {...(!open ? { inert: '' } : {})}
         style={{
           position: 'fixed', top: 0, left: 0, bottom: 0,
           width: 'min(400px, 100vw)', background: 'var(--cream)',

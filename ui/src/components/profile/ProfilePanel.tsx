@@ -211,6 +211,8 @@ export default function ProfilePanel({ open, onClose, onSaved }: Props) {
 
       <aside
         aria-label="Edit profile"
+        aria-hidden={!open}
+        {...(!open ? { inert: '' } : {})}
         style={{
           position: 'fixed', top: 0, right: 0, bottom: 0,
           width: 'min(400px, 100vw)', background: 'var(--cream)',

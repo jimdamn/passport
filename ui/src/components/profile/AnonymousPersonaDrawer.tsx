@@ -93,6 +93,8 @@ export function AnonymousPersonaDrawer({
 
       <aside
         aria-label="Anonymous Persona Settings"
+        aria-hidden={!open}
+        {...(!open ? { inert: '' } : {})}
         style={{
           position: 'fixed',
           top: 0,

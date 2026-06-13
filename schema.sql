@@ -98,14 +98,19 @@ CREATE TABLE IF NOT EXISTS passport_prize_drops (
 CREATE INDEX IF NOT EXISTS idx_drops_pending ON passport_prize_drops(prize_id, won_scan_id, drop_at);
 
 -- Scan Record & Cooldown Ledger
+-- user_id holds a kkauth_uid but is deliberately NOT a foreign key: users
+-- enforces uniqueness on (kkauth_uid, tenant_id), and SQLite rejects every
+-- write to a child table whose FK targets a non-uniquely-indexed column
+-- ("foreign key mismatch").
 CREATE TABLE IF NOT EXISTS passport_scans (
   id          TEXT PRIMARY KEY,
   plaque_id   TEXT NOT NULL REFERENCES passport_plaques(id),
-  user_id     INTEGER REFERENCES users(kkauth_uid),
+  user_id     INTEGER,
   guest_ip    TEXT,
   credits_won INTEGER NOT NULL DEFAULT 0,
   created_at  INTEGER NOT NULL DEFAULT (unixepoch())
 );
+CREATE INDEX IF NOT EXISTS idx_scans_guest_cooldown ON passport_scans(guest_ip, plaque_id, created_at);
 
 -- Deferred Claims System (Claim Tokens)
 -- Only the SHA-256 hash of the claim code is stored; the raw code is shown
