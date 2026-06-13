@@ -930,6 +930,32 @@ authRouter.post('/profile/admin/merchants/:id/review', async (c) => {
     return c.json(kkBody, res.status as any);
   }
 
+  // On approval, create/update the merchant's passport plaque so their QR code works
+  if (body.status === 'verified' && kkBody.data) {
+    const biz = kkBody.data;
+    if (biz.lat != null && biz.lon != null) {
+      const tenant = await c.env.DB.prepare(
+        'SELECT id FROM tenants WHERE is_active = 1 LIMIT 1'
+      ).first<{ id: string }>();
+
+      if (tenant) {
+        await c.env.DB.prepare(`
+          INSERT OR REPLACE INTO passport_plaques (id, tenant_id, merchant_id, name, location_name, lat, lon, category, is_active)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+        `).bind(
+          String(biz.id),
+          tenant.id,
+          String(biz.id),
+          biz.name,
+          biz.address || biz.name,
+          biz.lat,
+          biz.lon,
+          biz.category
+        ).run();
+      }
+    }
+  }
+
   return c.json(kkBody);
 });
 
