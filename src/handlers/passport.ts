@@ -77,7 +77,7 @@ export async function scanPlaque(c: AppContext) {
     if (plaque.event_end && now > plaque.event_end) {
       throw new HTTPException(403, { message: `${plaque.name} has ended. Thanks for playing — keep an eye out for the next one!` });
     }
-  } else if (!plaque.skip_geofence) {
+  } else {
     // Device coordinates are required — the ScanPortal UI always sends them, so a
     // request without coords is a hand-crafted call trying to skip the geofence.
     if (
@@ -92,9 +92,10 @@ export async function scanPlaque(c: AppContext) {
 
     let locationVerified = true;
 
-    // Primary gate: device GPS must be within 500 meters of the plaque
+    // Home-based merchants use an 8 km radius; fixed-location plaques use 500 m.
+    const geofenceRadius = plaque.skip_geofence ? 8000 : 500;
     const distanceMeters = getDistance(lat, lon, plaque.lat, plaque.lon) * 1000;
-    if (distanceMeters > 500) {
+    if (distanceMeters > geofenceRadius) {
       locationVerified = false;
     }
 
