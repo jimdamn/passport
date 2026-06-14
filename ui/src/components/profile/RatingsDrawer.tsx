@@ -5,14 +5,17 @@ import { Spinner } from '../ui/Spinner';
 import { formatDate } from '../../utils/dates';
 import type { Review } from '../../types';
 
+export type RatingsDrawerView = 'rating' | 'reviews';
+
 interface Props {
-  open:          boolean;
-  onClose:       () => void;
-  memberId:      string;
-  memberName:    string;
-  tenantId:      string;
+  open:           boolean;
+  onClose:        () => void;
+  view:           RatingsDrawerView;
+  memberId:       string;
+  memberName:     string;
+  tenantId:       string;
   currentUserId?: string;
-  isOwnProfile?: boolean;
+  isOwnProfile?:  boolean;
 }
 
 function Stars({ score, size = 16 }: { score: number; size?: number }) {
@@ -50,8 +53,142 @@ function StarPicker({ value, onChange }: { value: number; onChange: (n: number) 
   );
 }
 
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p style={{
+      fontFamily: 'var(--font-sans)', fontSize: '0.78rem', fontWeight: 700,
+      textTransform: 'uppercase', letterSpacing: '0.06em',
+      color: 'var(--muted)', marginBottom: 10,
+    }}>
+      {children}
+    </p>
+  );
+}
+
+// ── Rating view — average + star breakdown ────────────────────────────────────
+
+function RatingContent({ ratings, rating_avg, rating_count }: {
+  ratings: Review[];
+  rating_avg: number;
+  rating_count: number;
+}) {
+  const breakdown = [5, 4, 3, 2, 1].map(star => ({
+    star,
+    count: ratings.filter(r => r.score === star).length,
+  }));
+  const maxCount = Math.max(...breakdown.map(b => b.count), 1);
+
+  return (
+    <>
+      {/* Average hero */}
+      <div style={{
+        background: 'rgba(200,134,10,0.07)', border: '1px solid var(--amber)',
+        borderRadius: 'var(--r-md)', padding: '20px 16px', marginBottom: 20,
+        textAlign: 'center',
+      }}>
+        {rating_count > 0 ? (
+          <>
+            <div style={{
+              fontFamily: 'var(--font-serif)', fontSize: '2.8rem',
+              fontWeight: 'bold', color: 'var(--amber)', lineHeight: 1,
+            }}>
+              {rating_avg.toFixed(1)}
+            </div>
+            <div style={{ marginTop: 6 }}>
+              <Stars score={Math.round(rating_avg)} size={20} />
+            </div>
+            <div style={{
+              fontFamily: 'var(--font-sans)', fontSize: '0.75rem', fontWeight: 700,
+              textTransform: 'uppercase', letterSpacing: '0.06em',
+              color: 'var(--muted)', marginTop: 6,
+            }}>
+              {rating_count} rating{rating_count !== 1 ? 's' : ''}
+            </div>
+          </>
+        ) : (
+          <div style={{ fontFamily: 'var(--font-sans)', fontSize: '0.875rem', color: 'var(--muted)', padding: '8px 0' }}>
+            No ratings yet
+          </div>
+        )}
+      </div>
+
+      {/* Star breakdown */}
+      {rating_count > 0 && (
+        <>
+          <SectionLabel>Breakdown</SectionLabel>
+          {breakdown.map(b => (
+            <div key={b.star} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <span style={{ fontFamily: 'var(--font-sans)', fontSize: '0.8rem', color: 'var(--amber)', width: 20, textAlign: 'right', flexShrink: 0 }}>
+                {b.star}★
+              </span>
+              <div style={{ flex: 1, height: 8, background: 'var(--border)', borderRadius: 4, overflow: 'hidden' }}>
+                <div style={{
+                  width: `${(b.count / maxCount) * 100}%`,
+                  height: '100%', background: 'var(--amber)', borderRadius: 4,
+                  transition: 'width 0.3s ease',
+                }} />
+              </div>
+              <span style={{ fontFamily: 'var(--font-sans)', fontSize: '0.8rem', color: 'var(--muted)', width: 20, flexShrink: 0 }}>
+                {b.count}
+              </span>
+            </div>
+          ))}
+        </>
+      )}
+    </>
+  );
+}
+
+// ── Reviews view — written comments ──────────────────────────────────────────
+
+function ReviewsContent({ ratings, isOwnProfile }: { ratings: Review[]; isOwnProfile?: boolean }) {
+  const reviews = ratings.filter(r => r.comment);
+
+  if (reviews.length === 0) {
+    return (
+      <p style={{
+        fontFamily: 'var(--font-sans)', fontSize: '0.875rem',
+        color: 'var(--muted)', textAlign: 'center', padding: '20px 0',
+      }}>
+        {isOwnProfile ? "You haven't received any written reviews yet." : 'No written reviews yet.'}
+      </p>
+    );
+  }
+
+  return (
+    <>
+      <SectionLabel>Written Reviews</SectionLabel>
+      {reviews.map(r => (
+        <div key={r.id} style={{ padding: '12px 0', borderBottom: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+            <span style={{ fontFamily: 'var(--font-sans)', fontSize: '0.875rem', fontWeight: 600, color: 'var(--green)' }}>
+              {r.rater_display_name ?? 'A Member'}
+            </span>
+            <Stars score={r.score} size={14} />
+          </div>
+          <p style={{ margin: '4px 0', fontFamily: 'var(--font-sans)', fontSize: '0.85rem', color: 'var(--green)', lineHeight: 1.45 }}>
+            {r.comment}
+          </p>
+          <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+            <span style={{ fontFamily: 'var(--font-sans)', fontSize: '0.72rem', color: 'var(--muted)' }}>
+              {formatDate(r.created_at)}
+            </span>
+            {r.context_type && (
+              <span style={{ fontFamily: 'var(--font-sans)', fontSize: '0.72rem', color: 'var(--sage)' }}>
+                · {r.context_type.replace(/_/g, ' ')}
+              </span>
+            )}
+          </div>
+        </div>
+      ))}
+    </>
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
+
 export default function RatingsDrawer({
-  open, onClose, memberId, memberName, tenantId, currentUserId, isOwnProfile,
+  open, onClose, view, memberId, memberName, tenantId, currentUserId, isOwnProfile,
 }: Props) {
   const queryClient = useQueryClient();
   const [showForm,  setShowForm]  = useState(false);
@@ -77,7 +214,7 @@ export default function RatingsDrawer({
 
   const { data, isLoading } = useQuery({
     queryKey: ['ratings', tenantId, memberId],
-    queryFn:  () => getMemberRatings(tenantId, memberId),
+    queryFn:  () => getMemberRatings(tenantId, memberId, 50),
     enabled:  open && !!memberId && !!tenantId,
   });
 
@@ -90,7 +227,7 @@ export default function RatingsDrawer({
       queryClient.invalidateQueries({ queryKey: ['member',  tenantId, memberId] });
     },
     onError: (err: any) => {
-      setFormError(err.message ?? 'Failed to submit rating. Please try again.');
+      setFormError(err.message ?? 'Failed to submit. Please try again.');
     },
   });
 
@@ -98,6 +235,15 @@ export default function RatingsDrawer({
   const rating_avg        = data?.data?.rating_avg   ?? 0;
   const rating_count      = data?.data?.rating_count ?? 0;
   const canRate           = !isOwnProfile && !!currentUserId && !submitted;
+
+  const title = view === 'rating'
+    ? (isOwnProfile ? 'My Rating'  : `${memberName}'s Rating`)
+    : (isOwnProfile ? 'My Reviews' : `${memberName}'s Reviews`);
+
+  const submitLabel = view === 'rating' ? 'Leave a Rating' : 'Leave a Review';
+  const commentPlaceholder = view === 'rating'
+    ? 'Add a comment (optional)'
+    : 'Share your experience (required for reviews)';
 
   return (
     <>
@@ -112,7 +258,7 @@ export default function RatingsDrawer({
 
       {/* Slide-in panel — from the LEFT */}
       <aside
-        aria-label={isOwnProfile ? 'My Reviews' : `${memberName}'s Reviews`}
+        aria-label={title}
         aria-hidden={!open}
         {...(!open ? { inert: '' } : {})}
         style={{
@@ -128,7 +274,7 @@ export default function RatingsDrawer({
           transition: 'transform 0.25s ease',
         }}
       >
-        {/* Header — arrow points RIGHT to dismiss */}
+        {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24, flexShrink: 0 }}>
           <button
             onClick={onClose}
@@ -149,7 +295,7 @@ export default function RatingsDrawer({
             fontFamily: 'var(--font-serif)', fontSize: '1.15rem',
             fontWeight: 'bold', color: 'var(--green)', margin: 0,
           }}>
-            {isOwnProfile ? 'My Reviews' : `${memberName}'s Reviews`}
+            {title}
           </h2>
         </div>
 
@@ -161,46 +307,22 @@ export default function RatingsDrawer({
 
         {!isLoading && open && (
           <>
-            {/* Summary hero */}
-            <div style={{
-              background: 'rgba(200,134,10,0.07)', border: '1px solid var(--amber)',
-              borderRadius: 'var(--r-md)', padding: '20px 16px', marginBottom: 20,
-              textAlign: 'center',
-            }}>
-              {rating_count > 0 ? (
-                <>
-                  <div style={{
-                    fontFamily: 'var(--font-serif)', fontSize: '2.8rem',
-                    fontWeight: 'bold', color: 'var(--amber)', lineHeight: 1,
-                  }}>
-                    {rating_avg.toFixed(1)}
-                  </div>
-                  <div style={{ marginTop: 6 }}>
-                    <Stars score={Math.round(rating_avg)} size={20} />
-                  </div>
-                  <div style={{
-                    fontFamily: 'var(--font-sans)', fontSize: '0.75rem', fontWeight: 700,
-                    textTransform: 'uppercase', letterSpacing: '0.06em',
-                    color: 'var(--muted)', marginTop: 6,
-                  }}>
-                    {rating_count} review{rating_count !== 1 ? 's' : ''}
-                  </div>
-                </>
-              ) : (
-                <div style={{ fontFamily: 'var(--font-sans)', fontSize: '0.875rem', color: 'var(--muted)', padding: '8px 0' }}>
-                  No reviews yet
-                </div>
-              )}
-            </div>
+            {/* View-specific content */}
+            {view === 'rating' && (
+              <RatingContent ratings={ratings} rating_avg={rating_avg} rating_count={rating_count} />
+            )}
+            {view === 'reviews' && (
+              <ReviewsContent ratings={ratings} isOwnProfile={isOwnProfile} />
+            )}
 
-            {/* Rate button */}
+            {/* Submit button */}
             {canRate && !showForm && (
               <button
                 className="btn btn-amber btn-sm"
                 onClick={() => setShowForm(true)}
-                style={{ marginBottom: 20 }}
+                style={{ marginTop: 20 }}
               >
-                Leave a Review
+                {submitLabel}
               </button>
             )}
 
@@ -208,18 +330,18 @@ export default function RatingsDrawer({
             {submitted && (
               <div style={{
                 background: 'rgba(80,120,80,0.1)', border: '1px solid var(--sage)',
-                borderRadius: 'var(--r-sm)', padding: '12px 14px', marginBottom: 20,
+                borderRadius: 'var(--r-sm)', padding: '12px 14px', marginTop: 20,
                 fontFamily: 'var(--font-sans)', fontSize: '0.875rem', color: 'var(--green)',
               }}>
-                ✓ Your review has been submitted.
+                ✓ Submitted successfully.
               </div>
             )}
 
-            {/* Rating form */}
+            {/* Submission form */}
             {showForm && (
               <div style={{
                 background: 'rgba(30,51,32,0.04)', border: '1px solid var(--border)',
-                borderRadius: 'var(--r-md)', padding: '16px', marginBottom: 20,
+                borderRadius: 'var(--r-md)', padding: '16px', marginTop: 20,
               }}>
                 <p style={{
                   margin: '0 0 12px', fontFamily: 'var(--font-sans)',
@@ -233,7 +355,7 @@ export default function RatingsDrawer({
                 <textarea
                   value={comment}
                   onChange={e => setComment(e.target.value)}
-                  placeholder="Share your experience (optional)"
+                  placeholder={commentPlaceholder}
                   maxLength={500}
                   rows={3}
                   style={{
@@ -272,56 +394,6 @@ export default function RatingsDrawer({
                   </button>
                 </div>
               </div>
-            )}
-
-            {/* Reviews list */}
-            {ratings.length > 0 && (
-              <>
-                <p style={{
-                  fontFamily: 'var(--font-sans)', fontSize: '0.78rem', fontWeight: 700,
-                  textTransform: 'uppercase', letterSpacing: '0.06em',
-                  color: 'var(--muted)', marginBottom: 10,
-                }}>
-                  Reviews
-                </p>
-
-                {ratings.map(r => (
-                  <div key={r.id} style={{ padding: '12px 0', borderBottom: '1px solid var(--border)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
-                      <span style={{ fontFamily: 'var(--font-sans)', fontSize: '0.875rem', fontWeight: 600, color: 'var(--green)' }}>
-                        {r.rater_display_name ?? 'A Member'}
-                      </span>
-                      <Stars score={r.score} size={14} />
-                    </div>
-                    {r.comment && (
-                      <p style={{ margin: '4px 0', fontFamily: 'var(--font-sans)', fontSize: '0.85rem', color: 'var(--green)', lineHeight: 1.45 }}>
-                        {r.comment}
-                      </p>
-                    )}
-                    <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-                      <span style={{ fontFamily: 'var(--font-sans)', fontSize: '0.72rem', color: 'var(--muted)' }}>
-                        {formatDate(r.created_at)}
-                      </span>
-                      {r.context_type && (
-                        <span style={{ fontFamily: 'var(--font-sans)', fontSize: '0.72rem', color: 'var(--sage)' }}>
-                          · {r.context_type.replace(/_/g, ' ')}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </>
-            )}
-
-            {ratings.length === 0 && (
-              <p style={{
-                fontFamily: 'var(--font-sans)', fontSize: '0.875rem',
-                color: 'var(--muted)', textAlign: 'center', padding: '20px 0',
-              }}>
-                {isOwnProfile
-                  ? "You haven't received any reviews yet."
-                  : 'This member hasn\'t received any reviews yet.'}
-              </p>
             )}
           </>
         )}

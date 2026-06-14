@@ -100,6 +100,7 @@ export default function PublicProfile() {
 
       <RatingsDrawer
         open={ratingsOpen}
+        view="reviews"
         onClose={() => setRatingsOpen(false)}
         memberId={id!}
         memberName={member.display_name}
