@@ -10,7 +10,7 @@ type AppContext = Context<{ Bindings: Env }>;
 const TEST_PLAQUE_ID = 'test-plaque';
 const TEST_PRIZE_ID = 'test-prize-base';
 
-const PLAQUE_CATEGORIES = ['dining', 'shopping', 'farmfood', 'recreation', 'attractions', 'lodging'];
+const PLAQUE_CATEGORIES = ['dining', 'shopping', 'farmfood', 'recreation', 'attractions', 'lodging', 'services'];
 const PRIZE_TYPES = ['kredits_base', 'kredits_jackpot', 'merchant_coupon', 'merchant_gift', 'cash'];
 
 function requireAdmin(c: AppContext) {
