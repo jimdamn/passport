@@ -1,5 +1,5 @@
 import { api, getToken } from './client';
-import type { ApiResponse, User } from '../types';
+import type { ApiResponse, User, Review } from '../types';
 
 export interface ProfileUpdate {
   display_name?: string;
@@ -118,5 +118,29 @@ export async function getAdminMerchants() {
 
 export async function reviewMerchant(id: number, status: 'verified' | 'rejected' | 'pending') {
   return api.post<ApiResponse<any>>(`/auth/profile/admin/merchants/${id}/review`, { status });
+}
+
+export async function getMemberRatings(tenantId: string, memberId: string, limit = 20, offset = 0) {
+  return api.get<ApiResponse<{
+    ratings: Review[];
+    rating_avg: number;
+    rating_count: number;
+  }>>(`/t/${tenantId}/members/${memberId}/ratings?limit=${limit}&offset=${offset}`);
+}
+
+export async function submitRating(
+  tenantId:     string,
+  memberId:     string,
+  score:        number,
+  comment?:     string | null,
+  contextType?: string | null,
+  contextId?:   string | null,
+) {
+  return api.post<ApiResponse<{ id: string }>>(`/t/${tenantId}/members/${memberId}/rate`, {
+    score,
+    comment:      comment      ?? null,
+    context_type: contextType  ?? null,
+    context_id:   contextId    ?? null,
+  });
 }
 

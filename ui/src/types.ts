@@ -145,8 +145,9 @@ export interface Review {
   score: number;
   comment: string | null;
   created_at: number;
-  rater_display_name: string;
-  offer_title: string;
+  rater_display_name: string | null;
+  context_type: string | null;
+  context_id: string | null;
 }
 
 export interface ApiResponse<T> {
