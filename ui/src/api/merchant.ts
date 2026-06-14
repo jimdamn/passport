@@ -53,3 +53,26 @@ export function deleteMyPrize(tenant: string, id: string) {
 export function getMyClaims(tenant: string) {
   return api.get<ApiResponse<MerchantClaim[]>>(`/t/${tenant}/merchant/claims`);
 }
+
+export interface BusinessProfile {
+  id: number;
+  name: string;
+  category: string;
+  description: string | null;
+  address: string | null;
+  zip: string | null;
+  phone: string | null;
+  website: string | null;
+  hide_address: number;
+  hide_phone: number;
+  verification_status: string;
+  created_at: string;
+}
+
+export function getMyBusiness(tenant: string) {
+  return api.get<ApiResponse<BusinessProfile>>(`/t/${tenant}/merchant/business`);
+}
+
+export function updateMyBusiness(tenant: string, updates: { category?: string; phone?: string }) {
+  return api.patch<ApiResponse<BusinessProfile>>(`/t/${tenant}/merchant/business`, updates);
+}

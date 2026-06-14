@@ -201,3 +201,53 @@ export async function listMyClaims(c: AppContext) {
 
   return c.json({ data: results || [] });
 }
+
+/**
+ * GET /api/t/:tenant/merchant/business
+ * Returns the full business record from KKAuth for display on the merchant dashboard.
+ */
+export async function getMyBusiness(c: AppContext) {
+  requireVerifiedMerchant(c);
+  const auth = c.req.header('Authorization')!;
+
+  const res = await c.env.KKAUTH.fetch(
+    new Request('https://kkauth/businesses/me', {
+      headers: { 'Authorization': auth },
+    })
+  );
+
+  const body = await res.json<any>();
+  if (!res.ok) return c.json(body, res.status as any);
+  return c.json(body);
+}
+
+/**
+ * PATCH /api/t/:tenant/merchant/business
+ * Allows a verified merchant to update their category and/or phone.
+ * Syncs the plaque category in Passport D1 if category changes.
+ */
+export async function updateMyBusiness(c: AppContext) {
+  const merchantId = requireVerifiedMerchant(c);
+  const auth = c.req.header('Authorization')!;
+  const body = await c.req.json<{ category?: string; phone?: string }>();
+
+  const res = await c.env.KKAUTH.fetch(
+    new Request('https://kkauth/businesses/me', {
+      method: 'PATCH',
+      headers: { 'Authorization': auth, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+  );
+
+  const kkBody = await res.json<any>();
+  if (!res.ok) return c.json(kkBody, res.status as any);
+
+  // Keep plaque category in sync if it changed
+  if (body.category && kkBody.data) {
+    await c.env.DB.prepare(
+      'UPDATE passport_plaques SET category = ? WHERE merchant_id = ?'
+    ).bind(body.category, merchantId).run();
+  }
+
+  return c.json(kkBody);
+}

@@ -4,12 +4,23 @@ import { useAuth } from '../context/AuthContext';
 import { useTenant } from '../context/TenantContext';
 import {
   getMyPrizes, createMyPrize, updateMyPrize, deleteMyPrize, getMyClaims,
-  type MerchantPrize, type MerchantClaim, type MerchantPrizeInput,
+  getMyBusiness, updateMyBusiness,
+  type MerchantPrize, type MerchantClaim, type MerchantPrizeInput, type BusinessProfile,
 } from '../api/merchant';
-import { ArrowLeft, Plus, Pencil, Trash2, Gift, BadgeCheck, Clock, CheckCircle, XCircle, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Plus, Pencil, Trash2, Gift, BadgeCheck, Clock, CheckCircle, XCircle, RefreshCw, Building2 } from 'lucide-react';
 import { Alert } from '../components/ui/Alert';
 import { Spinner } from '../components/ui/Spinner';
 import DealsManager from '../components/merchant/DealsManager';
+
+const CATEGORIES = [
+  { value: 'dining',      label: 'Dining & Drinks' },
+  { value: 'shopping',    label: 'Boutiques & Shops' },
+  { value: 'recreation',  label: 'Parks & Recreation' },
+  { value: 'attractions', label: 'Attractions' },
+  { value: 'lodging',     label: 'Lodging & B&Bs' },
+  { value: 'farmfood',    label: 'Farm & Fresh' },
+  { value: 'services',    label: 'Services' },
+];
 
 interface FormState {
   name: string;
@@ -37,6 +48,11 @@ export default function MerchantDashboard() {
   const [notice, setNotice] = useState('');
   const [working, setWorking] = useState(false);
 
+  const [business, setBusiness] = useState<BusinessProfile | null>(null);
+  const [bizEdit, setBizEdit] = useState(false);
+  const [bizForm, setBizForm] = useState({ category: '', phone: '' });
+  const [bizWorking, setBizWorking] = useState(false);
+
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
@@ -54,16 +70,44 @@ export default function MerchantDashboard() {
     setLoading(true);
     setError('');
     try {
-      const [prizesRes, claimsRes] = await Promise.all([
+      const [prizesRes, claimsRes, bizRes] = await Promise.all([
         getMyPrizes(tenant.id),
         getMyClaims(tenant.id),
+        getMyBusiness(tenant.id),
       ]);
       setPrizes(prizesRes.data || []);
       setClaims(claimsRes.data || []);
+      if (bizRes.data) {
+        setBusiness(bizRes.data);
+        setBizForm({ category: bizRes.data.category, phone: bizRes.data.phone || '' });
+      }
     } catch (err: any) {
       setError(err.message || 'Failed to load your dashboard.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleBizSave = async () => {
+    if (!tenant || bizWorking) return;
+    setBizWorking(true);
+    setError('');
+    setNotice('');
+    try {
+      const res = await updateMyBusiness(tenant.id, {
+        category: bizForm.category,
+        phone: bizForm.phone.trim() || undefined,
+      });
+      if (res.data) {
+        setBusiness(res.data);
+        setBizForm({ category: res.data.category, phone: res.data.phone || '' });
+      }
+      setBizEdit(false);
+      setNotice('Business profile updated.');
+    } catch (err: any) {
+      setError(err.message || 'Failed to update business profile.');
+    } finally {
+      setBizWorking(false);
     }
   };
 
@@ -194,6 +238,92 @@ export default function MerchantDashboard() {
 
       {error && <Alert type="error" style={{ marginBottom: 16 }}>{error}</Alert>}
       {notice && <Alert type="success" style={{ marginBottom: 16 }}>{notice}</Alert>}
+
+      {/* Business Profile */}
+      {business && (
+        <div className="card" style={{ background: 'var(--white)', padding: 20, marginBottom: 20 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+            <h2 style={{ margin: 0, fontSize: '1rem', fontFamily: 'var(--font-serif)', color: 'var(--green)', display: 'flex', alignItems: 'center', gap: 7 }}>
+              <Building2 size={16} /> Business Profile
+            </h2>
+            {!bizEdit && (
+              <button className="btn btn-secondary btn-sm" onClick={() => setBizEdit(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, minHeight: 30 }}>
+                <Pencil size={12} /> Edit
+              </button>
+            )}
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 20px', fontSize: '0.82rem' }}>
+            {/* Name — read-only */}
+            <div>
+              <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', marginBottom: 2 }}>Business Name</div>
+              <div style={{ color: 'var(--body)' }}>{business.name}</div>
+            </div>
+
+            {/* Category — editable */}
+            <div>
+              <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', marginBottom: 2 }}>Business Type</div>
+              {bizEdit ? (
+                <select className="form-select" value={bizForm.category}
+                  onChange={e => setBizForm(f => ({ ...f, category: e.target.value }))}
+                  disabled={bizWorking} style={{ minHeight: 32, margin: 0, fontSize: '0.82rem' }}>
+                  {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                </select>
+              ) : (
+                <div style={{ color: 'var(--body)' }}>{CATEGORIES.find(c => c.value === business.category)?.label ?? business.category}</div>
+              )}
+            </div>
+
+            {/* Phone — editable */}
+            <div>
+              <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', marginBottom: 2 }}>
+                Contact Phone {business.hide_phone ? <span style={{ color: 'var(--muted)', fontWeight: 400 }}>(private)</span> : null}
+              </div>
+              {bizEdit ? (
+                <input type="tel" className="form-input" value={bizForm.phone}
+                  onChange={e => setBizForm(f => ({ ...f, phone: e.target.value }))}
+                  disabled={bizWorking} placeholder="(260) 555-0199"
+                  style={{ minHeight: 32, margin: 0, fontSize: '0.82rem' }} />
+              ) : (
+                <div style={{ color: 'var(--body)' }}>{business.phone || <span style={{ color: 'var(--muted)' }}>—</span>}</div>
+              )}
+            </div>
+
+            {/* Website — read-only */}
+            <div>
+              <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', marginBottom: 2 }}>Website</div>
+              <div style={{ color: 'var(--body)', wordBreak: 'break-all' }}>{business.website || <span style={{ color: 'var(--muted)' }}>—</span>}</div>
+            </div>
+
+            {/* Address — read-only */}
+            <div>
+              <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', marginBottom: 2 }}>
+                Address {business.hide_address ? <span style={{ color: 'var(--muted)', fontWeight: 400 }}>(private)</span> : null}
+              </div>
+              <div style={{ color: 'var(--body)' }}>
+                {business.hide_address ? <span style={{ color: 'var(--muted)', fontStyle: 'italic' }}>Hidden from public listings</span> : (business.address || <span style={{ color: 'var(--muted)' }}>—</span>)}
+              </div>
+            </div>
+
+            {/* Description — read-only */}
+            <div>
+              <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', marginBottom: 2 }}>Description</div>
+              <div style={{ color: 'var(--body)' }}>{business.description || <span style={{ color: 'var(--muted)' }}>—</span>}</div>
+            </div>
+          </div>
+
+          {bizEdit && (
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 14 }}>
+              <button className="btn btn-secondary btn-sm" onClick={() => { setBizEdit(false); setBizForm({ category: business.category, phone: business.phone || '' }); }} disabled={bizWorking} style={{ minHeight: 32 }}>
+                Cancel
+              </button>
+              <button className="btn btn-amber btn-sm" onClick={handleBizSave} disabled={bizWorking} style={{ minHeight: 32 }}>
+                {bizWorking ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 20 }}>
