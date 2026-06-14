@@ -162,7 +162,7 @@ function RatingContent({ ratings, rating_avg, rating_count }: {
 
 // ── Reviews view — written comments ──────────────────────────────────────────
 
-function ReviewsContent({ ratings, isOwnProfile }: { ratings: Review[]; isOwnProfile?: boolean }) {
+function ReviewsContent({ ratings }: { ratings: Review[] }) {
   const reviews    = ratings.filter(r => r.comment);
   const hasData    = reviews.length > 0;
   const displayRows = hasData ? reviews : PLACEHOLDER_RATINGS.filter(r => r.comment);
@@ -328,7 +328,7 @@ export default function RatingsDrawer({
               <RatingContent ratings={ratings} rating_avg={rating_avg} rating_count={rating_count} />
             )}
             {view === 'reviews' && (
-              <ReviewsContent ratings={ratings} isOwnProfile={isOwnProfile} />
+              <ReviewsContent ratings={ratings} />
             )}
 
             {/* Submit button */}
