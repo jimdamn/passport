@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTenant } from '../../context/TenantContext';
 import { getMe } from '../../api/auth';
-import { updateProfile, uploadAvatar } from '../../api/profile';
+import { updateProfile, uploadAvatar, updateLocation } from '../../api/profile';
 import { Alert } from '../ui/Alert';
 import { Spinner } from '../ui/Spinner';
 
@@ -104,6 +104,8 @@ interface Props {
   onSaved?: () => void;
 }
 
+const DISTANCE_OPTIONS = [10, 25, 50, 100];
+
 export default function ProfilePanel({ open, onClose, onSaved }: Props) {
   const { user, updateUser } = useAuth();
   const { tenant } = useTenant();
@@ -112,6 +114,7 @@ export default function ProfilePanel({ open, onClose, onSaved }: Props) {
 
   const [form, setForm] = useState({
     display_name: '', location: '', bio: '',
+    home_zip_location: '', home_distance_preference: 25,
   });
   const [saveError, setSaveError]     = useState('');
   const [saved, setSaved]             = useState(false);
@@ -128,16 +131,20 @@ export default function ProfilePanel({ open, onClose, onSaved }: Props) {
       .then(fresh => {
         updateUser(fresh);
         setForm({
-          display_name: fresh.display_name || '',
-          location:     fresh.location     || '',
-          bio:          (fresh as any).bio || '',
+          display_name:            fresh.display_name || '',
+          location:                fresh.location     || '',
+          bio:                     (fresh as any).bio || '',
+          home_zip_location:       fresh.home_zip_location       ?? '',
+          home_distance_preference: fresh.home_distance_preference ?? 25,
         });
       })
       .catch(() => {
         setForm({
-          display_name: user.display_name || '',
-          location:     user.location     || '',
-          bio:          (user as any).bio || '',
+          display_name:            user.display_name || '',
+          location:                user.location     || '',
+          bio:                     (user as any).bio || '',
+          home_zip_location:       user.home_zip_location       ?? '',
+          home_distance_preference: user.home_distance_preference ?? 25,
         });
       })
       .finally(() => setIsFetching(false));
@@ -151,6 +158,10 @@ export default function ProfilePanel({ open, onClose, onSaved }: Props) {
   const saveMutation = useMutation({
     mutationFn: (updates: Parameters<typeof updateProfile>[1]) =>
       updateProfile(tenant!.id, updates),
+  });
+
+  const locationMutation = useMutation({
+    mutationFn: updateLocation,
   });
 
   const avatarMutation = useMutation({
@@ -177,6 +188,13 @@ export default function ProfilePanel({ open, onClose, onSaved }: Props) {
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     setSaveError('');
+
+    const zip = form.home_zip_location.trim();
+    if (zip && !/^\d{5}$/.test(zip)) {
+      setSaveError('Please enter a valid 5-digit zip code.');
+      return;
+    }
+
     try {
       const profileRes = await saveMutation.mutateAsync({
         display_name: form.display_name.trim() || undefined,
@@ -184,6 +202,21 @@ export default function ProfilePanel({ open, onClose, onSaved }: Props) {
         bio:          form.bio.trim()          || undefined,
       });
       updateUser(profileRes.data.user);
+
+      const currentZip  = user?.home_zip_location       ?? '';
+      const currentDist = user?.home_distance_preference ?? 25;
+      if (zip !== currentZip || (zip && form.home_distance_preference !== currentDist)) {
+        const locRes = await locationMutation.mutateAsync({
+          home_zip_location:        zip || null,
+          home_distance_preference: zip ? form.home_distance_preference : null,
+        });
+        updateUser({
+          home_zip_location:        locRes.data.profile.home_zip_location,
+          home_zip_lat:             locRes.data.profile.home_zip_lat,
+          home_zip_lon:             locRes.data.profile.home_zip_lon,
+          home_distance_preference: locRes.data.profile.home_distance_preference,
+        });
+      }
 
       qc.invalidateQueries({ queryKey: ['me'] });
       setSaved(true);
@@ -195,7 +228,7 @@ export default function ProfilePanel({ open, onClose, onSaved }: Props) {
     }
   }
 
-  const isPending = saveMutation.isPending || isFetching;
+  const isPending = saveMutation.isPending || locationMutation.isPending || isFetching;
   const avatarUrl = user?.avatar_url ?? null;
   const name      = user?.display_name || user?.email || 'Me';
 
@@ -301,6 +334,47 @@ export default function ProfilePanel({ open, onClose, onSaved }: Props) {
             />
             <p className="form-hint">{form.bio.length} / 300</p>
           </div>
+
+          <div style={{ borderTop: '1px solid var(--border)', margin: '8px 0 16px' }} />
+
+          <div className="form-group">
+            <label className="form-label">Home Zip Code</label>
+            <input
+              className="form-input"
+              placeholder="e.g. 46703"
+              value={form.home_zip_location}
+              maxLength={5}
+              inputMode="numeric"
+              onChange={e => setForm(f => ({ ...f, home_zip_location: e.target.value.replace(/\D/g, '').slice(0, 5) }))}
+            />
+            <p className="form-hint">Used to filter nearby offers in the Exchange. Leave blank to see all.</p>
+          </div>
+
+          {form.home_zip_location.length === 5 && (
+            <div className="form-group">
+              <label className="form-label">Search Distance</label>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {DISTANCE_OPTIONS.map(d => (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, home_distance_preference: d }))}
+                    style={{
+                      flex: 1, padding: '8px 0', border: '1px solid',
+                      borderRadius: 'var(--r-sm)', cursor: 'pointer',
+                      fontFamily: 'var(--font-sans)', fontSize: '0.85rem', fontWeight: 600,
+                      transition: 'background 0.15s, color 0.15s, border-color 0.15s',
+                      background: form.home_distance_preference === d ? 'var(--green)' : 'var(--white)',
+                      color:      form.home_distance_preference === d ? 'var(--cream)' : 'var(--muted)',
+                      borderColor: form.home_distance_preference === d ? 'var(--green)' : 'var(--border)',
+                    }}
+                  >
+                    {d} mi
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           <button
             type="submit"
