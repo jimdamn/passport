@@ -65,6 +65,32 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
+function ExampleDisclaimer() {
+  return (
+    <div style={{
+      background: 'rgba(200,134,10,0.08)', border: '1px dashed var(--amber)',
+      borderRadius: 'var(--r-sm)', padding: '10px 14px', marginBottom: 18,
+      display: 'flex', gap: 10, alignItems: 'flex-start',
+    }}>
+      <span style={{ fontSize: '1rem', flexShrink: 0 }}>📋</span>
+      <p style={{
+        fontFamily: 'var(--font-sans)', fontSize: '0.78rem',
+        color: 'var(--amber)', margin: 0, lineHeight: 1.5, fontWeight: 600,
+      }}>
+        Example data shown below — your real ratings will appear here once you have data to display.
+      </p>
+    </div>
+  );
+}
+
+const PLACEHOLDER_RATINGS: Review[] = [
+  { id: 'p1', score: 5, comment: 'Fantastic to work with — reliable, friendly, and exactly what I needed. Highly recommend!', created_at: 0, rater_display_name: 'Sarah M.', context_type: null, context_id: null },
+  { id: 'p2', score: 4, comment: 'Great experience overall. Would definitely connect again.', created_at: 0, rater_display_name: 'Tom K.', context_type: null, context_id: null },
+  { id: 'p3', score: 5, comment: null, created_at: 0, rater_display_name: 'Jamie R.', context_type: null, context_id: null },
+];
+const PLACEHOLDER_AVG   = 4.7;
+const PLACEHOLDER_COUNT = 3;
+
 // ── Rating view — average + star breakdown ────────────────────────────────────
 
 function RatingContent({ ratings, rating_avg, rating_count }: {
@@ -72,69 +98,64 @@ function RatingContent({ ratings, rating_avg, rating_count }: {
   rating_avg: number;
   rating_count: number;
 }) {
+  const hasData    = rating_count > 0;
+  const displayAvg   = hasData ? rating_avg   : PLACEHOLDER_AVG;
+  const displayCount = hasData ? rating_count : PLACEHOLDER_COUNT;
+  const displayRows  = hasData ? ratings      : PLACEHOLDER_RATINGS;
+
   const breakdown = [5, 4, 3, 2, 1].map(star => ({
     star,
-    count: ratings.filter(r => r.score === star).length,
+    count: displayRows.filter(r => r.score === star).length,
   }));
   const maxCount = Math.max(...breakdown.map(b => b.count), 1);
 
   return (
     <>
+      {!hasData && <ExampleDisclaimer />}
+
       {/* Average hero */}
       <div style={{
         background: 'rgba(200,134,10,0.07)', border: '1px solid var(--amber)',
         borderRadius: 'var(--r-md)', padding: '20px 16px', marginBottom: 20,
         textAlign: 'center',
       }}>
-        {rating_count > 0 ? (
-          <>
-            <div style={{
-              fontFamily: 'var(--font-serif)', fontSize: '2.8rem',
-              fontWeight: 'bold', color: 'var(--amber)', lineHeight: 1,
-            }}>
-              {rating_avg.toFixed(1)}
-            </div>
-            <div style={{ marginTop: 6 }}>
-              <Stars score={Math.round(rating_avg)} size={20} />
-            </div>
-            <div style={{
-              fontFamily: 'var(--font-sans)', fontSize: '0.75rem', fontWeight: 700,
-              textTransform: 'uppercase', letterSpacing: '0.06em',
-              color: 'var(--muted)', marginTop: 6,
-            }}>
-              {rating_count} rating{rating_count !== 1 ? 's' : ''}
-            </div>
-          </>
-        ) : (
-          <div style={{ fontFamily: 'var(--font-sans)', fontSize: '0.875rem', color: 'var(--muted)', padding: '8px 0' }}>
-            No ratings yet
-          </div>
-        )}
+        <div style={{
+          fontFamily: 'var(--font-serif)', fontSize: '2.8rem',
+          fontWeight: 'bold', color: 'var(--amber)', lineHeight: 1,
+        }}>
+          {displayAvg.toFixed(1)}
+        </div>
+        <div style={{ marginTop: 6 }}>
+          <Stars score={Math.round(displayAvg)} size={20} />
+        </div>
+        <div style={{
+          fontFamily: 'var(--font-sans)', fontSize: '0.75rem', fontWeight: 700,
+          textTransform: 'uppercase', letterSpacing: '0.06em',
+          color: 'var(--muted)', marginTop: 6,
+        }}>
+          {displayCount} rating{displayCount !== 1 ? 's' : ''}
+        </div>
       </div>
 
       {/* Star breakdown */}
-      {rating_count > 0 && (
-        <>
-          <SectionLabel>Breakdown</SectionLabel>
-          {breakdown.map(b => (
-            <div key={b.star} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <span style={{ fontFamily: 'var(--font-sans)', fontSize: '0.8rem', color: 'var(--amber)', width: 20, textAlign: 'right', flexShrink: 0 }}>
-                {b.star}★
-              </span>
-              <div style={{ flex: 1, height: 8, background: 'var(--border)', borderRadius: 4, overflow: 'hidden' }}>
-                <div style={{
-                  width: `${(b.count / maxCount) * 100}%`,
-                  height: '100%', background: 'var(--amber)', borderRadius: 4,
-                  transition: 'width 0.3s ease',
-                }} />
-              </div>
-              <span style={{ fontFamily: 'var(--font-sans)', fontSize: '0.8rem', color: 'var(--muted)', width: 20, flexShrink: 0 }}>
-                {b.count}
-              </span>
-            </div>
-          ))}
-        </>
-      )}
+      <SectionLabel>Breakdown</SectionLabel>
+      {breakdown.map(b => (
+        <div key={b.star} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+          <span style={{ fontFamily: 'var(--font-sans)', fontSize: '0.8rem', color: 'var(--amber)', width: 20, textAlign: 'right', flexShrink: 0 }}>
+            {b.star}★
+          </span>
+          <div style={{ flex: 1, height: 8, background: 'var(--border)', borderRadius: 4, overflow: 'hidden' }}>
+            <div style={{
+              width: `${(b.count / maxCount) * 100}%`,
+              height: '100%', background: 'var(--amber)', borderRadius: 4,
+              transition: 'width 0.3s ease',
+            }} />
+          </div>
+          <span style={{ fontFamily: 'var(--font-sans)', fontSize: '0.8rem', color: 'var(--muted)', width: 20, flexShrink: 0 }}>
+            {b.count}
+          </span>
+        </div>
+      ))}
     </>
   );
 }
@@ -142,23 +163,16 @@ function RatingContent({ ratings, rating_avg, rating_count }: {
 // ── Reviews view — written comments ──────────────────────────────────────────
 
 function ReviewsContent({ ratings, isOwnProfile }: { ratings: Review[]; isOwnProfile?: boolean }) {
-  const reviews = ratings.filter(r => r.comment);
-
-  if (reviews.length === 0) {
-    return (
-      <p style={{
-        fontFamily: 'var(--font-sans)', fontSize: '0.875rem',
-        color: 'var(--muted)', textAlign: 'center', padding: '20px 0',
-      }}>
-        {isOwnProfile ? "You haven't received any written reviews yet." : 'No written reviews yet.'}
-      </p>
-    );
-  }
+  const reviews    = ratings.filter(r => r.comment);
+  const hasData    = reviews.length > 0;
+  const displayRows = hasData ? reviews : PLACEHOLDER_RATINGS.filter(r => r.comment);
 
   return (
     <>
+      {!hasData && <ExampleDisclaimer />}
+
       <SectionLabel>Written Reviews</SectionLabel>
-      {reviews.map(r => (
+      {displayRows.map(r => (
         <div key={r.id} style={{ padding: '12px 0', borderBottom: '1px solid var(--border)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
             <span style={{ fontFamily: 'var(--font-sans)', fontSize: '0.875rem', fontWeight: 600, color: 'var(--green)' }}>
@@ -169,16 +183,18 @@ function ReviewsContent({ ratings, isOwnProfile }: { ratings: Review[]; isOwnPro
           <p style={{ margin: '4px 0', fontFamily: 'var(--font-sans)', fontSize: '0.85rem', color: 'var(--green)', lineHeight: 1.45 }}>
             {r.comment}
           </p>
-          <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-            <span style={{ fontFamily: 'var(--font-sans)', fontSize: '0.72rem', color: 'var(--muted)' }}>
-              {formatDate(r.created_at)}
-            </span>
-            {r.context_type && (
-              <span style={{ fontFamily: 'var(--font-sans)', fontSize: '0.72rem', color: 'var(--sage)' }}>
-                · {r.context_type.replace(/_/g, ' ')}
+          {hasData && (
+            <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+              <span style={{ fontFamily: 'var(--font-sans)', fontSize: '0.72rem', color: 'var(--muted)' }}>
+                {formatDate(r.created_at)}
               </span>
-            )}
-          </div>
+              {r.context_type && (
+                <span style={{ fontFamily: 'var(--font-sans)', fontSize: '0.72rem', color: 'var(--sage)' }}>
+                  · {r.context_type.replace(/_/g, ' ')}
+                </span>
+              )}
+            </div>
+          )}
         </div>
       ))}
     </>
