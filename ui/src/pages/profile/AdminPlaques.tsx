@@ -17,6 +17,7 @@ const CATEGORIES = [
   { value: 'recreation', label: 'Recreation' },
   { value: 'attractions', label: 'Attractions' },
   { value: 'lodging', label: 'Lodging' },
+  { value: 'services', label: 'Services' },
 ];
 
 function toLocalInput(unix: number | null): string {
