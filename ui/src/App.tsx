@@ -23,7 +23,9 @@ import Help from './pages/Help';
 import EmbedDrawer from './pages/EmbedDrawer';
 import Explore from './pages/Explore';
 import Deals from './pages/Deals';
+import Happenings from './pages/Happenings';
 import AdminDeals from './pages/profile/AdminDeals';
+import AdminHappenings from './pages/profile/AdminHappenings';
 
 export default function App() {
   const { isLoading } = useAuth();
@@ -45,6 +47,7 @@ export default function App() {
         <Route path="/auth/login" element={<LoginPage />} />
         <Route path="/explore" element={<Explore />} />
         <Route path="/deals" element={<Deals />} />
+        <Route path="/happenings" element={<Happenings />} />
         <Route path="/my-stamps" element={<MyStamps />} />
         <Route path="/scan" element={<ScanPortal />} />
         <Route path="/profile" element={<MyProfile />} />
@@ -54,6 +57,7 @@ export default function App() {
         <Route path="/profile/admin/plaques" element={<AdminPlaques />} />
         <Route path="/profile/admin/prizes" element={<AdminPrizes />} />
         <Route path="/profile/admin/deals" element={<AdminDeals />} />
+        <Route path="/profile/admin/happenings" element={<AdminHappenings />} />
         <Route path="/redeem" element={<RedeemClaim />} />
         <Route path="/merchant" element={<MerchantDashboard />} />
         <Route path="/members/:id" element={<PublicProfile />} />

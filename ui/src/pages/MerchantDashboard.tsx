@@ -11,6 +11,7 @@ import { ArrowLeft, Plus, Pencil, Trash2, Gift, BadgeCheck, Clock, CheckCircle, 
 import { Alert } from '../components/ui/Alert';
 import { Spinner } from '../components/ui/Spinner';
 import DealsManager from '../components/merchant/DealsManager';
+import HappeningsManager from '../components/merchant/HappeningsManager';
 
 const CATEGORIES = [
   { value: 'dining',      label: 'Dining & Drinks' },
@@ -483,6 +484,9 @@ export default function MerchantDashboard() {
 
       {/* Kredit deals marketplace */}
       <DealsManager />
+
+      {/* Happenings board */}
+      <HappeningsManager />
 
       {/* Recent wins */}
       <h2 style={{ margin: '0 0 12px', fontSize: '1.1rem', fontFamily: 'var(--font-serif)', color: 'var(--green)' }}>Recent Wins of Your Prizes</h2>

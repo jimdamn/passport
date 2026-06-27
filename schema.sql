@@ -183,6 +183,53 @@ CREATE INDEX IF NOT EXISTS idx_deal_claims_sweep ON passport_deal_claims(status,
 CREATE INDEX IF NOT EXISTS idx_deal_claims_user  ON passport_deal_claims(user_id, deal_id, status);
 CREATE INDEX IF NOT EXISTS idx_deal_claims_deal  ON passport_deal_claims(deal_id);
 
+-- ============================================================
+-- HAPPENINGS — local bulletin board (June 2026)
+-- ============================================================
+
+-- Short, informal merchant updates ("Sourdough's out at 3", "Live music tonight").
+-- Posted by VERIFIED merchants and published LIVE — no admin review queue (unlike
+-- deals/prizes). This is the explicit trust model: a verified merchant's word about
+-- their own day needs no gatekeeping. Admins retain full review/modify/unpublish.
+--
+-- Contact fields are SNAPSHOTTED from KKAuth at post time (merchant data lives in
+-- KKAuth, not Passport) so the public board reads with a single query and never
+-- fans out to the auth service. Short-lived posts make snapshot staleness a non-issue.
+-- show_name / show_address / show_phone are per-post toggles (default on) that gate
+-- what the consumer "contact bubble" reveals.
+--
+-- expires_at defaults to end of the posting day (set app-side) so the board
+-- self-cleans nightly; reads filter is_active = 1 AND expires_at > now (lazy expiry,
+-- passport-cron is only a backstop). category is validated app-side against the
+-- Happenings taxonomy. An attached deal reuses the dormant passport_deals.event_id
+-- hook (event_id = this happening's id) — NO new column, NO schema change.
+--
+-- Anti-spam (G1 calm-board guardrail) is enforced app-side, not in schema: a
+-- per-merchant post cooldown plus a live-post cap, surfaced as a gentle nudge.
+CREATE TABLE IF NOT EXISTS passport_happenings (
+  id              TEXT PRIMARY KEY,
+  tenant_id       TEXT NOT NULL REFERENCES tenants(id),
+  merchant_id     TEXT NOT NULL,
+  merchant_name   TEXT,
+  merchant_phone  TEXT,
+  merchant_address TEXT,
+  merchant_website TEXT,
+  merchant_lat    REAL,
+  merchant_lon    REAL,
+  show_name       INTEGER NOT NULL DEFAULT 1,
+  show_address    INTEGER NOT NULL DEFAULT 1,
+  show_phone      INTEGER NOT NULL DEFAULT 1,
+  category        TEXT NOT NULL,
+  body            TEXT NOT NULL,
+  photo_url       TEXT,
+  starts_at       INTEGER,
+  expires_at      INTEGER NOT NULL,
+  is_active       INTEGER NOT NULL DEFAULT 1,
+  created_at      INTEGER NOT NULL DEFAULT (unixepoch())
+);
+CREATE INDEX IF NOT EXISTS idx_happenings_feed     ON passport_happenings(tenant_id, is_active, expires_at);
+CREATE INDEX IF NOT EXISTS idx_happenings_merchant ON passport_happenings(merchant_id, created_at);
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- MIGRATION PATTERN FOR LOCAL AND REMOTE DATA PRESERVATION
 -- (Run these SQL commands sequentially to transition schemas without dropping databases)
@@ -215,6 +262,11 @@ CREATE INDEX IF NOT EXISTS idx_deal_claims_deal  ON passport_deal_claims(deal_id
 -- 2d. If the database predates the deals marketplace (June 2026), run:
 --    [Create passport_deals + passport_deal_claims tables and their indexes
 --     exactly as defined above — both are new tables, no data migration needed]
+--
+-- 2e. If the database predates Happenings (June 2026), run:
+--    [Create passport_happenings table + idx_happenings_feed + idx_happenings_merchant
+--     exactly as defined above — new table, no data migration needed. Attached deals
+--     reuse the existing passport_deals.event_id column, so no deals migration is needed.]
 --
 -- 3. Migrate passport_scans table structure and copy data:
 --    ALTER TABLE passport_scans RENAME TO scans_old;

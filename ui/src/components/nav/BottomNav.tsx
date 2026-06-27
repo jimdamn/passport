@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Map, Award, User, LayoutGrid, Tag } from 'lucide-react';
+import { Map, Award, User, LayoutGrid, Tag, CalendarDays } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 export default function BottomNav() {
@@ -29,6 +29,15 @@ export default function BottomNav() {
       >
         <Tag size={20} />
         <span>Deals</span>
+      </Link>
+
+      <Link
+        to="/happenings"
+        className={`bottom-nav-tab ${isActive('/happenings') ? 'active' : ''}`}
+        aria-label="Happenings"
+      >
+        <CalendarDays size={20} />
+        <span>Events</span>
       </Link>
 
       <Link

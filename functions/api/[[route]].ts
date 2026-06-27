@@ -21,6 +21,10 @@ import {
   listMerchantDeals, createMerchantDeal, updateMerchantDeal, deleteMerchantDeal,
   adminListDeals, adminUpdateDeal, adminDeleteDeal, internalSweep,
 } from '../../src/handlers/deals';
+import {
+  listHappenings, listMerchantHappenings, createHappening, updateHappening, deleteHappening,
+  adminListHappenings, adminUpdateHappening, adminDeleteHappening,
+} from '../../src/handlers/happenings';
 
 import { logger } from '../../src/lib/logger';
 
@@ -109,6 +113,13 @@ tenantApp.delete('/merchant/deals/:id', deleteMerchantDeal);
 tenantApp.get('/admin/deals', adminListDeals);
 tenantApp.put('/admin/deals/:id', adminUpdateDeal);
 tenantApp.delete('/admin/deals/:id', adminDeleteDeal);
+tenantApp.get('/merchant/happenings', listMerchantHappenings);
+tenantApp.post('/merchant/happenings', createHappening);
+tenantApp.put('/merchant/happenings/:id', updateHappening);
+tenantApp.delete('/merchant/happenings/:id', deleteHappening);
+tenantApp.get('/admin/happenings', adminListHappenings);
+tenantApp.put('/admin/happenings/:id', adminUpdateHappening);
+tenantApp.delete('/admin/happenings/:id', adminDeleteHappening);
 
 // Cron backstop for deal-claim expiry (X-Internal-Secret protected)
 app.post('/api/internal/deals/sweep', internalSweep);
@@ -116,6 +127,7 @@ app.post('/api/internal/deals/sweep', internalSweep);
 // Public Passport Scan & Claims APIs (Tenant-scoped, Guest-friendly)
 app.post('/api/t/:tenant/passport/scan', resolveTenant, scanPlaque);
 app.get('/api/t/:tenant/deals', resolveTenant, listDeals);
+app.get('/api/t/:tenant/happenings', resolveTenant, listHappenings);
 app.post('/api/t/:tenant/passport/claims/register', resolveTenant, registerClaim);
 app.get('/api/t/:tenant/members/:id', resolveTenant, getMember);
 app.get('/api/t/:tenant/members/:id/ratings', getMemberRatings);
