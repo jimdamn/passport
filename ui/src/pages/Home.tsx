@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTenant } from '../context/TenantContext';
 import { getDeals, claimWindowLabel, type Deal } from '../api/deals';
-import { Map, Tag, Award, Flame, Store } from 'lucide-react';
+import { Map, Tag, Award, Flame, Store, CalendarDays } from 'lucide-react';
 
 export default function Home() {
   const { user } = useAuth();
@@ -82,6 +82,12 @@ export default function Home() {
         ? `${deals.length} live deal${deals.length === 1 ? '' : 's'} — spend your kredits at local businesses.`
         : 'Spend your kredits on real deals at local businesses.',
       to: '/deals',
+    },
+    {
+      icon: <CalendarDays size={28} style={{ color: 'var(--amber)' }} />,
+      title: 'Happenings',
+      blurb: 'Today’s events, markets, and live updates — posted by local businesses.',
+      to: '/happenings',
     },
     {
       icon: <Award size={28} style={{ color: 'var(--amber)' }} />,
