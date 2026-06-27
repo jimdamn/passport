@@ -68,6 +68,15 @@ function asBool(value: unknown, fallback: boolean): boolean {
 }
 
 /**
+ * Round a coordinate to ~town-level precision (2 decimals ≈ 0.7 mi grid) so a
+ * "near me" distance filter can rank a post without revealing the merchant's
+ * exact location. Used when a post hides its street address.
+ */
+function coarseCoord(v: number | null): number | null {
+  return v == null ? null : Math.round(v * 100) / 100;
+}
+
+/**
  * Unix seconds for the next local midnight in BOARD_TZ. Computes seconds
  * elapsed since local midnight from the wall clock and adds the remainder —
  * accurate to within the rare DST-shift hour, which is plenty for a board that
@@ -210,8 +219,10 @@ export async function listHappenings(c: AppContext) {
     // Contact bubble — only fields the merchant chose to show.
     merchant_name: h.show_name ? h.merchant_name : null,
     merchant_address: h.show_address ? h.merchant_address : null,
-    merchant_lat: h.show_address ? h.merchant_lat : null,
-    merchant_lon: h.show_address ? h.merchant_lon : null,
+    // Coordinates always flow for "near me" distance filtering, but are coarsened
+    // to town level when the street address is hidden so location stays private.
+    merchant_lat: h.show_address ? h.merchant_lat : coarseCoord(h.merchant_lat),
+    merchant_lon: h.show_address ? h.merchant_lon : coarseCoord(h.merchant_lon),
     merchant_phone: h.show_phone ? h.merchant_phone : null,
     merchant_website: h.merchant_website,
     deal: h.deal_id ? { id: h.deal_id, title: h.deal_title } : null,

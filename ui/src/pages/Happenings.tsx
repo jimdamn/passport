@@ -5,9 +5,21 @@ import {
   getHappenings, categoryLabel, HAPPENING_CATEGORIES,
   type Happening,
 } from '../api/happenings';
-import { CalendarDays, MapPin, Phone, Globe, Store, Tag, X } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { CalendarDays, MapPin, Phone, Globe, Store, Tag, X, Navigation } from 'lucide-react';
 import { Alert } from '../components/ui/Alert';
 import { Spinner } from '../components/ui/Spinner';
+
+// Empty-state illustrations only. These are clearly-labeled "Example" cards so a
+// first-time visitor sees the intent of the board when nothing is posted yet —
+// never styled or wired to look like a real merchant post (no contact, no tap).
+const SAMPLE_HAPPENINGS: { category: string; body: string }[] = [
+  { category: 'food_drink', body: 'Fresh sourdough out of the oven at 3 — still warm if you hurry.' },
+  { category: 'live_music', body: 'Live acoustic set on the patio tonight, 6–8pm. Pull up a chair.' },
+  { category: 'markets', body: 'Extra sweet corn just came in at the farm stand this morning.' },
+  { category: 'sales', body: 'End-of-season flannels 20% off through the weekend.' },
+  { category: 'community', body: 'Pickup euchre at the coffee shop Thursday at 7 — all are welcome.' },
+];
 
 // A calm bulletin board: chronological, no countdowns, no urgency. Posts clear
 // themselves at end of day, so there is nothing to chase.
@@ -18,6 +30,28 @@ function postedAgo(createdAt: number): string {
   const hrs = Math.floor(mins / 60);
   return hrs === 1 ? '1 hour ago' : `${hrs} hours ago`;
 }
+
+// Great-circle distance in miles. Used to filter the board to "near me" based
+// on the visitor's *current* location (or, as a fallback, their saved home area)
+// — never their permanent profile location, since Happenings is about right here,
+// right now.
+function milesBetween(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 3958.8 * 2 * Math.asin(Math.min(1, Math.sqrt(a)));
+}
+
+// Distance is a quiet relevance filter, not an urgency signal — no "3 nearby!"
+// pressure. The "All" option keeps the board unfiltered by default.
+const RADIUS_OPTIONS = [
+  { mi: 5, label: '5 mi' },
+  { mi: 15, label: '15 mi' },
+  { mi: 30, label: '30 mi' },
+  { mi: 0, label: 'Any' },
+];
 
 function mapHref(h: Happening): string {
   if (h.merchant_lat != null && h.merchant_lon != null) {
@@ -91,6 +125,7 @@ function ContactBubble({ happening, onClose }: { happening: Happening; onClose: 
 
 export default function Happenings() {
   const { tenant } = useTenant();
+  const { user } = useAuth();
   const navigate = useNavigate();
 
   const [items, setItems] = useState<Happening[]>([]);
@@ -98,6 +133,45 @@ export default function Happenings() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [open, setOpen] = useState<Happening | null>(null);
+
+  // "Near me" filtering off the visitor's current location. Coords live only in
+  // component state — we never persist them.
+  const [coords, setCoords] = useState<{ lat: number; lon: number } | null>(null);
+  const [radius, setRadius] = useState(15);
+  const [locating, setLocating] = useState(false);
+  const [geoError, setGeoError] = useState('');
+
+  const useMyLocation = () => {
+    setGeoError('');
+    if (!('geolocation' in navigator)) {
+      setGeoError('Location isn’t available on this device.');
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        setCoords({ lat: pos.coords.latitude, lon: pos.coords.longitude });
+        setLocating(false);
+      },
+      () => {
+        setLocating(false);
+        // Fall back to the saved home area if we have it; otherwise just ask
+        // them to allow location.
+        if (user?.home_zip_lat != null && user?.home_zip_lon != null) {
+          setCoords({ lat: user.home_zip_lat, lon: user.home_zip_lon });
+          setGeoError('Using your home area — allow location to use where you are now.');
+        } else {
+          setGeoError('Couldn’t get your location. Check your browser’s location permission.');
+        }
+      },
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 },
+    );
+  };
+
+  const clearLocation = () => {
+    setCoords(null);
+    setGeoError('');
+  };
 
   useEffect(() => {
     if (!tenant) return;
@@ -115,13 +189,26 @@ export default function Happenings() {
     })();
   }, [tenant, filter]);
 
+  // Annotate each post with distance from the visitor (when located), then keep
+  // only those within the chosen radius. Order stays chronological — distance is
+  // a filter, never a ranking, so the board stays calm.
+  const withDistance = items.map(h => ({
+    h,
+    miles: coords && h.merchant_lat != null && h.merchant_lon != null
+      ? milesBetween(coords.lat, coords.lon, h.merchant_lat, h.merchant_lon)
+      : null,
+  }));
+  const visible = coords && radius > 0
+    ? withDistance.filter(x => x.miles != null && x.miles <= radius)
+    : withDistance;
+
   return (
     <div className="main-content" style={{ maxWidth: 800, margin: '0 auto', paddingTop: 20, paddingBottom: 80 }}>
       <h1 style={{ margin: '0 0 4px', fontSize: '1.5rem', fontFamily: 'var(--font-serif)', color: 'var(--green)', display: 'flex', alignItems: 'center', gap: 8 }}>
         <CalendarDays size={22} /> Happenings
       </h1>
       <p style={{ margin: '0 0 16px', fontSize: '0.82rem', color: 'var(--muted)' }}>
-        What's going on around the lakes today — straight from local businesses. The board
+        What's going on around the region today — straight from local businesses. The board
         clears each night, so it's always about right now.
       </p>
 
@@ -138,22 +225,88 @@ export default function Happenings() {
         ))}
       </div>
 
+      {/* Near-me filter — current location for everyone, not the saved profile. */}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
+        {!coords ? (
+          <button onClick={useMyLocation} disabled={locating}
+            className="btn btn-sm btn-secondary"
+            style={{ minHeight: 32, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <Navigation size={13} /> {locating ? 'Locating…' : 'Near me'}
+          </button>
+        ) : (
+          <>
+            {RADIUS_OPTIONS.map(r => (
+              <button key={r.mi} onClick={() => setRadius(r.mi)}
+                className={`btn btn-sm ${radius === r.mi ? 'btn-amber' : 'btn-secondary'}`}
+                style={{ minHeight: 32, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                {r.label}
+              </button>
+            ))}
+            <button onClick={clearLocation}
+              className="btn btn-sm btn-secondary"
+              style={{ minHeight: 32, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <X size={13} /> Clear
+            </button>
+          </>
+        )}
+      </div>
+      {geoError && (
+        <p style={{ margin: '0 0 12px', fontSize: '0.78rem', color: 'var(--muted)' }}>{geoError}</p>
+      )}
+
       {loading ? (
         <div style={{ paddingTop: 32, textAlign: 'center' }}>
           <Spinner size="lg" />
         </div>
       ) : items.length === 0 ? (
-        <div className="card" style={{ padding: 32, textAlign: 'center', background: 'var(--white)' }}>
-          <CalendarDays size={28} style={{ color: 'var(--amber)', marginBottom: 8 }} />
-          <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.85rem' }}>
-            {filter === 'all'
-              ? 'Nothing posted yet today. Check back later — local businesses share updates here as the day goes on.'
-              : `No ${categoryLabel(filter).toLowerCase()} happenings right now.`}
+        <div>
+          <div className="card" style={{ padding: 24, textAlign: 'center', background: 'var(--white)', marginBottom: 16 }}>
+            <CalendarDays size={28} style={{ color: 'var(--amber)', marginBottom: 8 }} />
+            <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.85rem' }}>
+              {filter === 'all'
+                ? 'Nothing posted yet today. Here’s the kind of thing neighbors share here as the day goes on.'
+                : `No ${categoryLabel(filter).toLowerCase()} happenings right now. Here’s the kind of thing you’ll see here.`}
+            </p>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }} aria-hidden="true">
+            {SAMPLE_HAPPENINGS.map((s, i) => (
+              <div key={i} className="card" style={{
+                background: 'var(--white)', padding: 16, opacity: 0.7,
+                borderLeft: '4px dashed var(--muted, #999)',
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, gap: 8 }}>
+                  <span style={{
+                    fontSize: '0.66rem', fontWeight: 700, textTransform: 'uppercase', padding: '2px 8px',
+                    borderRadius: 'var(--r-sm)', background: 'rgba(80,120,80,0.12)', color: 'var(--green)',
+                  }}>
+                    {categoryLabel(s.category)}
+                  </span>
+                  <span style={{
+                    fontSize: '0.62rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5,
+                    padding: '2px 8px', borderRadius: 'var(--r-sm)',
+                    background: 'rgba(200,134,10,0.12)', color: 'var(--amber)',
+                  }}>
+                    Example
+                  </span>
+                </div>
+                <p style={{ margin: 0, fontSize: '0.95rem', color: 'var(--muted)', lineHeight: 1.45 }}>{s.body}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : visible.length === 0 ? (
+        <div className="card" style={{ padding: 24, textAlign: 'center', background: 'var(--white)' }}>
+          <Navigation size={26} style={{ color: 'var(--amber)', marginBottom: 8 }} />
+          <p style={{ margin: '0 0 4px', color: 'var(--text)', fontSize: '0.9rem' }}>
+            Nothing within {radius} miles right now.
+          </p>
+          <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.8rem' }}>
+            Try a wider range, or clear the location filter to see the whole board.
           </p>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {items.map(h => (
+          {visible.map(({ h, miles }) => (
             <div key={h.id} className="card" role="button" tabIndex={0}
               onClick={() => setOpen(h)}
               onKeyDown={e => { if (e.key === 'Enter') setOpen(h); }}
@@ -179,6 +332,15 @@ export default function Happenings() {
                 {h.merchant_name ? (
                   <span style={{ fontSize: '0.78rem', color: 'var(--muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                     <Store size={12} /> {h.merchant_name}
+                    {miles != null && (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                        <span>·</span><MapPin size={11} /> {miles < 1 ? '<1' : Math.round(miles)} mi
+                      </span>
+                    )}
+                  </span>
+                ) : miles != null ? (
+                  <span style={{ fontSize: '0.78rem', color: 'var(--muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <MapPin size={11} /> {miles < 1 ? '<1' : Math.round(miles)} mi
                   </span>
                 ) : <span />}
                 {h.deal && (
