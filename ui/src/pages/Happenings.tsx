@@ -123,15 +123,33 @@ export default function Happenings() {
   const [error, setError] = useState('');
   const [open, setOpen] = useState<Happening | null>(null);
 
-  // "Near me" filtering off the visitor's current location. Coords live only in
-  // component state — we never persist them.
+  // Location filtering. Coords live only in component state — never persisted.
+  // `source` records where they came from so the UI can be honest about whether
+  // we're showing the live position or just a default from the saved profile.
   const [coords, setCoords] = useState<{ lat: number; lon: number } | null>(null);
+  const [source, setSource] = useState<'home' | 'live' | null>(null);
   const [radius, setRadius] = useState(15);
   const [locating, setLocating] = useState(false);
   const [geoError, setGeoError] = useState('');
+  // Once the visitor acts on the location control, stop auto-seeding their home
+  // area so a cleared/overridden choice never snaps back on the next render.
+  const [touched, setTouched] = useState(false);
+
+  // Smart default for registered users: seed the board with their saved home
+  // area the first time their profile loads. It's a default, never a lock — live
+  // location overrides it, and clearing turns it off for good.
+  useEffect(() => {
+    if (touched || coords) return;
+    if (user?.home_zip_lat != null && user?.home_zip_lon != null) {
+      setCoords({ lat: user.home_zip_lat, lon: user.home_zip_lon });
+      setRadius(30); // home browsing is regional — a bit wider than live "near me"
+      setSource('home');
+    }
+  }, [user, touched, coords]);
 
   const useMyLocation = () => {
     setGeoError('');
+    setTouched(true);
     if (!('geolocation' in navigator)) {
       setGeoError('Location isn’t available on this device.');
       return;
@@ -140,6 +158,7 @@ export default function Happenings() {
     navigator.geolocation.getCurrentPosition(
       pos => {
         setCoords({ lat: pos.coords.latitude, lon: pos.coords.longitude });
+        setSource('live');
         setLocating(false);
       },
       () => {
@@ -148,6 +167,7 @@ export default function Happenings() {
         // them to allow location.
         if (user?.home_zip_lat != null && user?.home_zip_lon != null) {
           setCoords({ lat: user.home_zip_lat, lon: user.home_zip_lon });
+          setSource('home');
           setGeoError('Using your home area — allow location to use where you are now.');
         } else {
           setGeoError('Couldn’t get your location. Check your browser’s location permission.');
@@ -158,7 +178,9 @@ export default function Happenings() {
   };
 
   const clearLocation = () => {
+    setTouched(true);
     setCoords(null);
+    setSource(null);
     setGeoError('');
   };
 
@@ -209,8 +231,9 @@ export default function Happenings() {
         ))}
       </div>
 
-      {/* Near-me filter — current location for everyone, not the saved profile. */}
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
+      {/* Location filter. Live position is "near me"; a saved profile zip is shown
+          as a clearly-labeled "home area" default that live location can override. */}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: source === 'home' ? 6 : 12 }}>
         {!coords ? (
           <button onClick={useMyLocation} disabled={locating}
             className="btn btn-sm btn-secondary"
@@ -226,6 +249,13 @@ export default function Happenings() {
                 {r.label}
               </button>
             ))}
+            {source === 'home' && (
+              <button onClick={useMyLocation} disabled={locating}
+                className="btn btn-sm btn-secondary"
+                style={{ minHeight: 32, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                <Navigation size={13} /> {locating ? 'Locating…' : 'Use my location'}
+              </button>
+            )}
             <button onClick={clearLocation}
               className="btn btn-sm btn-secondary"
               style={{ minHeight: 32, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
@@ -234,6 +264,12 @@ export default function Happenings() {
           </>
         )}
       </div>
+      {source === 'home' && !geoError && (
+        <p style={{ margin: '0 0 12px', fontSize: '0.78rem', color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 5 }}>
+          <MapPin size={12} style={{ color: 'var(--amber)' }} />
+          Showing your home area{user?.home_zip_location ? ` (${user.home_zip_location})` : ''} — tap “Use my location” if you’re out and about.
+        </p>
+      )}
       {geoError && (
         <p style={{ margin: '0 0 12px', fontSize: '0.78rem', color: 'var(--muted)' }}>{geoError}</p>
       )}
