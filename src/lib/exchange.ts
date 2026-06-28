@@ -5,6 +5,10 @@ import type { Env } from '../types';
 // Override per-environment by setting EXCHANGE_BASE_URL; defaults to prod.
 const DEFAULT_EXCHANGE_BASE_URL = 'https://exchange.lakeandlocals.com';
 
+// Exchange currently runs a single niche (SkillSwap, slug "skills"). The offers
+// list route is niche-scoped, so we target that slug.
+const EXCHANGE_NICHE = 'skills';
+
 export interface ExchangeOffer {
   id: string;
   title: string;
@@ -13,6 +17,13 @@ export interface ExchangeOffer {
   created_at: number;
   category_name: string | null;
   category_icon: string | null;
+}
+
+export interface ExchangeMarketOffer extends ExchangeOffer {
+  creator_label: string | null;
+  interest_count: number;
+  user_id: number;
+  persona_type: string;
 }
 
 function exchangeBaseUrl(env: Env): string {
@@ -38,6 +49,41 @@ export async function fetchMemberActiveOffers(
     if (!res.ok) return [];
     const json = await res.json<{ data?: { active_offers?: ExchangeOffer[] } }>();
     return json.data?.active_offers ?? [];
+  } catch {
+    return [];
+  }
+}
+
+// Fetch the most recent active offers across the niche, to surface a strip on
+// the Marketplace. Forwards the caller's bearer token (Exchange's offers list is
+// behind requireAuth). Returns [] on any failure.
+export async function fetchExchangeOffers(
+  env: Env,
+  tenantId: string,
+  authHeader: string | null,
+  limit = 6,
+): Promise<ExchangeMarketOffer[]> {
+  if (!authHeader) return [];
+  try {
+    const res = await fetch(
+      `${exchangeBaseUrl(env)}/api/t/${encodeURIComponent(tenantId)}/${EXCHANGE_NICHE}/offers?limit=${limit}&sort=recent`,
+      { headers: { Authorization: authHeader } },
+    );
+    if (!res.ok) return [];
+    const json = await res.json<{ data?: any[] }>();
+    return (json.data ?? []).map(o => ({
+      id: o.id,
+      title: o.title,
+      offer_type: o.offer_type,
+      location: o.location ?? null,
+      created_at: o.created_at,
+      category_name: o.category_name ?? null,
+      category_icon: o.category_icon ?? null,
+      creator_label: o.creator_label ?? null,
+      interest_count: o.interest_count ?? 0,
+      user_id: o.user_id,
+      persona_type: o.persona_type ?? 'anonymous',
+    }));
   } catch {
     return [];
   }

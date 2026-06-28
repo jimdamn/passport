@@ -26,6 +26,8 @@ import {
   adminListHappenings, adminUpdateHappening, adminDeleteHappening,
 } from '../../src/handlers/happenings';
 
+import { listExchangeOffers } from '../../src/handlers/exchange';
+
 import { logger } from '../../src/lib/logger';
 
 const app = new Hono<{ Bindings: Env }>();
@@ -127,6 +129,7 @@ app.post('/api/internal/deals/sweep', internalSweep);
 // Public Passport Scan & Claims APIs (Tenant-scoped, Guest-friendly)
 app.post('/api/t/:tenant/passport/scan', resolveTenant, scanPlaque);
 app.get('/api/t/:tenant/deals', resolveTenant, listDeals);
+app.get('/api/t/:tenant/exchange/offers', resolveTenant, listExchangeOffers);
 app.get('/api/t/:tenant/happenings', resolveTenant, listHappenings);
 app.post('/api/t/:tenant/passport/claims/register', resolveTenant, registerClaim);
 app.get('/api/t/:tenant/members/:id', resolveTenant, getMember);

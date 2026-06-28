@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTenant } from '../context/TenantContext';
 import {
@@ -7,9 +7,20 @@ import {
   type Deal, type MyDealClaim, type DealPurchase,
 } from '../api/deals';
 import { getBalanceOnly } from '../api/credits';
-import { Flame, Clock, Store, CheckCircle, XCircle, RotateCw, Ticket, Tag, Tags } from 'lucide-react';
+import { getExchangeOffers, type ExchangeOffer } from '../api/exchange';
+import { Flame, Clock, Store, CheckCircle, XCircle, RotateCw, Ticket, Tag, Tags, Repeat, Users, ExternalLink } from 'lucide-react';
 import { Alert } from '../components/ui/Alert';
 import { Spinner } from '../components/ui/Spinner';
+
+// Exchange is a separate Pages app on the shared domain; offer detail is /offers/:id.
+const EXCHANGE_BASE_URL = 'https://exchange.lakeandlocals.com';
+
+const OFFER_TYPE_LABELS: Record<string, string> = {
+  have:  'Offering',
+  want:  'Looking for',
+  trade: 'Trade',
+  free:  'Free',
+};
 
 function useNow(tickMs = 1000) {
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
@@ -74,9 +85,12 @@ export default function Deals() {
   const navigate = useNavigate();
   const now = useNow();
 
-  const [tab, setTab] = useState<'market' | 'mine'>('market');
+  const [tab, setTab] = useState<'market' | 'mine' | 'exchange'>('market');
   const [deals, setDeals] = useState<Deal[]>([]);
   const [mine, setMine] = useState<MyDealClaim[]>([]);
+  const [exchangeOffers, setExchangeOffers] = useState<ExchangeOffer[]>([]);
+  const [exchangeLoaded, setExchangeLoaded] = useState(false);
+  const [exchangeLoading, setExchangeLoading] = useState(false);
   const [balance, setBalance] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -106,6 +120,16 @@ export default function Deals() {
       }
     })();
   }, [tenant, user]);
+
+  // Load Exchange offers lazily the first time the Exchange tab is opened.
+  useEffect(() => {
+    if (tab !== 'exchange' || !tenant || !user || exchangeLoaded) return;
+    setExchangeLoading(true);
+    getExchangeOffers(tenant.id)
+      .then(res => setExchangeOffers(res.data || []))
+      .catch(() => setExchangeOffers([]))
+      .finally(() => { setExchangeLoaded(true); setExchangeLoading(false); });
+  }, [tab, tenant, user, exchangeLoaded]);
 
   const refreshAfterPurchase = async () => {
     if (!tenant) return;
@@ -193,7 +217,7 @@ export default function Deals() {
 
       {user && (
         <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-          {([['market', 'Marketplace'], ['mine', `My Deals${pendingMine.length ? ` (${pendingMine.length})` : ''}`]] as const).map(([key, label]) => (
+          {([['market', 'Marketplace'], ['mine', `My Deals${pendingMine.length ? ` (${pendingMine.length})` : ''}`], ['exchange', 'Exchange']] as const).map(([key, label]) => (
             <button key={key} onClick={() => setTab(key)}
               className={`btn btn-sm ${tab === key ? 'btn-amber' : 'btn-secondary'}`}
               style={{ minHeight: 34 }}>
@@ -313,6 +337,79 @@ export default function Deals() {
                 </div>
               );
             })
+          )}
+        </div>
+      )}
+
+      {tab === 'exchange' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <p style={{ margin: '0 0 4px', fontSize: '0.82rem', color: 'var(--muted)' }}>
+            Neighbors trading skills and services on the KrowdKraft Exchange. Tap an
+            offer to view it and reach out.
+          </p>
+          {exchangeLoading ? (
+            <div style={{ textAlign: 'center', padding: 24 }}><Spinner /></div>
+          ) : exchangeOffers.length === 0 ? (
+            <div className="card" style={{ padding: 32, textAlign: 'center', background: 'var(--white)' }}>
+              <Repeat size={28} style={{ color: 'var(--amber)', marginBottom: 8 }} />
+              <p style={{ margin: '0 0 12px', color: 'var(--muted)', fontSize: '0.85rem' }}>
+                No open offers right now. Be the first to post one on the Exchange.
+              </p>
+              <a className="btn btn-amber btn-sm" href={`${EXCHANGE_BASE_URL}/offers/new`}
+                target="_blank" rel="noopener noreferrer" style={{ minHeight: 34 }}>
+                Post an Offer
+              </a>
+            </div>
+          ) : (
+            <>
+              {exchangeOffers.map(offer => {
+                const linkProfile = offer.persona_type !== 'anonymous' && !!offer.user_id;
+                return (
+                  <div key={offer.id} className="card" style={{
+                    background: 'var(--white)', padding: 16,
+                    display: 'flex', gap: 12, alignItems: 'flex-start',
+                    borderLeft: '4px solid var(--green)',
+                  }}>
+                    <span style={{ fontSize: '1.5rem', flexShrink: 0 }}>{offer.category_icon || '🔄'}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <a href={`${EXCHANGE_BASE_URL}/offers/${offer.id}`}
+                        target="_blank" rel="noopener noreferrer"
+                        style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 2 }}>
+                          <span style={{
+                            fontSize: '0.66rem', fontWeight: 700, textTransform: 'uppercase', padding: '2px 8px',
+                            borderRadius: 'var(--r-sm)', background: 'rgba(80,120,80,0.12)', color: 'var(--green)',
+                          }}>
+                            {OFFER_TYPE_LABELS[offer.offer_type] || offer.offer_type}
+                          </span>
+                          <h3 style={{ margin: 0, fontSize: '1rem', color: 'var(--green)', fontWeight: 600 }}>{offer.title}</h3>
+                          <ExternalLink size={13} style={{ color: 'var(--muted)' }} />
+                        </div>
+                      </a>
+                      <p style={{ margin: 0, fontSize: '0.74rem', color: 'var(--muted)' }}>
+                        {linkProfile ? (
+                          <Link to={`/members/${offer.user_id}`} style={{ color: 'var(--green)', fontWeight: 600 }}>
+                            {offer.creator_label || 'A neighbor'}
+                          </Link>
+                        ) : (
+                          offer.creator_label || 'A neighbor'
+                        )}
+                        {offer.location ? ` · ${offer.location}` : ''}
+                        {offer.interest_count > 0 && (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, marginLeft: 6 }}>
+                            <Users size={11} /> {offer.interest_count} interested
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+              <a href={EXCHANGE_BASE_URL} target="_blank" rel="noopener noreferrer"
+                style={{ textAlign: 'center', fontSize: '0.82rem', color: 'var(--green)', fontWeight: 600, textDecoration: 'none', padding: '4px 0' }}>
+                Browse all offers on the Exchange →
+              </a>
+            </>
           )}
         </div>
       )}
