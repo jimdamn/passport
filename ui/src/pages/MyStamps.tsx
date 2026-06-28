@@ -363,7 +363,7 @@ export default function MyStamps() {
             gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
             gap: 16,
           }}>
-            {EXAMPLE_STAMPS.map(stamp => (
+            {stamps.map(stamp => (
               <div
                 key={stamp.id}
                 style={{
@@ -495,7 +495,7 @@ export default function MyStamps() {
             gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
             gap: 16,
           }}>
-            {EXAMPLE_BADGES.map(badge => (
+            {badges.map(badge => (
               <div
                 key={badge.id}
                 style={{
