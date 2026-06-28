@@ -68,13 +68,29 @@ function asBool(value: unknown, fallback: boolean): boolean {
 }
 
 /**
- * Round a coordinate to ~town-level precision (2 decimals ≈ 0.7 mi grid) so a
- * "near me" distance filter can rank a post without revealing the merchant's
- * exact location. Used when a post hides its street address.
+ * Parse the optional ?lat=&lon=&radius= "near me" params. Returns null unless a
+ * valid coordinate is supplied. radius is in miles; 0 (or absent) means "compute
+ * distance but don't filter by it" so the board can still label each post.
  */
-function coarseCoord(v: number | null): number | null {
-  return v == null ? null : Math.round(v * 100) / 100;
+function parseNearby(c: AppContext): { lat: number; lon: number; radius: number } | null {
+  const lat = Number(c.req.query('lat'));
+  const lon = Number(c.req.query('lon'));
+  if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
+    return null;
+  }
+  const radius = Math.max(0, Math.min(500, Number(c.req.query('radius')) || 0));
+  return { lat, lon, radius };
 }
+
+// Great-circle distance (miles) as a SQL expression over a post's stored coords.
+// Mirrors the Exchange's haversine; clamps the acos argument to avoid NaN at the
+// antipodes. The precise coords are used only here, server-side — never returned.
+const DISTANCE_SQL = `
+  3958.8 * acos(MIN(1.0, MAX(-1.0,
+    sin(radians(h.merchant_lat)) * sin(radians(?)) +
+    cos(radians(h.merchant_lat)) * cos(radians(?)) * cos(radians(h.merchant_lon) - radians(?))
+  )))
+`;
 
 /**
  * Unix seconds for the next local midnight in BOARD_TZ. Computes seconds
@@ -181,6 +197,7 @@ async function reconcileAttachedDeal(
 export async function listHappenings(c: AppContext) {
   const tenant = c.get('tenant');
   const category = c.req.query('category');
+  const near = parseNearby(c);
 
   const filters: string[] = [
     'h.tenant_id = ?', 'h.is_active = 1',
@@ -193,10 +210,25 @@ export async function listHappenings(c: AppContext) {
     binds.push(category);
   }
 
+  // "Near me": compute distance server-side on precise coords and, when a radius
+  // is set, filter to within it *before* the 200-cap — so the closest posts can
+  // never be dropped by the limit. The precise coords are not returned.
+  let distanceSelect = 'NULL AS distance_mi';
+  if (near) {
+    distanceSelect = `(${DISTANCE_SQL}) AS distance_mi`;
+    binds.unshift(near.lat, near.lat, near.lon); // bound to the leading SELECT expr
+    if (near.radius > 0) {
+      filters.push('h.merchant_lat IS NOT NULL', 'h.merchant_lon IS NOT NULL');
+      filters.push(`(${DISTANCE_SQL}) <= ?`);
+      binds.push(near.lat, near.lat, near.lon, near.radius);
+    }
+  }
+
   const { results } = await c.env.DB.prepare(`
     SELECT h.id, h.merchant_id, h.category, h.body, h.photo_url, h.starts_at, h.expires_at, h.created_at,
            h.merchant_name, h.merchant_phone, h.merchant_address, h.merchant_website, h.merchant_lat, h.merchant_lon,
            h.show_name, h.show_address, h.show_phone,
+           ${distanceSelect},
            d.id AS deal_id, d.title AS deal_title
     FROM passport_happenings h
     LEFT JOIN passport_deals d
@@ -216,13 +248,16 @@ export async function listHappenings(c: AppContext) {
     starts_at: h.starts_at,
     expires_at: h.expires_at,
     created_at: h.created_at,
-    // Contact bubble — only fields the merchant chose to show.
+    // Distance from the visitor when "near me" is active — a number only; the
+    // underlying coords stay server-side.
+    distance_mi: h.distance_mi == null ? null : Math.round(h.distance_mi * 10) / 10,
+    // Contact bubble — only fields the merchant chose to show. Coordinates are
+    // returned solely to power the map link, so they ride along only when the
+    // address is shown; a hidden-address post reveals no coordinates at all.
     merchant_name: h.show_name ? h.merchant_name : null,
     merchant_address: h.show_address ? h.merchant_address : null,
-    // Coordinates always flow for "near me" distance filtering, but are coarsened
-    // to town level when the street address is hidden so location stays private.
-    merchant_lat: h.show_address ? h.merchant_lat : coarseCoord(h.merchant_lat),
-    merchant_lon: h.show_address ? h.merchant_lon : coarseCoord(h.merchant_lon),
+    merchant_lat: h.show_address ? h.merchant_lat : null,
+    merchant_lon: h.show_address ? h.merchant_lon : null,
     merchant_phone: h.show_phone ? h.merchant_phone : null,
     merchant_website: h.merchant_website,
     deal: h.deal_id ? { id: h.deal_id, title: h.deal_title } : null,

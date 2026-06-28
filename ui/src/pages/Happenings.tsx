@@ -31,21 +31,10 @@ function postedAgo(createdAt: number): string {
   return hrs === 1 ? '1 hour ago' : `${hrs} hours ago`;
 }
 
-// Great-circle distance in miles. Used to filter the board to "near me" based
-// on the visitor's *current* location (or, as a fallback, their saved home area)
-// — never their permanent profile location, since Happenings is about right here,
-// right now.
-function milesBetween(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
-  const a = Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-  return 3958.8 * 2 * Math.asin(Math.min(1, Math.sqrt(a)));
-}
-
 // Distance is a quiet relevance filter, not an urgency signal — no "3 nearby!"
-// pressure. The "All" option keeps the board unfiltered by default.
+// pressure. The "Any" option keeps the board unfiltered by distance. Filtering
+// happens server-side (the board refetches with the visitor's coords) so the
+// nearest posts can never be cut off by the result limit.
 const RADIUS_OPTIONS = [
   { mi: 5, label: '5 mi' },
   { mi: 15, label: '15 mi' },
@@ -173,13 +162,19 @@ export default function Happenings() {
     setGeoError('');
   };
 
+  // Refetch whenever the category, location, or radius changes. The server does
+  // the distance filtering, so the closest posts are never cut off by the limit.
   useEffect(() => {
     if (!tenant) return;
     (async () => {
       setLoading(true);
       setError('');
       try {
-        const res = await getHappenings(tenant.id, filter === 'all' ? undefined : filter);
+        const res = await getHappenings(
+          tenant.id,
+          filter === 'all' ? undefined : filter,
+          coords ? { lat: coords.lat, lon: coords.lon, radius } : undefined,
+        );
         setItems(res.data || []);
       } catch (err: any) {
         setError(err.message || 'Failed to load happenings.');
@@ -187,21 +182,10 @@ export default function Happenings() {
         setLoading(false);
       }
     })();
-  }, [tenant, filter]);
+  }, [tenant, filter, coords, radius]);
 
-  // Annotate each post with distance from the visitor (when located), then keep
-  // only those within the chosen radius. Order stays chronological — distance is
-  // a filter, never a ranking, so the board stays calm.
-  const withDistance = items.map(h => ({
-    h,
-    miles: coords && h.merchant_lat != null && h.merchant_lon != null
-      ? milesBetween(coords.lat, coords.lon, h.merchant_lat, h.merchant_lon)
-      : null,
-  }));
-  const visible = coords && radius > 0
-    ? withDistance.filter(x => x.miles != null && x.miles <= radius)
-    : withDistance;
-
+  // Distance filtering happens server-side; render the board as returned. Order
+  // stays chronological — distance is a filter, never a ranking, so it's calm.
   return (
     <div className="main-content" style={{ maxWidth: 800, margin: '0 auto', paddingTop: 20, paddingBottom: 80 }}>
       <h1 style={{ margin: '0 0 4px', fontSize: '1.5rem', fontFamily: 'var(--font-serif)', color: 'var(--green)', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -259,6 +243,17 @@ export default function Happenings() {
           <Spinner size="lg" />
         </div>
       ) : items.length === 0 ? (
+        coords && radius > 0 ? (
+          <div className="card" style={{ padding: 24, textAlign: 'center', background: 'var(--white)' }}>
+            <Navigation size={26} style={{ color: 'var(--amber)', marginBottom: 8 }} />
+            <p style={{ margin: '0 0 4px', color: 'var(--text)', fontSize: '0.9rem' }}>
+              Nothing within {radius} miles right now.
+            </p>
+            <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.8rem' }}>
+              Try a wider range, or clear the location filter to see the whole board.
+            </p>
+          </div>
+        ) : (
         <div>
           <div className="card" style={{ padding: 24, textAlign: 'center', background: 'var(--white)', marginBottom: 16 }}>
             <CalendarDays size={28} style={{ color: 'var(--amber)', marginBottom: 8 }} />
@@ -294,19 +289,10 @@ export default function Happenings() {
             ))}
           </div>
         </div>
-      ) : visible.length === 0 ? (
-        <div className="card" style={{ padding: 24, textAlign: 'center', background: 'var(--white)' }}>
-          <Navigation size={26} style={{ color: 'var(--amber)', marginBottom: 8 }} />
-          <p style={{ margin: '0 0 4px', color: 'var(--text)', fontSize: '0.9rem' }}>
-            Nothing within {radius} miles right now.
-          </p>
-          <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.8rem' }}>
-            Try a wider range, or clear the location filter to see the whole board.
-          </p>
-        </div>
+        )
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {visible.map(({ h, miles }) => (
+          {items.map(h => (
             <div key={h.id} className="card" role="button" tabIndex={0}
               onClick={() => setOpen(h)}
               onKeyDown={e => { if (e.key === 'Enter') setOpen(h); }}
@@ -332,15 +318,15 @@ export default function Happenings() {
                 {h.merchant_name ? (
                   <span style={{ fontSize: '0.78rem', color: 'var(--muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                     <Store size={12} /> {h.merchant_name}
-                    {miles != null && (
+                    {h.distance_mi != null && (
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                        <span>·</span><MapPin size={11} /> {miles < 1 ? '<1' : Math.round(miles)} mi
+                        <span>·</span><MapPin size={11} /> {h.distance_mi < 1 ? '<1' : Math.round(h.distance_mi)} mi
                       </span>
                     )}
                   </span>
-                ) : miles != null ? (
+                ) : h.distance_mi != null ? (
                   <span style={{ fontSize: '0.78rem', color: 'var(--muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                    <MapPin size={11} /> {miles < 1 ? '<1' : Math.round(miles)} mi
+                    <MapPin size={11} /> {h.distance_mi < 1 ? '<1' : Math.round(h.distance_mi)} mi
                   </span>
                 ) : <span />}
                 {h.deal && (

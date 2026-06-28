@@ -33,6 +33,9 @@ export interface Happening {
   merchant_lon: number | null;
   merchant_phone: string | null;
   merchant_website: string | null;
+  // Distance in miles from the visitor's current location — present only when the
+  // board was fetched with "near me" coordinates; null otherwise.
+  distance_mi: number | null;
   deal: { id: string; title: string } | null;
 }
 
@@ -72,10 +75,22 @@ export interface HappeningInput {
   is_active?: boolean;
 }
 
-// Public
-export function getHappenings(tenant: string, category?: string) {
-  const q = category ? `?category=${encodeURIComponent(category)}` : '';
-  return api.get<ApiResponse<Happening[]>>(`/t/${tenant}/happenings${q}`);
+// Public. Pass `nearby` to filter/annotate by the visitor's current location:
+// the server computes distance and (when radius > 0) returns only posts within it.
+export function getHappenings(
+  tenant: string,
+  category?: string,
+  nearby?: { lat: number; lon: number; radius: number },
+) {
+  const params = new URLSearchParams();
+  if (category) params.set('category', category);
+  if (nearby) {
+    params.set('lat', String(nearby.lat));
+    params.set('lon', String(nearby.lon));
+    params.set('radius', String(nearby.radius));
+  }
+  const q = params.toString();
+  return api.get<ApiResponse<Happening[]>>(`/t/${tenant}/happenings${q ? `?${q}` : ''}`);
 }
 
 // Merchant
