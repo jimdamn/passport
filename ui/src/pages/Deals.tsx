@@ -356,7 +356,7 @@ export default function Deals() {
                 No open offers right now. Be the first to post one on the Exchange.
               </p>
               <a className="btn btn-amber btn-sm" href={`${EXCHANGE_BASE_URL}/offers/new`}
-                target="_blank" rel="noopener noreferrer" style={{ minHeight: 34 }}>
+                style={{ minHeight: 34 }}>
                 Post an Offer
               </a>
             </div>
@@ -373,7 +373,6 @@ export default function Deals() {
                     <span style={{ fontSize: '1.5rem', flexShrink: 0 }}>{offer.category_icon || '🔄'}</span>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <a href={`${EXCHANGE_BASE_URL}/offers/${offer.id}`}
-                        target="_blank" rel="noopener noreferrer"
                         style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}>
                         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 2 }}>
                           <span style={{
@@ -405,7 +404,7 @@ export default function Deals() {
                   </div>
                 );
               })}
-              <a href={EXCHANGE_BASE_URL} target="_blank" rel="noopener noreferrer"
+              <a href={EXCHANGE_BASE_URL}
                 style={{ textAlign: 'center', fontSize: '0.82rem', color: 'var(--green)', fontWeight: 600, textDecoration: 'none', padding: '4px 0' }}>
                 Browse all offers on the Exchange →
               </a>

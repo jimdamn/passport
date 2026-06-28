@@ -130,8 +130,6 @@ export default function PublicProfile() {
               <a
                 key={offer.id}
                 href={`${EXCHANGE_BASE_URL}/offers/${offer.id}`}
-                target="_blank"
-                rel="noopener noreferrer"
                 style={{
                   display: 'flex', alignItems: 'center', gap: 10,
                   padding: '10px 12px', borderRadius: 8,
