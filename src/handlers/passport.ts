@@ -31,6 +31,42 @@ function getDistance(lat1: number, lon1: number, lat2: number, lon2: number): nu
   return R * c;
 }
 
+type DrawnPrize = {
+  id: string;
+  name: string;
+  prize_type: string;
+  value: number;
+  details: string;
+  probability: number;
+  quantity_left: number;
+};
+
+// Floor prize display value mirrors KKGame's passport_scan base_credits. The real
+// KrowdKredits award is issued by KKGame; prize.value is shown to the user only.
+const FLOOR_PRIZE_VALUE = 25;
+
+// Every winning scan must award something. The probability matrix falls through to
+// the kredits_base "floor" prize, so a tenant with no active floor prize would 500
+// the scanner. Guarantee the invariant: return the active floor prize, lazily
+// creating a deterministic one if it is missing. Creating a real row (rather than
+// synthesizing an in-memory prize) keeps the passport_claims.prize_id foreign key
+// valid — guest scans always insert a claim referencing this id.
+async function ensureFloorPrize(env: Env, tenantId: string): Promise<DrawnPrize> {
+  const existing = await env.DB.prepare(
+    "SELECT id, name, prize_type, value, details, probability, quantity_left FROM passport_prizes WHERE tenant_id = ? AND prize_type = 'kredits_base' AND is_active = 1 LIMIT 1"
+  ).bind(tenantId).first<DrawnPrize>();
+  if (existing) return existing;
+
+  const id = `kredits-base-${tenantId}`;
+  await env.DB.prepare(
+    `INSERT OR IGNORE INTO passport_prizes
+       (id, tenant_id, name, prize_type, value, details, probability, quantity_left, is_active, is_paced)
+     VALUES (?, ?, 'KrowdKredits', 'kredits_base', ?, NULL, 0, -1, 1, 0)`
+  ).bind(id, tenantId, FLOOR_PRIZE_VALUE).run();
+
+  return { id, name: 'KrowdKredits', prize_type: 'kredits_base', value: FLOOR_PRIZE_VALUE, details: '', probability: 0, quantity_left: -1 };
+}
+
 /**
  * POST /api/t/:tenant/passport/scan
  * Handles scans from both registered users and parade street guests.
@@ -198,15 +234,7 @@ export async function scanPlaque(c: AppContext) {
   // 5a. Paced prize drops take priority (event pacing): each unit of a paced
   // prize has a hidden random release time; the first eligible scan at/after
   // it wins. The conditional UPDATE makes the claim atomic under concurrency.
-  let rolledPrize: {
-    id: string;
-    name: string;
-    prize_type: string;
-    value: number;
-    details: string;
-    probability: number;
-    quantity_left: number;
-  } | undefined;
+  let rolledPrize: DrawnPrize | undefined;
 
   const maturedDrop = await c.env.DB.prepare(`
     SELECT d.id AS drop_id, p.id, p.name, p.prize_type, p.value, p.details, p.probability, p.quantity_left
@@ -247,43 +275,36 @@ export async function scanPlaque(c: AppContext) {
   }>();
 
   if (!rolledPrize) {
-    rolledPrize = prizes.results.find(p => p.prize_type === 'kredits_base');
     const roll = Math.random();
     let cumulativeProb = 0;
 
-    // We filter out prizes that have run out of stock
+    // Out-of-stock prizes (quantity_left === 0) are excluded; the kredits_base
+    // floor is handled separately below, never in the weighted roll.
     const availablePrizes = prizes.results.filter(p => p.quantity_left !== 0);
 
+    let upgraded: DrawnPrize | undefined;
     for (const prize of availablePrizes) {
-      if (prize.prize_type === 'kredits_base') continue; // baseline is default fallback
+      if (prize.prize_type === 'kredits_base') continue; // floor is the default fallback
       cumulativeProb += prize.probability;
       if (roll < cumulativeProb) {
-        rolledPrize = prize;
+        upgraded = prize;
         break;
       }
     }
 
-    if (!rolledPrize) {
-      throw new HTTPException(500, { message: 'Failed to draw prize. Please try again.' });
-    }
-
-    // Decrement stock atomically for limited prizes (quantity_left = -1 means
-    // unlimited). The conditional WHERE closes the race where two concurrent
-    // scans both claim the last unit and push stock to -1 (= unlimited).
-    if (rolledPrize.quantity_left > 0) {
+    // Decrement stock atomically for a limited upgraded prize (quantity_left = -1
+    // means unlimited). The conditional WHERE closes the race where two concurrent
+    // scans both claim the last unit; the loser drops to the floor prize.
+    if (upgraded && upgraded.quantity_left > 0) {
       const decr = await c.env.DB.prepare(
         'UPDATE passport_prizes SET quantity_left = quantity_left - 1 WHERE id = ? AND quantity_left > 0'
-      ).bind(rolledPrize.id).run();
-
-      if (decr.meta.changes === 0) {
-        // Lost the race — fall back to the baseline prize
-        const baseline = prizes.results.find(p => p.prize_type === 'kredits_base');
-        if (!baseline) {
-          throw new HTTPException(500, { message: 'Failed to draw prize. Please try again.' });
-        }
-        rolledPrize = baseline;
-      }
+      ).bind(upgraded.id).run();
+      if (decr.meta.changes === 0) upgraded = undefined;
     }
+
+    // Guaranteed floor: every winning scan awards something, so a missing or
+    // depleted upgraded prize never 500s the scanner.
+    rolledPrize = upgraded ?? await ensureFloorPrize(c.env, tenant.id);
   }
 
   // 6. Handle payouts instantly if logged in, or generate deferred claim token for guests

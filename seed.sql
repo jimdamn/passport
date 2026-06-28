@@ -41,3 +41,13 @@ INSERT OR REPLACE INTO categories (id, niche_id, slug, name, icon, sort_order) V
   ('pass-attractions', 'll-explore', 'attractions', 'Local Attractions',  '🏛️', 4),
   ('pass-lodging',     'll-explore', 'lodging',     'Lodging & B&Bs',     '🏨', 5),
   ('pass-farmfood',    'll-explore', 'farmfood',    'Farm & Fresh Food',  '🌾', 6);
+
+-- Guaranteed floor prize. Every winning scan falls through to the kredits_base
+-- prize when no upgraded prize is rolled, so this row MUST exist or scans 500.
+-- value is display-only (the real KrowdKredits award is issued by KKGame's
+-- passport_scan action); -1 quantity = unlimited; probability 0 = never in the
+-- weighted roll, only the fallback.
+INSERT OR IGNORE INTO passport_prizes
+  (id, tenant_id, name, prize_type, value, details, probability, quantity_left, is_active, is_paced)
+VALUES
+  ('kredits-base-lake-locals', 'lake-locals', 'KrowdKredits', 'kredits_base', 25, NULL, 0, -1, 1, 0);

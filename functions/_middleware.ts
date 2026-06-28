@@ -19,6 +19,7 @@
  */
 
 import type { Env } from '../src/types';
+import { hmacHex, timingSafeEqual } from '../src/lib/hmac';
 
 // ─── Geo trust-token verification ────────────────────────────────────────────
 // Inline implementation — Pages Functions can't share source with Workers.
@@ -116,9 +117,49 @@ function extractGeoToken(cookieHeader: string): string | null {
   return match ? match[1] : null;
 }
 
+// ─── Event-plaque scan bypass ────────────────────────────────────────────────
+// A roving event plaque (e.g. a QR on a t-shirt at a street fair) is meant to be
+// scanned by passers-by who are not region-verified. The geo-gate would otherwise
+// wall them out before the SPA — and thus before the scan API's own event check —
+// could run, defeating the whole point of an event plaque. So if a /scan page load
+// carries a validly-signed link for a currently-active EVENT plaque, we let it
+// through and mint a short-lived geo_bypass cookie for the rest of the visit. The
+// scan API still enforces the full signature + time-window + cooldown checks; this
+// only unlocks the front door. Non-event plaques are unaffected and still require
+// region trust.
+async function isActiveEventScan(
+  url: URL,
+  env: Env & { QR_SIGNING_SECRET: string },
+): Promise<boolean> {
+  if (url.pathname !== '/scan') return false;
+
+  const plaqueId = url.searchParams.get('plaque') || url.searchParams.get('id');
+  const sig      = url.searchParams.get('sig');
+  if (!plaqueId || !sig) return false;
+
+  const expectedSig = await hmacHex(env.QR_SIGNING_SECRET, `/scan:${plaqueId}`);
+  if (!timingSafeEqual(sig, expectedSig)) return false;
+
+  const plaque = await env.DB.prepare(
+    'SELECT is_event, event_start, event_end FROM passport_plaques WHERE id = ? AND is_active = 1'
+  ).bind(plaqueId).first<{ is_event: number; event_start: number | null; event_end: number | null }>();
+
+  if (!plaque || plaque.is_event !== 1) return false;
+
+  const now = Math.floor(Date.now() / 1000);
+  if (plaque.event_start && now < plaque.event_start) return false;
+  if (plaque.event_end && now > plaque.event_end) return false;
+
+  return true;
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const APPS_HUB_URL = 'https://apps.lakeandlocals.com';
+
+// Short-lived front-door pass minted for a valid event-plaque scan (6 hours) so a
+// non-region-verified passer-by can use the app for the rest of their visit.
+const EVENT_BYPASS_TTL_DAYS = 6 / 24;
 
 const REGIONAL_DOMAINS: Record<string, string> = {
   'exchange.lakeandlocals.com': 'lake-locals',
@@ -276,6 +317,7 @@ export const onRequest: PagesFunction<Env & { GEO_TOKEN_SECRET: string }> = asyn
   const isStaticAsset  = url.pathname.startsWith('/assets/');
   const isSiteAsset    = url.pathname.startsWith('/site-assets/');
   let verifiedPayload: GeoTokenPayload | null = null;
+  let mintEventBypass = false;
 
   if (!isApiRequest && !isStaticAsset && !isSiteAsset) {
     // Geo-gate: verify the kk_geo_trust cookie before serving the SPA.
@@ -295,7 +337,13 @@ export const onRequest: PagesFunction<Env & { GEO_TOKEN_SECRET: string }> = asyn
     }
 
     if (!geoOk) {
-      return geoGatePage('Lake & Locals');
+      // A signed, active event-plaque scan opens the front door for a passer-by
+      // who has no region-trust cookie; we mint a short-lived bypass below.
+      if (await isActiveEventScan(url, context.env)) {
+        mintEventBypass = true;
+      } else {
+        return geoGatePage('Lake & Locals');
+      }
     }
   }
 
@@ -322,6 +370,15 @@ export const onRequest: PagesFunction<Env & { GEO_TOKEN_SECRET: string }> = asyn
     const cookieDomain = context.env.COOKIE_DOMAIN || '.lakeandlocals.com';
     const newToken = await signGeoToken('local_verified', secret, 30);
     response.headers.append('Set-Cookie', geoTokenCookie(newToken, 30, cookieDomain));
+  }
+
+  // Event-plaque scan: issue a short-lived bypass so the visitor's whole session
+  // works. geo_bypass tokens are never auto-renewed above, so they expire cleanly.
+  if (mintEventBypass) {
+    const secret = context.env.GEO_TOKEN_SECRET;
+    const cookieDomain = context.env.COOKIE_DOMAIN || '.lakeandlocals.com';
+    const bypassToken = await signGeoToken('geo_bypass', secret, EVENT_BYPASS_TTL_DAYS);
+    response.headers.append('Set-Cookie', geoTokenCookie(bypassToken, EVENT_BYPASS_TTL_DAYS, cookieDomain));
   }
 
   // Only rewrite HTML (the SPA shell)
