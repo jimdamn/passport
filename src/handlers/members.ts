@@ -1,6 +1,7 @@
 import type { Context } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import type { Env } from '../types';
+import { fetchMemberActiveOffers } from '../lib/exchange';
 
 type AppContext = Context<{ Bindings: Env }>;
 
@@ -11,7 +12,7 @@ export async function getMember(c: AppContext) {
   const memberId  = parseInt(c.req.param('id') ?? '', 10);
   if (isNaN(memberId) || memberId < 1) throw new HTTPException(404, { message: 'Member not found' });
 
-  const [user, badgesRes, ratingRes] = await Promise.all([
+  const [user, badgesRes, ratingRes, activeOffers] = await Promise.all([
     c.env.DB.prepare(`
       SELECT kkauth_uid as id, display_name, location, bio, avatar_url,
              bd_member_since, created_at
@@ -26,6 +27,8 @@ export async function getMember(c: AppContext) {
         headers: { 'X-Internal-Secret': c.env.INTERNAL_SECRET },
       })
     ).catch(() => null),
+
+    fetchMemberActiveOffers(c.env, tenant.id, memberId, c.req.header('Authorization') ?? null),
   ]);
 
   if (!user) throw new HTTPException(404, { message: 'Member not found' });
@@ -52,7 +55,7 @@ export async function getMember(c: AppContext) {
     data: {
       member: { ...user, rating_avg, rating_count },
       badges,
-      active_offers: [],
+      active_offers: activeOffers,
     },
   });
 }

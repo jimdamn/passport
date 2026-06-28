@@ -9,6 +9,26 @@ import { Alert } from '../../components/ui/Alert';
 import BadgeStrip from '../../components/ui/BadgeStrip';
 import RatingsDrawer from '../../components/profile/RatingsDrawer';
 
+// Exchange is a separate Pages app on the shared domain; offer detail lives at /offers/:id.
+const EXCHANGE_BASE_URL = 'https://exchange.lakeandlocals.com';
+
+const OFFER_TYPE_LABELS: Record<string, string> = {
+  have:  'Offering',
+  want:  'Looking for',
+  trade: 'Trade',
+  free:  'Free',
+};
+
+interface ActiveOffer {
+  id: string;
+  title: string;
+  offer_type: string;
+  location: string | null;
+  created_at: number;
+  category_name: string | null;
+  category_icon: string | null;
+}
+
 function Avatar({ name, size = 64 }: { name: string; size?: number }) {
   const parts = name.trim().split(' ');
   const letters = parts.length >= 2
@@ -54,7 +74,9 @@ export default function PublicProfile() {
     );
   }
 
-  const { member, badges = [] } = data.data as any;
+  const { member, badges = [], active_offers = [] } = data.data as {
+    member: any; badges?: any[]; active_offers?: ActiveOffer[];
+  };
 
   return (
     <div className="main-content" style={{ paddingTop: 24, paddingBottom: 80 }}>
@@ -97,6 +119,46 @@ export default function PublicProfile() {
           </button>
         </div>
       </div>
+
+      {active_offers.length > 0 && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <h3 style={{ margin: '0 0 12px', fontSize: '1rem' }}>
+            On the Exchange
+          </h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {active_offers.map(offer => (
+              <a
+                key={offer.id}
+                href={`${EXCHANGE_BASE_URL}/offers/${offer.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '10px 12px', borderRadius: 8,
+                  border: '1px solid var(--border)', textDecoration: 'none',
+                  color: 'inherit',
+                }}
+              >
+                <span style={{ fontSize: '1.3rem', flexShrink: 0 }}>
+                  {offer.category_icon || '🔄'}
+                </span>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{
+                    fontSize: '0.9rem', fontWeight: 600,
+                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                  }}>
+                    {offer.title}
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--sage)' }}>
+                    {OFFER_TYPE_LABELS[offer.offer_type] || offer.offer_type}
+                    {offer.location ? ` · ${offer.location}` : ''}
+                  </div>
+                </div>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
 
       <RatingsDrawer
         open={ratingsOpen}
