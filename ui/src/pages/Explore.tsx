@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTenant } from '../context/TenantContext';
 
 import { updateLocation } from '../api/profile';
-import { MapPin, Star, Phone, Globe, Compass, Utensils, ShoppingBag, Trees, Landmark, Hotel, Wheat, Briefcase } from 'lucide-react';
+import { MapPin, Star, Phone, Globe, Compass, Utensils, ShoppingBag, Trees, Landmark, Hotel, Wheat, Briefcase, CalendarDays, ChevronRight } from 'lucide-react';
 
 interface Business {
   id: string;
@@ -346,6 +346,25 @@ export default function Explore() {
 
   return (
     <div style={{ paddingBottom: 60 }}>
+      {/* Events live under Around Town — entry point into the Happenings page. */}
+      <Link
+        to="/happenings"
+        className="card"
+        style={{
+          display: 'flex', alignItems: 'center', gap: 12,
+          padding: '14px 16px', marginBottom: 16,
+          textDecoration: 'none', color: 'inherit',
+          background: 'var(--white)', border: '1px solid var(--border)',
+        }}
+      >
+        <CalendarDays size={22} color="var(--amber)" style={{ flexShrink: 0 }} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 600, color: 'var(--green)', fontSize: '0.95rem' }}>Events &amp; Happenings</div>
+          <div style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>See what's going on around town</div>
+        </div>
+        <ChevronRight size={20} color="var(--amber)" style={{ flexShrink: 0 }} />
+      </Link>
+
       {/* Search & Location Card (Matches the Premium Exchange Design!) */}
       <div className="card" style={{ padding: '20px', marginBottom: '24px', background: 'var(--white)' }}>
         <h1 className="page-title" style={{ marginBottom: 6, fontSize: '1.6rem', fontFamily: 'var(--font-serif)', color: 'var(--green)' }}>
