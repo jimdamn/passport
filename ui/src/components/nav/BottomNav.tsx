@@ -2,16 +2,17 @@ import { useState } from 'react';
 import { Map, Tag, QrCode, Wallet, User } from 'lucide-react';
 import { BottomNav, type BottomNavItem } from 'kk-shared-ui';
 import { useAuth } from '../../context/AuthContext';
-import QrDrawer from '../ui/QrDrawer';
+import ScanDrawer from '../ui/ScanDrawer';
 
 export default function PassportBottomNav() {
   const { user } = useAuth();
-  const [qrOpen, setQrOpen] = useState(false);
+  const [scanOpen, setScanOpen] = useState(false);
 
-  // The center FAB shows the member's QR for merchants to scan. Signed-out users
+  // The center FAB opens the shared "My Passport" panel (My Code, camera scan,
+  // stamps) — the same surface the passport-sdk launcher loads. Signed-out users
   // are sent to login instead.
   const scanItem: BottomNavItem = user
-    ? { label: 'Scan', icon: QrCode, fab: true, onClick: () => setQrOpen(true), ariaLabel: 'Show my QR code' }
+    ? { label: 'Scan', icon: QrCode, fab: true, onClick: () => setScanOpen(true), ariaLabel: 'Open My Passport' }
     : { label: 'Scan', icon: QrCode, fab: true, to: '/auth/login', ariaLabel: 'Sign in to scan' };
 
   const items: BottomNavItem[] = [
@@ -25,7 +26,7 @@ export default function PassportBottomNav() {
   return (
     <>
       <BottomNav items={items} />
-      <QrDrawer open={qrOpen} onClose={() => setQrOpen(false)} />
+      <ScanDrawer open={scanOpen} onClose={() => setScanOpen(false)} />
     </>
   );
 }
