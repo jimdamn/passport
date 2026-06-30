@@ -362,7 +362,7 @@ export default function EmbedDrawer() {
             color: 'var(--green)',
             margin: 0
           }}>
-            My Passport Panel
+            My Passport
           </h2>
         </div>
         <button

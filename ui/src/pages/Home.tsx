@@ -25,46 +25,6 @@ export default function Home() {
       .catch(() => { /* home still renders without deals */ });
   }, [tenantSlug]);
 
-  useEffect(() => {
-    // Load and init Passport SDK dynamically
-    const scriptId = 'passport-sdk-script';
-    let script = document.getElementById(scriptId) as HTMLScriptElement | null;
-
-    const initSDK = () => {
-      const win = window as any;
-      if (win.PassportSDK) {
-        win.PassportSDK.init({
-          baseUrl: window.location.origin
-        });
-      }
-    };
-
-    if (!script) {
-      script = document.createElement('script');
-      script.id = scriptId;
-      script.src = '/passport-sdk.js';
-      script.onload = initSDK;
-      document.body.appendChild(script);
-    } else {
-      initSDK();
-    }
-
-    // Cleanup launcher and drawer elements on unmount to prevent double renders
-    return () => {
-      const win = window as any;
-      if (win.PassportSDK) {
-        win.PassportSDK.close();
-        // Remove elements
-        const launcher = document.querySelector('.passport-launcher');
-        const container = document.querySelector('.passport-drawer-container');
-        if (launcher) launcher.remove();
-        if (container) container.remove();
-        win.PassportSDK.isOpen = false;
-        win.PassportSDK.elements = {};
-      }
-    };
-  }, []);
-
   const hotDeals = deals.filter(d => d.is_hot_deal === 1);
   const creditsName = tenant?.config.credits_name ?? 'KrowdKredits';
 
