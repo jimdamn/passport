@@ -8,7 +8,7 @@ import { requireAuth } from '../../src/middleware/auth';
 import { authRouter } from '../../src/routers/auth';
 import { scanPlaque, registerClaim, attachClaim, getStamps } from '../../src/handlers/passport';
 import { getBalance, getBalanceOnly } from '../../src/handlers/credits';
-import { getMember, rateMember, getMemberRatings } from '../../src/handlers/members';
+import { getMember, rateMember, getMemberRatings, provisionMember } from '../../src/handlers/members';
 import {
   createTestPlaque, removeTestPlaque,
   listPlaques, createPlaque, updatePlaque, deletePlaque,
@@ -125,6 +125,7 @@ tenantApp.delete('/admin/happenings/:id', adminDeleteHappening);
 
 // Cron backstop for deal-claim expiry (X-Internal-Secret protected)
 app.post('/api/internal/deals/sweep', internalSweep);
+app.post('/api/internal/members/provision', provisionMember);
 
 // Public Passport Scan & Claims APIs (Tenant-scoped, Guest-friendly)
 app.post('/api/t/:tenant/passport/scan', resolveTenant, scanPlaque);

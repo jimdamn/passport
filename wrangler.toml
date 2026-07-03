@@ -31,6 +31,7 @@ bucket_name = "site-image-assets"
 [vars]
 ENVIRONMENT = "production"
 COOKIE_DOMAIN = ".lakeandlocals.com"
+HUB_URL = "https://business.lakeandlocals.com"
 
 # Secrets — set via: wrangler pages secret put <NAME>
 # INTERNAL_SECRET  — Shared secret for KKAuth internal calls

@@ -12,7 +12,7 @@ export async function getMember(c: AppContext) {
   const memberId  = parseInt(c.req.param('id') ?? '', 10);
   if (isNaN(memberId) || memberId < 1) throw new HTTPException(404, { message: 'Member not found' });
 
-  const [user, badgesRes, ratingRes, activeOffers] = await Promise.all([
+  const [user, badgesRes, ratingRes, activeOffers, hubLinksRes] = await Promise.all([
     c.env.DB.prepare(`
       SELECT kkauth_uid as id, display_name, location, bio, avatar_url,
              bd_member_since, created_at
@@ -29,6 +29,12 @@ export async function getMember(c: AppContext) {
     ).catch(() => null),
 
     fetchMemberActiveOffers(c.env, tenant.id, memberId, c.req.header('Authorization') ?? null),
+
+    // Business Hub public links (booking + endorsements) - present only when
+    // this member is a business with hub pages. Best-effort; never blocks.
+    fetch(`${c.env.HUB_URL ?? 'https://business.lakeandlocals.com'}/api/public/links/${memberId}`, {
+      signal: AbortSignal.timeout(3000),
+    }).catch(() => null),
   ]);
 
   if (!user) throw new HTTPException(404, { message: 'Member not found' });
@@ -51,13 +57,54 @@ export async function getMember(c: AppContext) {
     } catch {}
   }
 
+  let business_links: { business_name: string; booking_url: string | null; endorse_url: string | null } | null = null;
+  if (hubLinksRes?.ok) {
+    try {
+      const json = await hubLinksRes.json<{ data: typeof business_links }>();
+      business_links = json.data ?? null;
+    } catch {}
+  }
+
   return c.json({
     data: {
       member: { ...user, rating_avg, rating_count },
       badges,
       active_offers: activeOffers,
+      business_links,
     },
   });
+}
+
+// POST /api/internal/members/provision - called by the Business Hub the
+// moment a business is verified, so every member business has a page on the
+// network from day one (no waiting for their first Passport sign-in).
+// Never overwrites an existing member's identity.
+export async function provisionMember(c: AppContext) {
+  const secret = c.req.header('X-Internal-Secret');
+  if (!secret || secret !== c.env.INTERNAL_SECRET) {
+    throw new HTTPException(401, { message: 'Unauthorized' });
+  }
+
+  const body = await c.req.json<{
+    tenant_id?: string;
+    kkauth_uid?: number;
+    email?: string;
+    display_name?: string;
+  }>();
+  const tenantId = body.tenant_id ?? 'lake-locals';
+  const kkauthUid = Number(body.kkauth_uid);
+  const email = (body.email ?? '').trim().toLowerCase();
+  const displayName = (body.display_name ?? '').trim() || 'Member';
+  if (!Number.isInteger(kkauthUid) || kkauthUid < 1 || !email) {
+    throw new HTTPException(400, { message: 'kkauth_uid and email are required' });
+  }
+
+  const res = await c.env.DB.prepare(`
+    INSERT OR IGNORE INTO users (kkauth_uid, tenant_id, email, display_name)
+    VALUES (?, ?, ?, ?)
+  `).bind(kkauthUid, tenantId, email, displayName).run();
+
+  return c.json({ data: { created: (res.meta?.changes ?? 0) > 0 } });
 }
 
 // POST /api/t/:tenant/members/:id/rate — authenticated

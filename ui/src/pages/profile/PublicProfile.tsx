@@ -74,8 +74,9 @@ export default function PublicProfile() {
     );
   }
 
-  const { member, badges = [], active_offers = [] } = data.data as {
+  const { member, badges = [], active_offers = [], business_links = null } = data.data as {
     member: any; badges?: any[]; active_offers?: ActiveOffer[];
+    business_links?: { business_name: string; booking_url: string | null; endorse_url: string | null } | null;
   };
 
   return (
@@ -119,6 +120,29 @@ export default function PublicProfile() {
           </button>
         </div>
       </div>
+
+      {business_links && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <h3 style={{ margin: '0 0 4px', fontSize: '1rem' }}>
+            {business_links.business_name}
+          </h3>
+          <p style={{ margin: '0 0 14px', fontSize: '0.82rem', color: 'var(--sage)' }}>
+            A verified member business on the Lake &amp; Locals network
+          </p>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            {business_links.booking_url && (
+              <a href={business_links.booking_url} className="btn btn-amber">
+                Book an appointment
+              </a>
+            )}
+            {business_links.endorse_url && (
+              <a href={business_links.endorse_url} className="btn btn-secondary">
+                Share your experience
+              </a>
+            )}
+          </div>
+        </div>
+      )}
 
       {active_offers.length > 0 && (
         <div className="card" style={{ marginBottom: 16 }}>
