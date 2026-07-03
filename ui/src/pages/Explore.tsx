@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTenant } from '../context/TenantContext';
 
-import { updateLocation } from '../api/profile';
 import { MapPin, Compass, CalendarDays, ChevronRight, Navigation, X } from 'lucide-react';
 import { Spinner } from '../components/ui/Spinner';
 
