@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTenant } from '../context/TenantContext';
 
 import { updateLocation } from '../api/profile';
-import { MapPin, Compass, Utensils, ShoppingBag, Trees, Landmark, Hotel, Wheat, Briefcase, CalendarDays, ChevronRight } from 'lucide-react';
+import { MapPin, Compass, Utensils, ShoppingBag, Trees, Landmark, Hotel, Wheat, Briefcase, CalendarDays, ChevronRight, Navigation, X } from 'lucide-react';
 
 // A verified member business on the network - real data from KKAuth via the
 // network-members endpoint. No fabricated ratings, coordinates, or samples.
@@ -53,18 +53,9 @@ function getCoordinatesForZip(zip: string): { lat: number; lon: number; label: s
   if (LOCAL_ZIP_COORDINATES[cleaned]) {
     return LOCAL_ZIP_COORDINATES[cleaned];
   }
-  // Generate a deterministic coordinate close to Angola, IN (46703) for other inputs
-  let seed = 0;
-  for (let i = 0; i < cleaned.length; i++) {
-    seed = (seed << 5) - seed + cleaned.charCodeAt(i);
-  }
-  const latOffset = (Math.abs(seed % 100) / 500) - 0.1;
-  const lonOffset = (Math.abs((seed >> 3) % 100) / 500) - 0.1;
-  return {
-    lat: 41.6348 + latOffset,
-    lon: -84.9997 + lonOffset,
-    label: `Area ${cleaned}`
-  };
+  // Honest fallback for unknown zips: the region center - never an invented
+  // coordinate pretending to be the visitor's area.
+  return { lat: 41.6348, lon: -84.9997, label: 'Tri-State Lakes Region' };
 }
 
 function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -90,6 +81,36 @@ export default function Explore() {
   const [maxDistance, setMaxDistance] = useState<number>(25); // Default 25 miles
   const [dbMembers, setDbMembers] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  // Live device location - lets a member browsing outside their home area
+  // find what's near them with one tap (same pattern as Happenings).
+  const [liveCoords, setLiveCoords] = useState<{ lat: number; lon: number } | null>(null);
+  const [locating, setLocating] = useState(false);
+  const [geoError, setGeoError] = useState('');
+
+  const useMyLocation = () => {
+    setGeoError('');
+    if (!('geolocation' in navigator)) {
+      setGeoError("Location isn't available on this device.");
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        setLiveCoords({ lat: pos.coords.latitude, lon: pos.coords.longitude });
+        setLocating(false);
+      },
+      () => {
+        setLocating(false);
+        setGeoError("Couldn't get your location. Check your browser's location permission.");
+      },
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 },
+    );
+  };
+
+  const clearLiveLocation = () => {
+    setLiveCoords(null);
+    setGeoError('');
+  };
 
   // Synchronize filters with user preferences when user loads/changes
   useEffect(() => {
@@ -126,6 +147,8 @@ export default function Explore() {
   const handleZipChange = async (val: string) => {
     const cleaned = val.replace(/\D/g, '').slice(0, 5);
     setZipInput(cleaned);
+    // Typing a zip is an explicit choice - it takes over from live location.
+    if (liveCoords) clearLiveLocation();
 
     if (user) {
       if (cleaned.length === 5 || cleaned === '') {
@@ -170,9 +193,15 @@ export default function Explore() {
     }
   };
 
-  // Handle location geocoding
+  // Where distances are measured FROM, in priority order: live device
+  // location, the saved home area (real geocode from their profile), a known
+  // regional zip, then the region center.
   const activeZip = zipInput.trim() || '46703';
-  const userCoords = getCoordinatesForZip(activeZip);
+  const userCoords = liveCoords
+    ?? (user?.home_zip_lat != null && user?.home_zip_lon != null && activeZip === user.home_zip_location
+      ? { lat: user.home_zip_lat, lon: user.home_zip_lon }
+      : getCoordinatesForZip(activeZip));
+  const hasLocationFilter = liveCoords != null || zipInput.length === 5;
 
   // Real member businesses only - category from their own listing, real
   // coordinates when they share an address, nothing invented.
@@ -204,7 +233,7 @@ export default function Explore() {
     }))
     .filter(b => {
       if (selectedCategory !== 'all' && b.category !== selectedCategory) return false;
-      if (zipInput.length === 5 && b.distance != null && b.distance > maxDistance) return false;
+      if (hasLocationFilter && b.distance != null && b.distance > maxDistance) return false;
       return true;
     })
     .sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity));
@@ -262,26 +291,53 @@ export default function Explore() {
             alignItems: 'center',
             flexWrap: 'wrap'
           }}>
-            {/* Location field */}
+            {/* Location field + live-location control */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: '1 1 200px' }}>
               <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--green)' }}>
-                Selected Location (Zip)
+                Location
               </label>
-              <div style={{ position: 'relative' }}>
-                <input
-                  type="text"
-                  className="form-control"
-                  value={zipInput}
-                  onChange={e => handleZipChange(e.target.value)}
-                  placeholder="e.g. 46703"
-                  style={{ paddingLeft: 32, fontSize: '0.85rem', height: 38 }}
-                />
-                <MapPin size={15} color="var(--amber)" style={{ position: 'absolute', left: 10, top: 12 }} />
-              </div>
+              {liveCoords ? (
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 8, height: 38,
+                  padding: '0 10px', background: 'rgba(200, 134, 10, 0.08)',
+                  border: '1px solid var(--amber)', borderRadius: 'var(--r-sm)',
+                }}>
+                  <Navigation size={14} color="var(--amber)" style={{ flexShrink: 0 }} />
+                  <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--green)', flex: 1 }}>
+                    Using your location
+                  </span>
+                  <button onClick={clearLiveLocation} aria-label="Stop using my location"
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', padding: 4 }}>
+                    <X size={15} color="var(--muted)" />
+                  </button>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={zipInput}
+                      onChange={e => handleZipChange(e.target.value)}
+                      placeholder="Zip, e.g. 46703"
+                      style={{ paddingLeft: 32, fontSize: '0.85rem', height: 38, width: '100%' }}
+                    />
+                    <MapPin size={15} color="var(--amber)" style={{ position: 'absolute', left: 10, top: 12 }} />
+                  </div>
+                  <button onClick={useMyLocation} disabled={locating}
+                    className="btn btn-sm btn-secondary"
+                    style={{ minHeight: 38, display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                    <Navigation size={13} /> {locating ? 'Locating…' : 'Near me'}
+                  </button>
+                </div>
+              )}
+              {geoError && (
+                <span style={{ fontSize: '0.72rem', color: 'var(--muted)' }}>{geoError}</span>
+              )}
             </div>
 
             {/* Distance Segment Control (Matching Exchange Design System!) */}
-            {zipInput.length === 5 && (
+            {hasLocationFilter && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: '2 1 300px' }}>
                 <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--green)' }}>
                   Search Radius
