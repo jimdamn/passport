@@ -4,24 +4,39 @@ import { useAuth } from '../context/AuthContext';
 import { useTenant } from '../context/TenantContext';
 
 import { updateLocation } from '../api/profile';
-import { MapPin, Star, Phone, Globe, Compass, Utensils, ShoppingBag, Trees, Landmark, Hotel, Wheat, Briefcase, CalendarDays, ChevronRight } from 'lucide-react';
+import { MapPin, Phone, Globe, Compass, Utensils, ShoppingBag, Trees, Landmark, Hotel, Wheat, Briefcase, CalendarDays, ChevronRight } from 'lucide-react';
 
+// A verified member business on the network - real data from KKAuth via the
+// network-members endpoint. No fabricated ratings, coordinates, or samples.
 interface Business {
-  id: string;
+  member_uid: number;
   name: string;
-  category: string;
+  category: string;      // mapped to a category slug below
   icon: string;
-  description: string;
-  address: string;
-  zip: string;
-  lat: number;
-  lon: number;
-  rating: number;
-  reviewsCount: number;
-  creditsToEarn: number;
-  phone?: string;
-  website?: string;
-  isLive?: boolean;
+  description: string | null;
+  address: string | null;
+  zip: string | null;
+  lat: number | null;
+  lon: number | null;
+  phone: string | null;
+  website: string | null;
+}
+
+// Map a business's free-text category from KKAuth onto the browse slugs.
+const CATEGORY_ICONS: Record<string, string> = {
+  dining: '🍔', shopping: '🛍️', recreation: '🌲', attractions: '🏛️',
+  lodging: '🏨', farmfood: '🌾', services: '💼',
+};
+
+function categorySlug(raw: string | null): string {
+  const c = (raw ?? '').toLowerCase();
+  if (/food|dining|restaurant|cafe|coffee|bakery|brew|bar\b/.test(c)) return 'dining';
+  if (/shop|retail|boutique|store|gift/.test(c)) return 'shopping';
+  if (/farm|orchard|produce|market|csa/.test(c)) return 'farmfood';
+  if (/lodg|hotel|inn|b&b|bnb|resort|camp/.test(c)) return 'lodging';
+  if (/park|trail|recreat|outdoor|marina|golf/.test(c)) return 'recreation';
+  if (/attraction|museum|landmark|theat/.test(c)) return 'attractions';
+  return 'services';
 }
 
 // Canonical Steuben County & Angola, Indiana Region coordinates
@@ -64,129 +79,7 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
   return R * c;
 }
 
-const SAMPLE_BUSINESSES: Business[] = [
-  {
-    id: 'sb-bistro',
-    name: 'Angola Lakeside Bistro',
-    category: 'dining',
-    icon: '🍔',
-    description: 'Scenic bistro with a lakeside deck, craft beers, and farm-to-table seasonal specials.',
-    address: '200 Public Sq, Angola, IN',
-    zip: '46703',
-    lat: 41.6348,
-    lon: -84.9997,
-    rating: 4.8,
-    reviewsCount: 124,
-    creditsToEarn: 15,
-    phone: '(260) 555-0143',
-    website: 'https://lakesidebistro.example.com'
-  },
-  {
-    id: 'sb-mill',
-    name: 'Steuben Woolen Mill Boutique',
-    category: 'shopping',
-    icon: '🛍️',
-    description: 'Locally made woolen goods, curated apparel, and unique gifts from regional artisans.',
-    address: '305 N Wayne St, Angola, IN',
-    zip: '46703',
-    lat: 41.6360,
-    lon: -85.0010,
-    rating: 4.9,
-    reviewsCount: 86,
-    creditsToEarn: 10,
-    phone: '(260) 555-0187',
-    website: 'https://steubenboutique.example.com'
-  },
-  {
-    id: 'sb-trail',
-    name: 'Pokagon State Park & Trails',
-    category: 'recreation',
-    icon: '🌲',
-    description: 'Beautiful gorges, hiking trails, and majestic lake views. Scan the post at the overlook!',
-    address: '450 Lane 100 Lake James, Angola, IN',
-    zip: '46703',
-    lat: 41.7100,
-    lon: -84.9850,
-    rating: 4.7,
-    reviewsCount: 54,
-    creditsToEarn: 5,
-    website: 'https://pokagon.example.gov'
-  },
-  {
-    id: 'sb-orchards',
-    name: 'Hudson Valley Orchard Stand',
-    category: 'farmfood',
-    icon: '🌾',
-    description: 'Pick-your-own apples, fresh organic cider, and homemade pumpkin donuts.',
-    address: '750 State Rd 4, Hudson, IN',
-    zip: '46747',
-    lat: 41.5317,
-    lon: -85.0811,
-    rating: 4.6,
-    reviewsCount: 92,
-    creditsToEarn: 10,
-    phone: '(260) 555-0210'
-  },
-  {
-    id: 'sb-bnb',
-    name: 'Potawatomi Inn at Lake James',
-    category: 'lodging',
-    icon: '🏨',
-    description: 'Charming historic inn with cozy rooms, full gourmet breakfasts, and garden lake pathways.',
-    address: '6 Potawatomi Dr, Angola, IN',
-    zip: '46737',
-    lat: 41.7120,
-    lon: -84.9860,
-    rating: 4.9,
-    reviewsCount: 38,
-    creditsToEarn: 25,
-    phone: '(260) 555-0155',
-    website: 'https://potawatomiinn.example.com'
-  },
-  {
-    id: 'sb-cider',
-    name: 'Fremont Cider Barn',
-    category: 'dining',
-    icon: '🍎',
-    description: 'Artisan hard cider tastings, local charcuterie boards, and sweeping farm vistas.',
-    address: '505 W Toledo St, Fremont, IN',
-    zip: '46737',
-    lat: 41.7303,
-    lon: -84.9316,
-    rating: 4.8,
-    reviewsCount: 156,
-    creditsToEarn: 15,
-    phone: '(260) 555-0199'
-  },
-  {
-    id: 'sb-kayak',
-    name: 'Lake James Paddleboards',
-    category: 'recreation',
-    icon: '🛶',
-    description: 'Kayak, paddleboard, and canoe rentals for exploring the beautiful Lake James coastline.',
-    address: '290 Lane 200 Lake James, Angola, IN',
-    zip: '46703',
-    lat: 41.6850,
-    lon: -85.0120,
-    rating: 4.5,
-    reviewsCount: 42,
-    creditsToEarn: 10
-  },
-  {
-    id: 'sb-overlook',
-    name: 'Pokagon Toboggan & Overlook',
-    category: 'attractions',
-    icon: '🏛️',
-    description: 'Stunning panoramic views of the entire valley and lake. Famous refrigerated toboggan stop.',
-    address: '1 Pokagon Overlook Rd, Angola, IN',
-    zip: '46737',
-    lat: 41.7080,
-    lon: -84.9810,
-    rating: 4.7,
-    reviewsCount: 73,
-    creditsToEarn: 5
-  }
-];
+// (sample listings removed - the feed is real verified member businesses only)
 
 export default function Explore() {
   const { user, updateUser } = useAuth();
@@ -209,19 +102,19 @@ export default function Explore() {
     }
   }, [user?.home_zip_location, user?.home_distance_preference]);
 
-  // Fetch live network members from D1 database
+  // Fetch the verified member businesses of the network (KKAuth-sourced).
   useEffect(() => {
     const fetchDbMembers = async () => {
       try {
         setLoading(true);
         const tenantId = tenant?.id || 'lake-locals';
-        const res = await fetch(`/api/t/${tenantId}/passport/members`);
+        const res = await fetch(`/api/t/${tenantId}/network-members`);
         if (res.ok) {
           const json = await res.json() as { data: any[] };
           setDbMembers(json.data || []);
         }
       } catch (err) {
-        console.error('Failed to fetch D1 directory members:', err);
+        console.error('Failed to fetch network members:', err);
       } finally {
         setLoading(false);
       }
@@ -281,57 +174,40 @@ export default function Explore() {
   const activeZip = zipInput.trim() || '46703';
   const userCoords = getCoordinatesForZip(activeZip);
 
-  // Map D1 members to our business listings structure
-  const mappedDbMembers: Business[] = dbMembers.map((m, index) => {
-    // Deterministically assign categories/icons to D1 users based on display name or index
-    const categoriesList = ['dining', 'shopping', 'recreation', 'attractions', 'lodging', 'farmfood'];
-    const iconsList = ['🍔', '🛍️', '🌲', '🏛️', '🏨', '🌾'];
-    const catIndex = Math.abs(m.id.split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0)) % categoriesList.length;
-
-    // Resolve lat/lon deterministically close to the user's current location or predefined zips
-    const offsetSeed = index + 1;
-    const latOffset = (offsetSeed * 0.015) - 0.03;
-    const lonOffset = (offsetSeed * 0.02) - 0.04;
-
+  // Real member businesses only - category from their own listing, real
+  // coordinates when they share an address, nothing invented.
+  const allListings: Business[] = dbMembers.map((m: any) => {
+    const slug = categorySlug(m.category);
     return {
-      id: m.id,
-      name: m.display_name,
-      category: categoriesList[catIndex],
-      icon: iconsList[catIndex],
-      description: m.bio || 'Active regional member contributing to local commerce and community trade.',
-      address: m.location || 'Tri-State Lakes Region',
-      zip: activeZip,
-      lat: userCoords.lat + latOffset,
-      lon: userCoords.lon + lonOffset,
-      rating: m.rating_avg > 0 ? parseFloat(m.rating_avg.toFixed(1)) : 4.7,
-      reviewsCount: m.rating_count || 12,
-      creditsToEarn: 10,
-      isLive: true
+      member_uid: m.member_uid,
+      name: m.name,
+      category: slug,
+      icon: CATEGORY_ICONS[slug] ?? '💼',
+      description: m.description ?? null,
+      address: m.address ?? null,
+      zip: m.zip ?? null,
+      lat: m.lat ?? null,
+      lon: m.lon ?? null,
+      phone: m.phone ?? null,
+      website: m.website ?? null,
     };
   });
 
-  // Combine live D1 members and high-fidelity sample listings
-  const allListings = [...mappedDbMembers, ...SAMPLE_BUSINESSES];
-
-  // Calculate distances and filter the list
+  // Distance only when the business shares real coordinates; members without
+  // them are never distance-filtered out - they list after the located ones.
   const filteredListings = allListings
-    .map(b => {
-      const distance = calculateDistance(userCoords.lat, userCoords.lon, b.lat, b.lon);
-      return { ...b, distance };
-    })
+    .map(b => ({
+      ...b,
+      distance: b.lat != null && b.lon != null
+        ? calculateDistance(userCoords.lat, userCoords.lon, b.lat, b.lon)
+        : null,
+    }))
     .filter(b => {
-      // 1. Category check
-      if (selectedCategory !== 'all' && b.category !== selectedCategory) {
-        return false;
-      }
-      // 2. Distance check (if zipInput is exactly 5 digits)
-      if (zipInput.length === 5 && b.distance > maxDistance) {
-        return false;
-      }
+      if (selectedCategory !== 'all' && b.category !== selectedCategory) return false;
+      if (zipInput.length === 5 && b.distance != null && b.distance > maxDistance) return false;
       return true;
     })
-    // Sort closest first
-    .sort((a, b) => a.distance - b.distance);
+    .sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity));
 
   const categories = [
     { slug: 'all', name: 'All Destinations', Icon: Compass },
@@ -368,10 +244,11 @@ export default function Explore() {
       {/* Search & Location Card (Matches the Premium Exchange Design!) */}
       <div className="card" style={{ padding: '20px', marginBottom: '24px', background: 'var(--white)' }}>
         <h1 className="page-title" style={{ marginBottom: 6, fontSize: '1.6rem', fontFamily: 'var(--font-serif)', color: 'var(--green)' }}>
-          Explore Regional Partners
+          Member Businesses
         </h1>
         <p style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: 20 }}>
-          Check in at boutique shops, farm stands, and scenic vistas to collect stamps and earn KrowdKredits.
+          The local businesses of the Lake &amp; Locals network. Visit their member pages
+          to book an appointment, share your experience, or see what they offer.
         </p>
 
         <div style={{
@@ -472,7 +349,7 @@ export default function Explore() {
       {/* Business Feed */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <p className="section-title" style={{ margin: 0 }}>
-          Local Partners Near You ({filteredListings.length})
+          Network members near you ({filteredListings.length})
         </p>
         <span style={{ fontSize: '0.75rem', color: 'var(--muted)', fontWeight: 500 }}>
           Sorted closest first
@@ -500,10 +377,11 @@ export default function Explore() {
         <div className="empty-state" style={{ padding: '40px 20px', background: 'var(--white)' }}>
           <div className="empty-state-icon">🧭</div>
           <h3 style={{ fontFamily: 'var(--font-serif)', color: 'var(--green)', fontSize: '1.15rem', marginBottom: 6 }}>
-            No Partners Found
+            No member businesses match
           </h3>
           <p style={{ fontSize: '0.8rem', color: 'var(--muted)', maxWidth: 280, margin: '0 auto 16px auto', lineHeight: 1.4 }}>
-            Try increasing your search distance or enter a local regional zip code (like <strong style={{ color: 'var(--amber)' }}>46703</strong>).
+            The network is growing - try widening your search distance or clearing the
+            category filter.
           </p>
           <button
             onClick={() => {
@@ -520,8 +398,9 @@ export default function Explore() {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {filteredListings.map(b => (
-            <div
-              key={b.id}
+            <Link
+              key={b.member_uid}
+              to={`/members/${b.member_uid}`}
               className="card"
               style={{
                 background: 'var(--white)',
@@ -530,14 +409,15 @@ export default function Explore() {
                 gap: 16,
                 position: 'relative',
                 transition: 'transform 0.15s, box-shadow 0.15s',
-                cursor: 'default'
+                textDecoration: 'none',
+                color: 'inherit',
               }}
             >
               {/* Category Icon box */}
               <div style={{
                 width: 50,
                 height: 50,
-                background: b.isLive ? 'rgba(30, 51, 32, 0.06)' : 'rgba(200, 134, 10, 0.06)',
+                background: 'rgba(200, 134, 10, 0.06)',
                 borderRadius: 'var(--r-md)',
                 display: 'flex',
                 alignItems: 'center',
@@ -564,51 +444,25 @@ export default function Explore() {
                   }}>
                     {b.name}
                   </h3>
-                  {/* Distance badge */}
-                  <span style={{
-                    fontSize: '0.7rem',
-                    fontWeight: 600,
-                    color: 'var(--amber)',
-                    background: 'rgba(200, 134, 10, 0.08)',
-                    padding: '2px 8px',
-                    borderRadius: '100px',
-                    flexShrink: 0
-                  }}>
-                    {b.distance.toFixed(1)} mi
-                  </span>
-                </div>
-
-                {/* Rating row */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-                  <div style={{ display: 'flex', gap: 1 }}>
-                    {[...Array(5)].map((_, i) => (
-                      <Star
-                        key={i}
-                        size={11}
-                        fill={i < Math.floor(b.rating) ? 'var(--amber)' : 'none'}
-                        color="var(--amber)"
-                      />
-                    ))}
-                  </div>
-                  <span style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--green)' }}>
-                    {b.rating}
-                  </span>
-                  <span style={{ fontSize: '0.7rem', color: 'var(--muted)' }}>
-                    ({b.reviewsCount} reviews)
-                  </span>
-                  {b.isLive && (
+                  {/* Distance badge - only when the business shares a location */}
+                  {b.distance != null && (
                     <span style={{
-                      fontSize: '0.65rem',
-                      fontWeight: 700,
-                      color: 'var(--green)',
-                      background: 'rgba(30, 51, 32, 0.06)',
-                      padding: '1px 5px',
-                      borderRadius: 3,
-                      marginLeft: 4
+                      fontSize: '0.7rem',
+                      fontWeight: 600,
+                      color: 'var(--amber)',
+                      background: 'rgba(200, 134, 10, 0.08)',
+                      padding: '2px 8px',
+                      borderRadius: '100px',
+                      flexShrink: 0
                     }}>
-                      LIVE MEMBER
+                      {b.distance.toFixed(1)} mi
                     </span>
                   )}
+                </div>
+
+                {/* Verified member line */}
+                <div style={{ fontSize: '0.72rem', color: 'var(--sage)', marginBottom: 8 }}>
+                  Verified member business
                 </div>
 
                 {/* Description */}
@@ -618,7 +472,7 @@ export default function Explore() {
                   lineHeight: '1.4',
                   margin: '0 0 12px 0'
                 }}>
-                  {b.description}
+                  {b.description ?? 'A member business of the Lake & Locals network.'}
                 </p>
 
                 {/* Details Footer line */}
@@ -632,10 +486,12 @@ export default function Explore() {
                   paddingTop: 10,
                   flexWrap: 'wrap'
                 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <MapPin size={12} color="var(--sage)" />
-                    <span>{b.address}</span>
-                  </div>
+                  {b.address && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <MapPin size={12} color="var(--sage)" />
+                      <span>{b.address}</span>
+                    </div>
+                  )}
                   {b.phone && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                       <Phone size={11} color="var(--sage)" />
@@ -643,45 +499,20 @@ export default function Explore() {
                     </div>
                   )}
                   {b.website && (
-                    <a
-                      href={b.website}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 4,
-                        color: 'var(--amber)',
-                        textDecoration: 'none',
-                        fontWeight: 600
-                      }}
-                    >
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--amber)', fontWeight: 600 }}>
                       <Globe size={11} />
                       <span>Website</span>
-                    </a>
+                    </span>
                   )}
+                  <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 2, color: 'var(--amber)', fontWeight: 600 }}>
+                    View member page <ChevronRight size={12} />
+                  </span>
                 </div>
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       )}
-
-      {/* Subtle Disclaimer */}
-      <p style={{
-        fontSize: '0.72rem',
-        color: 'var(--muted)',
-        fontStyle: 'italic',
-        textAlign: 'center',
-        marginTop: 20,
-        marginBottom: 24,
-        lineHeight: 1.4,
-        maxWidth: 500,
-        marginLeft: 'auto',
-        marginRight: 'auto'
-      }}>
-        * Regional partner destinations marked as examples are simulated to demonstrate KrowdKraft integration. Coordinates and distance metrics are calculated dynamically relative to your selected ZIP location.
-      </p>
 
       {/* Premium Business CTA Banner */}
       <div className="card" style={{

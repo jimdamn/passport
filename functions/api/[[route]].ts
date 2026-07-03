@@ -8,7 +8,7 @@ import { requireAuth } from '../../src/middleware/auth';
 import { authRouter } from '../../src/routers/auth';
 import { scanPlaque, registerClaim, attachClaim, getStamps } from '../../src/handlers/passport';
 import { getBalance, getBalanceOnly } from '../../src/handlers/credits';
-import { getMember, rateMember, getMemberRatings, provisionMember } from '../../src/handlers/members';
+import { getMember, rateMember, getMemberRatings, provisionMember, getNetworkMembers } from '../../src/handlers/members';
 import {
   createTestPlaque, removeTestPlaque,
   listPlaques, createPlaque, updatePlaque, deletePlaque,
@@ -133,6 +133,7 @@ app.get('/api/t/:tenant/deals', resolveTenant, listDeals);
 app.get('/api/t/:tenant/exchange/offers', resolveTenant, listExchangeOffers);
 app.get('/api/t/:tenant/happenings', resolveTenant, listHappenings);
 app.post('/api/t/:tenant/passport/claims/register', resolveTenant, registerClaim);
+app.get('/api/t/:tenant/network-members', resolveTenant, getNetworkMembers);
 app.get('/api/t/:tenant/members/:id', resolveTenant, getMember);
 app.get('/api/t/:tenant/members/:id/ratings', getMemberRatings);
 tenantApp.post('/members/:id/rate', rateMember);
@@ -163,4 +164,10 @@ app.onError((err, c) => {
   return c.json({ error: message, status: 500 }, 500);
 });
 
-export const onRequest: PagesFunction<Env> = (context) => app.fetch(context.request, context.env);
+// The Pages EventContext must ride along as Hono's ExecutionContext - without
+// it, any handler touching c.executionCtx throws after its work committed.
+export const onRequest: PagesFunction<Env> = (context) =>
+  app.fetch(context.request, context.env, {
+    waitUntil: (p) => context.waitUntil(p),
+    passThroughOnException: () => context.passThroughOnException(),
+  } as ExecutionContext);

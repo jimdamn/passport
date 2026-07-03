@@ -107,6 +107,35 @@ export async function provisionMember(c: AppContext) {
   return c.json({ data: { created: (res.meta?.changes ?? 0) > 0 } });
 }
 
+// GET /api/t/:tenant/network-members - the browse surface: every verified
+// member business on the network, from KKAuth (the verification source of
+// truth), KV-cached briefly. This is how "somebody who just showed up" learns
+// who's on Lake & Locals. Real businesses only - no samples, no fabricated
+// ratings, no paid placement; alphabetical from the source.
+export async function getNetworkMembers(c: AppContext) {
+  const tenant = c.get('tenant');
+  const cacheKey = `network-members:${tenant.id}`;
+
+  const cached = await c.env.PASSPORT_CONFIG.get(cacheKey, 'json').catch(() => null);
+  if (cached) return c.json({ data: cached });
+
+  const res = await c.env.KKAUTH.fetch(
+    new Request('https://kkauth/internal/businesses/verified', {
+      headers: { 'X-Internal-Secret': c.env.INTERNAL_SECRET },
+    }),
+  );
+  if (!res.ok) throw new HTTPException(502, { message: 'Could not load network members' });
+
+  const json = await res.json<{ data: any[] }>();
+  const members = json.data ?? [];
+
+  c.executionCtx.waitUntil(
+    c.env.PASSPORT_CONFIG.put(cacheKey, JSON.stringify(members), { expirationTtl: 300 }).catch(() => {}),
+  );
+
+  return c.json({ data: members });
+}
+
 // POST /api/t/:tenant/members/:id/rate — authenticated
 export async function rateMember(c: AppContext) {
   const rateeId = parseInt(c.req.param('id') ?? '', 10);
