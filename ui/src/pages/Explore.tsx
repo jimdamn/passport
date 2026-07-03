@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTenant } from '../context/TenantContext';
 
 import { updateLocation } from '../api/profile';
-import { MapPin, Phone, Globe, Compass, Utensils, ShoppingBag, Trees, Landmark, Hotel, Wheat, Briefcase, CalendarDays, ChevronRight } from 'lucide-react';
+import { MapPin, Compass, Utensils, ShoppingBag, Trees, Landmark, Hotel, Wheat, Briefcase, CalendarDays, ChevronRight } from 'lucide-react';
 
 // A verified member business on the network - real data from KKAuth via the
 // network-members endpoint. No fabricated ratings, coordinates, or samples.
@@ -486,25 +486,15 @@ export default function Explore() {
                   paddingTop: 10,
                   flexWrap: 'wrap'
                 }}>
+                  {/* Phone and website live on the member page - the card
+                      stays uncrowded on a phone: place, then the action. */}
                   {b.address && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <MapPin size={12} color="var(--sage)" />
-                      <span>{b.address}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0, flex: 1 }}>
+                      <MapPin size={12} color="var(--sage)" style={{ flexShrink: 0 }} />
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.address}</span>
                     </div>
                   )}
-                  {b.phone && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <Phone size={11} color="var(--sage)" />
-                      <span>{b.phone}</span>
-                    </div>
-                  )}
-                  {b.website && (
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--amber)', fontWeight: 600 }}>
-                      <Globe size={11} />
-                      <span>Website</span>
-                    </span>
-                  )}
-                  <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 2, color: 'var(--amber)', fontWeight: 600 }}>
+                  <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 2, color: 'var(--amber)', fontWeight: 600, flexShrink: 0 }}>
                     View member page <ChevronRight size={12} />
                   </span>
                 </div>

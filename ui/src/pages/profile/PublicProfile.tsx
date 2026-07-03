@@ -129,14 +129,18 @@ export default function PublicProfile() {
           <p style={{ margin: '0 0 14px', fontSize: '0.82rem', color: 'var(--sage)' }}>
             A verified member business on the Lake &amp; Locals network
           </p>
+          {/* Mobile-first: full-width stacked buttons on phones, side by side
+              once there's room. */}
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             {business_links.booking_url && (
-              <a href={business_links.booking_url} className="btn btn-amber">
+              <a href={business_links.booking_url} className="btn btn-amber"
+                 style={{ flex: '1 1 200px', textAlign: 'center' }}>
                 Book an appointment
               </a>
             )}
             {business_links.endorse_url && (
-              <a href={business_links.endorse_url} className="btn btn-secondary">
+              <a href={business_links.endorse_url} className="btn btn-secondary"
+                 style={{ flex: '1 1 200px', textAlign: 'center' }}>
                 Share your experience
               </a>
             )}
