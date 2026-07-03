@@ -54,7 +54,7 @@ export default function AdminTestPlaque() {
       (geoErr) => {
         setError(
           geoErr.code === geoErr.PERMISSION_DENIED
-            ? 'Location permission was denied. The test plaque must be placed at your current location — please allow location access and try again.'
+            ? 'Location permission was denied. The test plaque must be placed at your current location - please allow location access and try again.'
             : 'Could not determine your location. Please try again.'
         );
         setWorking(false);
@@ -86,7 +86,7 @@ export default function AdminTestPlaque() {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // clipboard unavailable — the link is still visible to copy by hand
+      // clipboard unavailable - the link is still visible to copy by hand
     }
   };
 
@@ -123,7 +123,7 @@ export default function AdminTestPlaque() {
       {result && (
         <div className="card" style={{ padding: 24, background: 'var(--white)', textAlign: 'center' }}>
           <p style={{ margin: '0 0 12px', fontSize: '0.85rem', color: 'var(--muted)' }}>
-            Scan this QR code with another phone — or open the link below on this one.
+            Scan this QR code with another phone - or open the link below on this one.
           </p>
 
           <div

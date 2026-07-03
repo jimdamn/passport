@@ -11,14 +11,14 @@ import { Alert } from '../../components/ui/Alert';
 import { Spinner } from '../../components/ui/Spinner';
 
 const PRIZE_TYPES = [
-  { value: 'kredits_base', label: 'KrowdKredits — guaranteed (everyone wins this as the floor)' },
-  { value: 'kredits_jackpot', label: 'KrowdKredits — jackpot' },
+  { value: 'kredits_base', label: 'KrowdKredits - guaranteed (everyone wins this as the floor)' },
+  { value: 'kredits_jackpot', label: 'KrowdKredits - jackpot' },
   { value: 'merchant_coupon', label: 'Coupon / Discount' },
   { value: 'merchant_gift', label: 'Gift / Certificate' },
   { value: 'cash', label: 'Cash' },
 ];
 
-const typeLabel = (t: string) => PRIZE_TYPES.find(p => p.value === t)?.label.split(' — ')[0].split(' / ')[0] ?? t;
+const typeLabel = (t: string) => PRIZE_TYPES.find(p => p.value === t)?.label.split(' - ')[0].split(' / ')[0] ?? t;
 
 interface FormState {
   name: string;
@@ -206,7 +206,7 @@ export default function AdminPrizes() {
             Prize Pools
           </h1>
           <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--muted)' }}>
-            What scanners can win — everywhere, at one plaque, or paced across an event
+            What scanners can win - everywhere, at one plaque, or paced across an event
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -346,7 +346,7 @@ export default function AdminPrizes() {
                       )}
                       {pr.merchant_id && (
                         <span style={{ fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', padding: '2px 6px', borderRadius: 'var(--r-sm)', background: 'rgba(80,120,80,0.12)', color: 'var(--sage, #507850)' }}>
-                          Merchant{!isActive ? ' — needs review' : ''}
+                          Merchant{!isActive ? ' - needs review' : ''}
                         </span>
                       )}
                       {!isActive && (

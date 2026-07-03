@@ -119,7 +119,7 @@ export default function AdminPlaques() {
     if (!navigator.geolocation) { setError('This browser does not support location access.'); return; }
     navigator.geolocation.getCurrentPosition(
       pos => setForm(f => ({ ...f, lat: pos.coords.latitude.toFixed(6), lon: pos.coords.longitude.toFixed(6) })),
-      () => setError('Could not read your location — you can type coordinates manually.'),
+      () => setError('Could not read your location - you can type coordinates manually.'),
       { enableHighAccuracy: true, timeout: 15000 }
     );
   };
@@ -202,7 +202,7 @@ export default function AdminPlaques() {
   const handlePrint = (p: AdminPlaque) => {
     const w = window.open('', '_blank');
     if (!w) return;
-    w.document.write(`<!doctype html><html><head><title>${escapeHtml(p.name)} — QR</title></head>
+    w.document.write(`<!doctype html><html><head><title>${escapeHtml(p.name)} - QR</title></head>
 <body style="text-align:center;font-family:Georgia,serif;padding:40px">
 <h1 style="margin:0 0 4px">${escapeHtml(p.name)}</h1>
 <p style="margin:0 0 24px;color:#555">${escapeHtml(p.location_name)}</p>
@@ -287,7 +287,7 @@ export default function AdminPlaques() {
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 36, fontSize: '0.85rem', cursor: 'pointer' }}>
                 <input type="checkbox" checked={form.is_event}
                   onChange={e => setForm(f => ({ ...f, is_event: e.target.checked }))} />
-                Roving event (no location check — e.g. QR on a t-shirt)
+                Roving event (no location check - e.g. QR on a t-shirt)
               </label>
             </div>
           </div>

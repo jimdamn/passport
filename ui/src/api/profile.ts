@@ -67,7 +67,7 @@ export async function getMember(tenant: string, memberId: string) {
 /**
  * Upload a profile image for the current user.
  * blob should already be resized/converted to WebP by the caller (Canvas API).
- * Sends raw binary with correct Content-Type — bypasses the JSON client wrapper.
+ * Sends raw binary with correct Content-Type - bypasses the JSON client wrapper.
  */
 export async function uploadAvatar(
   tenantId: string,

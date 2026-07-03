@@ -41,7 +41,7 @@ function ExampleDisclaimer() {
         color: 'var(--amber)', margin: 0, lineHeight: 1.5,
         fontWeight: 600,
       }}>
-        Example data shown below — your real activity will appear here once you have data to display.
+        Example data shown below - your real activity will appear here once you have data to display.
       </p>
     </div>
   );
@@ -145,7 +145,7 @@ export default function StatsPanel({ open, type, onClose }: Props) {
   const creditsName = tenant?.config.credits_name ?? 'KrowdKredits';
   const tenantId    = tenant?.id ?? '';
 
-  // Lock body scroll while open — mirrors ProfilePanel
+  // Lock body scroll while open - mirrors ProfilePanel
   useEffect(() => {
     document.body.style.overflow = open ? 'hidden' : '';
     return () => { document.body.style.overflow = ''; };
@@ -162,7 +162,7 @@ export default function StatsPanel({ open, type, onClose }: Props) {
         }}
       />
 
-      {/* Slide-in panel — from the LEFT */}
+      {/* Slide-in panel - from the LEFT */}
       <aside
         aria-label={type ? panelTitle(type, creditsName) : 'Stats'}
         aria-hidden={!open}
@@ -180,7 +180,7 @@ export default function StatsPanel({ open, type, onClose }: Props) {
           transition: 'transform 0.25s ease',
         }}
       >
-        {/* Header — close arrow points RIGHT (dismiss to left) */}
+        {/* Header - close arrow points RIGHT (dismiss to left) */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24, flexShrink: 0 }}>
           <button
             onClick={onClose}
@@ -205,7 +205,7 @@ export default function StatsPanel({ open, type, onClose }: Props) {
           </h2>
         </div>
 
-        {/* Content — only render when open to avoid unnecessary fetches */}
+        {/* Content - only render when open to avoid unnecessary fetches */}
         {open && type === 'credits' && (
           <CreditsContent tenantId={tenantId} creditsName={creditsName} />
         )}

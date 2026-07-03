@@ -255,13 +255,13 @@ export default function MerchantDashboard() {
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 20px', fontSize: '0.82rem' }}>
-            {/* Name — read-only */}
+            {/* Name - read-only */}
             <div>
               <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', marginBottom: 2 }}>Business Name</div>
               <div style={{ color: 'var(--body)' }}>{business.name}</div>
             </div>
 
-            {/* Category — editable */}
+            {/* Category - editable */}
             <div>
               <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', marginBottom: 2 }}>Business Type</div>
               {bizEdit ? (
@@ -275,7 +275,7 @@ export default function MerchantDashboard() {
               )}
             </div>
 
-            {/* Phone — editable */}
+            {/* Phone - editable */}
             <div>
               <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', marginBottom: 2 }}>
                 Contact Phone {business.hide_phone ? <span style={{ color: 'var(--muted)', fontWeight: 400 }}>(private)</span> : null}
@@ -286,30 +286,30 @@ export default function MerchantDashboard() {
                   disabled={bizWorking} placeholder="(260) 555-0199"
                   style={{ minHeight: 32, margin: 0, fontSize: '0.82rem' }} />
               ) : (
-                <div style={{ color: 'var(--body)' }}>{business.phone || <span style={{ color: 'var(--muted)' }}>—</span>}</div>
+                <div style={{ color: 'var(--body)' }}>{business.phone || <span style={{ color: 'var(--muted)' }}> - </span>}</div>
               )}
             </div>
 
-            {/* Website — read-only */}
+            {/* Website - read-only */}
             <div>
               <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', marginBottom: 2 }}>Website</div>
-              <div style={{ color: 'var(--body)', wordBreak: 'break-all' }}>{business.website || <span style={{ color: 'var(--muted)' }}>—</span>}</div>
+              <div style={{ color: 'var(--body)', wordBreak: 'break-all' }}>{business.website || <span style={{ color: 'var(--muted)' }}> - </span>}</div>
             </div>
 
-            {/* Address — read-only */}
+            {/* Address - read-only */}
             <div>
               <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', marginBottom: 2 }}>
                 Address {business.hide_address ? <span style={{ color: 'var(--muted)', fontWeight: 400 }}>(private)</span> : null}
               </div>
               <div style={{ color: 'var(--body)' }}>
-                {business.hide_address ? <span style={{ color: 'var(--muted)', fontStyle: 'italic' }}>Hidden from public listings</span> : (business.address || <span style={{ color: 'var(--muted)' }}>—</span>)}
+                {business.hide_address ? <span style={{ color: 'var(--muted)', fontStyle: 'italic' }}>Hidden from public listings</span> : (business.address || <span style={{ color: 'var(--muted)' }}> - </span>)}
               </div>
             </div>
 
-            {/* Description — read-only */}
+            {/* Description - read-only */}
             <div>
               <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', marginBottom: 2 }}>Description</div>
-              <div style={{ color: 'var(--body)' }}>{business.description || <span style={{ color: 'var(--muted)' }}>—</span>}</div>
+              <div style={{ color: 'var(--body)' }}>{business.description || <span style={{ color: 'var(--muted)' }}> - </span>}</div>
             </div>
           </div>
 
@@ -429,7 +429,7 @@ export default function MerchantDashboard() {
           <div className="card" style={{ padding: 32, textAlign: 'center', background: 'var(--white)' }}>
             <Gift size={28} style={{ color: 'var(--amber)', marginBottom: 8 }} />
             <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.85rem' }}>
-              No prizes yet. Add a coupon or gift to put your business in the prize draw —
+              No prizes yet. Add a coupon or gift to put your business in the prize draw - 
               every win sends a visitor to your door.
             </p>
           </div>
@@ -494,7 +494,7 @@ export default function MerchantDashboard() {
         {claims.length === 0 ? (
           <div className="card" style={{ padding: 24, textAlign: 'center', background: 'var(--white)' }}>
             <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.85rem' }}>
-              No wins yet — once your prizes are live, every win shows up here.
+              No wins yet - once your prizes are live, every win shows up here.
             </p>
           </div>
         ) : (

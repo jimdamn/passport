@@ -186,7 +186,7 @@ export default function AdminHappenings() {
         </button>
       </div>
       <p style={{ margin: '0 0 20px', fontSize: '0.82rem', color: 'var(--muted)' }}>
-        Verified merchants post here live — no approval needed. Use this page to review, edit,
+        Verified merchants post here live - no approval needed. Use this page to review, edit,
         or unpublish anything that doesn't belong. Posts clear themselves at end of day.
       </p>
 

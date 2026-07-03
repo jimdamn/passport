@@ -147,7 +147,7 @@ export default function DealsManager() {
         </button>
       </div>
       <p style={{ margin: '0 0 12px', fontSize: '0.78rem', color: 'var(--muted)' }}>
-        Deals are purchased with KrowdKredits. Short claim windows create urgency — if a
+        Deals are purchased with KrowdKredits. Short claim windows create urgency - if a
         buyer doesn't redeem in time, their kredits refund and the slot returns to the pool.
       </p>
 
@@ -207,7 +207,7 @@ export default function DealsManager() {
             <input type="checkbox" checked={form.is_hot_deal}
               onChange={e => setForm(f => ({ ...f, is_hot_deal: e.target.checked }))} />
             <Flame size={14} style={{ color: 'var(--error, #c0392b)' }} />
-            Hot deal — featured with urgency styling. Great for spurring business during slow hours.
+            Hot deal - featured with urgency styling. Great for spurring business during slow hours.
           </label>
 
           <p style={{ margin: '0 0 12px', fontSize: '0.75rem', color: 'var(--muted)' }}>
@@ -229,7 +229,7 @@ export default function DealsManager() {
         {deals.length === 0 ? (
           <div className="card" style={{ padding: 24, textAlign: 'center', background: 'var(--white)' }}>
             <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.85rem' }}>
-              No deals yet. Post a kredit deal — slow Tuesday lunch? A hot deal with a
+              No deals yet. Post a kredit deal - slow Tuesday lunch? A hot deal with a
               30-minute window puts customers at your counter fast.
             </p>
           </div>

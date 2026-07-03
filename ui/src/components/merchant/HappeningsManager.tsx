@@ -148,7 +148,7 @@ export default function HappeningsManager() {
         </button>
       </div>
       <p style={{ margin: '0 0 12px', fontSize: '0.78rem', color: 'var(--muted)' }}>
-        Share what's happening right now — "Fresh sourdough out at 3," "Live music tonight."
+        Share what's happening right now - "Fresh sourdough out at 3," "Live music tonight."
         Posts go live instantly and clear at end of day. Up to 3 live at once.
       </p>
 
@@ -164,7 +164,7 @@ export default function HappeningsManager() {
           <div style={{ marginBottom: 12 }}>
             <label style={labelStyle}>What's happening?</label>
             <textarea className="form-input" rows={2} maxLength={BODY_MAX} value={form.body}
-              placeholder="e.g. Fresh sourdough out at 3 — still warm!"
+              placeholder="e.g. Fresh sourdough out at 3 - still warm!"
               style={{ margin: 0, resize: 'vertical' }}
               onChange={e => setForm(f => ({ ...f, body: e.target.value }))} />
             <p style={{ margin: '4px 0 0', fontSize: '0.7rem', color: 'var(--muted)', textAlign: 'right' }}>
@@ -224,7 +224,7 @@ export default function HappeningsManager() {
         {items.length === 0 ? (
           <div className="card" style={{ padding: 24, textAlign: 'center', background: 'var(--white)' }}>
             <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.85rem' }}>
-              No happenings yet. Post a quick update — it's the easiest way to let neighbors
+              No happenings yet. Post a quick update - it's the easiest way to let neighbors
               know what's going on at your place today.
             </p>
           </div>

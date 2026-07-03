@@ -39,14 +39,14 @@ export default function Home() {
       icon: <Tag size={28} style={{ color: 'var(--amber)' }} />,
       title: 'Deals',
       blurb: deals.length > 0
-        ? `${deals.length} live deal${deals.length === 1 ? '' : 's'} — spend your kredits at local businesses.`
+        ? `${deals.length} live deal${deals.length === 1 ? '' : 's'} - spend your kredits at local businesses.`
         : 'Spend your kredits on real deals at local businesses.',
       to: '/deals',
     },
     {
       icon: <CalendarDays size={28} style={{ color: 'var(--amber)' }} />,
       title: 'Happenings',
-      blurb: 'Today’s events, markets, and live updates — posted by local businesses.',
+      blurb: 'Today’s events, markets, and live updates - posted by local businesses.',
       to: '/happenings',
     },
     {
@@ -66,7 +66,7 @@ export default function Home() {
       {!user && (
         <div className="card" style={{ marginBottom: 24 }}>
           <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.95rem', marginBottom: 16, lineHeight: 1.6 }}>
-            The Passport is an exploration platform for your region — a place to discover scenic spots, boutiques,
+            The Passport is an exploration platform for your region - a place to discover scenic spots, boutiques,
             and dining destinations, check in with neighbors, and support regional businesses.
             Earn {creditsName} when you scan and use them to unlock rewards.
           </p>
@@ -91,7 +91,7 @@ export default function Home() {
       {hotDeals.length > 0 && (
         <>
           <p className="section-title" style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--error, #c0392b)' }}>
-            <Flame size={16} /> Hot deals — going fast
+            <Flame size={16} /> Hot deals - going fast
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 24 }}>
             {hotDeals.map(deal => (

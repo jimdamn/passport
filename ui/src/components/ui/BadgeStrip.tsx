@@ -1,5 +1,5 @@
 /**
- * BadgeStrip — renders a row of earned badges from the site-image-assets R2 bucket.
+ * BadgeStrip - renders a row of earned badges from the site-image-assets R2 bucket.
  *
  * Badge images live at /site-assets/badges/<id>.png
  * If an image fails to load (not yet uploaded), the component falls back to

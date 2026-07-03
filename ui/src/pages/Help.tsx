@@ -148,7 +148,7 @@ export default function Help() {
       {/* ── The Prize Matrix ── */}
       <Section title="The Explorer Prize Matrix">
         <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.92rem', lineHeight: 1.6, marginBottom: 16 }}>
-          Scanning a QR code isn't just about the stamp — it carries a guaranteed prize payout! Here is what's loaded into the regional prize matrix:
+          Scanning a QR code isn't just about the stamp - it carries a guaranteed prize payout! Here is what's loaded into the regional prize matrix:
         </p>
 
         <div style={{
@@ -217,7 +217,7 @@ export default function Help() {
           }}>
             <p style={{ fontWeight: 'bold', marginBottom: 4 }}>2. Secure Your Reward Slot</p>
             <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.87rem', color: 'var(--muted)', lineHeight: 1.5 }}>
-              Simply input one field — your phone or email. We immediately link your claim token and queue a secure claim OTP link.
+              Simply input one field - your phone or email. We immediately link your claim token and queue a secure claim OTP link.
             </p>
           </div>
           <div style={{

@@ -29,10 +29,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const result = await refreshToken();
         setToken(result.access_token);
         setTokenState(result.access_token);
-        // Cast to User — Exchange-specific fields will be undefined until /me is called
+        // Cast to User - Exchange-specific fields will be undefined until /me is called
         setUser(result.user as unknown as User);
       } catch {
-        // Stay logged out — no action needed
+        // Stay logged out - no action needed
       } finally {
         setIsLoading(false);
       }
@@ -50,7 +50,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setToken(null);
     setTokenState(null);
     setUser(null);
-    // Fire the backend call to revoke the refresh cookie — don't await,
+    // Fire the backend call to revoke the refresh cookie - don't await,
     // so the UI doesn't block. Even if this fails the cookie will eventually expire.
     apiLogout().catch(() => {});
   }, []);

@@ -66,9 +66,9 @@ function resolveHostnameInfo(hostname: string): HostnameInfo {
 // ─── Context ──────────────────────────────────────────────────────────────────
 
 interface TenantContextValue {
-  /** Display tenant — brand_name may be overridden on parent/platform domains */
+  /** Display tenant - brand_name may be overridden on parent/platform domains */
   tenant: Tenant;
-  /** Data tenant slug — use this for all API calls and auth requests */
+  /** Data tenant slug - use this for all API calls and auth requests */
   tenantSlug: string;
   /** True when on a KrowdKraft platform domain or localhost */
   isParentDomain: boolean;
@@ -111,7 +111,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
         if (nicheList.length > 0) setCurrentNicheState(nicheList[0]);
       })
       .catch(() => {
-        // DEFAULT_TENANT (Lake & Locals branding) stays — correct fallback for
+        // DEFAULT_TENANT (Lake & Locals branding) stays - correct fallback for
         // any load failure or unrecognised hostname.
       });
   }, [tenantSlug, useParentBranding]);

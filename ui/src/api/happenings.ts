@@ -18,7 +18,7 @@ export function categoryLabel(key: string): string {
   return HAPPENING_CATEGORIES.find(c => c.key === key)?.label ?? key;
 }
 
-// Public board shape — contact fields already gated by the merchant's show flags.
+// Public board shape - contact fields already gated by the merchant's show flags.
 export interface Happening {
   id: string;
   category: string;
@@ -33,13 +33,13 @@ export interface Happening {
   merchant_lon: number | null;
   merchant_phone: string | null;
   merchant_website: string | null;
-  // Distance in miles from the visitor's current location — present only when the
+  // Distance in miles from the visitor's current location - present only when the
   // board was fetched with "near me" coordinates; null otherwise.
   distance_mi: number | null;
   deal: { id: string; title: string } | null;
 }
 
-// Merchant/admin shape — full row plus attached-deal info.
+// Merchant/admin shape - full row plus attached-deal info.
 export interface MerchantHappening {
   id: string;
   merchant_id: string;

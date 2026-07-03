@@ -24,7 +24,7 @@ export default function ScanPortal() {
   const { tenant } = useTenant();
   const [searchParams] = useSearchParams();
   const plaqueId = searchParams.get('plaque') || searchParams.get('id');
-  // HMAC signature baked into the printed QR link — the backend rejects
+  // HMAC signature baked into the printed QR link - the backend rejects
   // scans without it, so a hand-typed plaque id can't mint stamps.
   const sig = searchParams.get('sig');
 
@@ -35,7 +35,7 @@ export default function ScanPortal() {
   const [geoCoords, setGeoCoords] = useState<{ lat: number; lon: number } | null>(null);
   const [geoDenied, setGeoDenied] = useState<boolean>(false);
   const [geoPrompting, setGeoPrompting] = useState<boolean>(true);
-  // Set when location was unavailable — we still try the scan, because event
+  // Set when location was unavailable - we still try the scan, because event
   // plaques (street events, t-shirt QRs) don't need coordinates at all.
   const [geoFailed, setGeoFailed] = useState<boolean>(false);
 
@@ -59,7 +59,7 @@ export default function ScanPortal() {
     setGeoFailed(false);
 
     if (!navigator.geolocation) {
-      // No geolocation API at all — still attempt the scan (event QRs work without it)
+      // No geolocation API at all - still attempt the scan (event QRs work without it)
       setGeoPrompting(false);
       setGeoFailed(true);
       return;
@@ -75,7 +75,7 @@ export default function ScanPortal() {
       },
       (error) => {
         console.warn('Geolocation unavailable:', error);
-        // Don't block the scan — event plaques don't need coordinates. If this
+        // Don't block the scan - event plaques don't need coordinates. If this
         // turns out to be a regular plaque, the server tells us and we show
         // the location card then.
         setGeoFailed(true);
@@ -98,7 +98,7 @@ export default function ScanPortal() {
   // has finished hydrating. Waiting on !authLoading is critical: the token
   // refreshes asynchronously on mount, so firing the scan the instant geo
   // resolves can outrun it and record a logged-in member's winning scan as a
-  // guest (user_id NULL) — credit never lands and they get the claim-code
+  // guest (user_id NULL) - credit never lands and they get the claim-code
   // friction instead of an instant deposit.
   useEffect(() => {
     if ((geoCoords || geoFailed) && plaqueId && !authLoading) {
@@ -141,7 +141,7 @@ export default function ScanPortal() {
       };
 
       if (!res.ok) {
-        // Regular plaques require coordinates — if we scanned without them
+        // Regular plaques require coordinates - if we scanned without them
         // (location denied/unavailable), show the location card instead of an error.
         if (res.status === 400 && !geoCoords && (json.error ?? '').includes('Location verification')) {
           setStatus('idle');
@@ -240,7 +240,7 @@ export default function ScanPortal() {
           <div style={{ fontSize: '3rem', marginBottom: 16 }}>🔒</div>
           <h2 style={{ fontFamily: 'var(--font-serif)', color: 'var(--error)', marginBottom: 10 }}>Location Needed for This Stamp</h2>
           <p style={{ fontFamily: 'var(--font-sans)', color: 'var(--muted)', fontSize: '0.88rem', lineHeight: 1.6, marginBottom: 20 }}>
-            This stamp is tied to a physical place, so we need to confirm you're standing there. Your location is checked once for this scan only — we never track or store where you go.
+            This stamp is tied to a physical place, so we need to confirm you're standing there. Your location is checked once for this scan only - we never track or store where you go.
           </p>
           <button className="btn btn-primary btn-block" onClick={requestLocation}>
             <MapPin size={18} /> Enable Location Verification
@@ -365,13 +365,13 @@ export default function ScanPortal() {
             {prize.claim_token && (
               <div style={{ background: 'var(--cream)', border: '1px dashed var(--amber)', borderRadius: 'var(--r-md)', padding: '12px 14px', margin: '14px 0 0 0' }}>
                 <span style={{ fontSize: '0.68rem', textTransform: 'uppercase', color: 'var(--muted)', fontWeight: 'bold', display: 'block', marginBottom: 2 }}>
-                  Your claim code — show this to collect your prize
+                  Your claim code - show this to collect your prize
                 </span>
                 <span style={{ fontFamily: 'monospace', fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--green)', letterSpacing: '0.05em' }}>
                   {prize.claim_token}
                 </span>
                 <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.72rem', color: 'var(--muted)', margin: '4px 0 0 0' }}>
-                  Take a screenshot — you'll show this code in person within 7 days to pick up your prize.
+                  Take a screenshot - you'll show this code in person within 7 days to pick up your prize.
                 </p>
               </div>
             )}
@@ -507,7 +507,7 @@ export default function ScanPortal() {
             </p>
           </div>
 
-          {/* Conversion CTA — turn the win into an account */}
+          {/* Conversion CTA - turn the win into an account */}
           <Link
             to={`/auth/login?return_to=${encodeURIComponent(`/my-stamps?claim=${claimToken}`)}`}
             className="btn btn-primary btn-block"
@@ -516,7 +516,7 @@ export default function ScanPortal() {
             🛂 Create My Free Passport & Deposit This Win
           </Link>
           <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.75rem', color: 'var(--muted)', textAlign: 'center', margin: '0 0 16px 0', lineHeight: 1.4 }}>
-            Takes under a minute — just your email, no password. Your {creditsName} and stamp land in your passport automatically.
+            Takes under a minute - just your email, no password. Your {creditsName} and stamp land in your passport automatically.
           </p>
 
           <div style={{ textAlign: 'center' }}>

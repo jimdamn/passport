@@ -100,7 +100,7 @@ export default function ApplyMerchant() {
     setGeocodingPending(true);
     setError('');
     try {
-      // US Census Geocoder — handles rural county road formats well
+      // US Census Geocoder - handles rural county road formats well
       const censusRes = await fetch(
         `https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?address=${encodeURIComponent(addr)}&benchmark=2020&format=json`
       );
@@ -417,7 +417,7 @@ export default function ApplyMerchant() {
               style={{ marginTop: 2, accentColor: 'var(--green)', flexShrink: 0 }}
             />
             <span style={{ fontSize: '0.82rem', color: 'var(--body)', lineHeight: 1.45 }}>
-              <strong>Home-based business</strong> — keep my street address private. Only my city/ZIP will be shown publicly.
+              <strong>Home-based business</strong> - keep my street address private. Only my city/ZIP will be shown publicly.
             </span>
           </label>
 
@@ -461,7 +461,7 @@ export default function ApplyMerchant() {
               style={{ marginTop: 2, accentColor: 'var(--green)', flexShrink: 0 }}
             />
             <span style={{ fontSize: '0.82rem', color: 'var(--body)', lineHeight: 1.45 }}>
-              <strong>Personal phone</strong> — keep my phone number private. It will not be shown on public listings.
+              <strong>Personal phone</strong> - keep my phone number private. It will not be shown on public listings.
             </span>
           </label>
 

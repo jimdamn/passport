@@ -141,7 +141,7 @@ export default function RedeemClaim() {
           ) : (
             <Alert type="error" style={{ marginBottom: 16, textAlign: 'left' }}>
               {claim.status === 'claimed'
-                ? 'This claim was already redeemed — do not hand out the prize again.'
+                ? 'This claim was already redeemed - do not hand out the prize again.'
                 : 'This claim expired before it was redeemed.'}
             </Alert>
           )}

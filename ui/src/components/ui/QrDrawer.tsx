@@ -33,7 +33,7 @@ export default function QrDrawer({ open, onClose }: Props) {
   }, [open]);
 
   // Fetch the QR SVG with the Authorization header (never put the token in a
-  // URL — query strings end up in logs and browser history) and render it
+  // URL - query strings end up in logs and browser history) and render it
   // via a blob object URL.
   useEffect(() => {
     if (!open) return;

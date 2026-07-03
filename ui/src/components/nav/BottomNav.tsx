@@ -9,7 +9,7 @@ export default function PassportBottomNav() {
   const [scanOpen, setScanOpen] = useState(false);
 
   // The center FAB opens the shared "My Passport" panel (My Code, camera scan,
-  // stamps) — the same surface the passport-sdk launcher loads. Signed-out users
+  // stamps) - the same surface the passport-sdk launcher loads. Signed-out users
   // are sent to login instead.
   const scanItem: BottomNavItem = user
     ? { label: 'Scan', icon: QrCode, fab: true, onClick: () => setScanOpen(true), ariaLabel: 'Open My Passport' }

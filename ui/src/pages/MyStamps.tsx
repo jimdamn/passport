@@ -141,7 +141,7 @@ function ExampleDisclaimer() {
         lineHeight: 1.5,
         fontWeight: 600,
       }}>
-        Example data shown below — your real activity will appear here once you have scanned stamps and unlocked badges on the platform.
+        Example data shown below - your real activity will appear here once you have scanned stamps and unlocked badges on the platform.
       </p>
     </div>
   );
@@ -305,7 +305,7 @@ export default function MyStamps() {
           </h3>
         </div>
         <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.8rem', color: 'var(--muted)', margin: '0 0 12px 0', lineHeight: 1.4 }}>
-          Won before you had an account? Enter the code from your win screen or email — {creditsName} deposit instantly, and physical prizes get linked to your name.
+          Won before you had an account? Enter the code from your win screen or email - {creditsName} deposit instantly, and physical prizes get linked to your name.
         </p>
         <form
           onSubmit={(e) => { e.preventDefault(); depositClaim(claimCode); }}

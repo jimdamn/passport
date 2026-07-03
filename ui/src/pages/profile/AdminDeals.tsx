@@ -161,7 +161,7 @@ export default function AdminDeals() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 28 }}>
         {pending.length === 0 ? (
           <div className="card" style={{ padding: 20, textAlign: 'center', background: 'var(--white)' }}>
-            <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.85rem' }}>Nothing waiting — all caught up.</p>
+            <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.85rem' }}>Nothing waiting - all caught up.</p>
           </div>
         ) : pending.map(dealCard)}
       </div>

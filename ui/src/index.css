@@ -10,7 +10,7 @@
   --error:  #b00000;
   --success: #2a6a2a;
 
-  --light: #e4ede4;  /* pale sage — from L&L Design Framework */
+  --light: #e4ede4;  /* pale sage - from L&L Design Framework */
   --r-sm: 6px;
   --r-md: 10px;
   --r-lg: 16px;
@@ -933,7 +933,7 @@ img { max-width: 100%; display: block; }
   background: rgba(200, 134, 10, 0.04);
 }
 
-/* Clickable stat card — resets button defaults while keeping card appearance */
+/* Clickable stat card - resets button defaults while keeping card appearance */
 .stat-card--btn {
   cursor: pointer;
   font: inherit;

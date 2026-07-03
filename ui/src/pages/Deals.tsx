@@ -31,7 +31,7 @@ function useNow(tickMs = 1000) {
   return now;
 }
 
-// Client-side countdown — counts down from the expiry timestamp locally, so
+// Client-side countdown - counts down from the expiry timestamp locally, so
 // no server polling is ever needed.
 function formatRemaining(seconds: number): string {
   if (seconds <= 0) return 'Expired';
@@ -67,7 +67,7 @@ function CodeModal({ title, code, expiresAt, onClose }: { title: string; code: s
         }}>
           {code}
         </div>
-        <p style={{ margin: '0 0 16px', fontSize: '0.82rem', fontWeight: 600, color: remaining < 3600 ? 'var(--error)' : 'var(--amber)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+        <p style={{ margin: '0 0 16px', fontSize: '0.82rem', fontWeight: 600, color: 'var(--amber)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
           <Clock size={14} /> {formatRemaining(remaining)}
         </p>
         <p style={{ margin: '0 0 16px', fontSize: '0.72rem', color: 'var(--muted)' }}>
@@ -191,26 +191,19 @@ export default function Deals() {
   const claimStatusBadge = (cl: MyDealClaim) => {
     const expired = cl.status === 'refunded' || (cl.status === 'pending' && cl.expires_at <= now);
     if (cl.status === 'claimed') return <span style={{ color: 'var(--green)', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.72rem', fontWeight: 600 }}><CheckCircle size={11} /> Redeemed</span>;
-    if (expired) return <span style={{ color: 'var(--muted)', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.72rem', fontWeight: 600 }}><XCircle size={11} /> Expired — kredits returned</span>;
-    return <span style={{ color: cl.expires_at - now < 3600 ? 'var(--error)' : 'var(--amber)', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.72rem', fontWeight: 600 }}><Clock size={11} /> {formatRemaining(cl.expires_at - now)}</span>;
+    if (expired) return <span style={{ color: 'var(--muted)', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.72rem', fontWeight: 600 }}><XCircle size={11} /> Expired - kredits returned</span>;
+    return <span style={{ color: 'var(--amber)', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.72rem', fontWeight: 600 }}><Clock size={11} /> {formatRemaining(cl.expires_at - now)}</span>;
   };
 
   return (
     <div className="main-content" style={{ maxWidth: 800, margin: '0 auto', paddingTop: 20, paddingBottom: 80 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, flexWrap: 'wrap', gap: 12 }}>
-        <h1 style={{ margin: 0, fontSize: '1.5rem', fontFamily: 'var(--font-serif)', color: 'var(--green)', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Tag size={22} /> Deals
-        </h1>
-        {user && balance !== null && (
-          <span className="topbar-credits" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <span>💰</span>
-            <span>{balance.toLocaleString()}</span>
-          </span>
-        )}
-      </div>
+      <h1 style={{ margin: '0 0 4px', fontSize: '1.5rem', fontFamily: 'var(--font-serif)', color: 'var(--green)', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <Tag size={22} /> Deals
+      </h1>
       <p style={{ margin: '0 0 16px', fontSize: '0.82rem', color: 'var(--muted)' }}>
-        Spend your KrowdKredits on real deals at local businesses. Hot deals move fast —
-        claim one and use it before the clock runs out.
+        Spend your KrowdKredits on real offers at member businesses. Every deal shows
+        its claim window up front - and if you don't use a claim in time, your kredits
+        come right back.
       </p>
 
       {error && <Alert type="error" style={{ marginBottom: 16 }}>{error}</Alert>}
@@ -233,7 +226,7 @@ export default function Deals() {
             <div className="card" style={{ padding: 32, textAlign: 'center', background: 'var(--white)' }}>
               <Tag size={28} style={{ color: 'var(--amber)', marginBottom: 8 }} />
               <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.85rem' }}>
-                No deals available right now — check back soon. Local businesses post
+                No deals available right now - check back soon. Local businesses post
                 new deals here, and hot deals can appear any time.
               </p>
             </div>
@@ -245,7 +238,7 @@ export default function Deals() {
               return (
                 <div key={deal.id} className="card" style={{
                   background: 'var(--white)', padding: 16,
-                  borderLeft: `4px solid ${isHot ? 'var(--error, #c0392b)' : 'var(--green)'}`,
+                  borderLeft: '4px solid var(--green)',
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
                     <div style={{ flex: 1, minWidth: 200 }}>
@@ -253,7 +246,7 @@ export default function Deals() {
                         {isHot && (
                           <span style={{
                             fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase', padding: '2px 8px',
-                            borderRadius: 'var(--r-sm)', background: 'rgba(192,57,43,0.1)', color: 'var(--error, #c0392b)',
+                            borderRadius: 'var(--r-sm)', background: 'rgba(200,134,10,0.12)', color: 'var(--amber)',
                             display: 'inline-flex', alignItems: 'center', gap: 4,
                           }}>
                             <Flame size={11} /> Hot Deal
@@ -269,7 +262,7 @@ export default function Deals() {
                         {deal.quantity_left === -1 ? 'Unlimited' : `${deal.quantity_left} left`}
                         {' · '}Use within {claimWindowLabel(deal.claim_window_minutes)} of claiming
                         {deal.ends_at !== null && (
-                          <span style={{ color: endsSoon ? 'var(--error)' : undefined, fontWeight: endsSoon ? 600 : undefined }}>
+                          <span style={{ color: endsSoon ? 'var(--amber)' : undefined, fontWeight: endsSoon ? 600 : undefined }}>
                             {' · '}Offer ends {formatRemaining(deal.ends_at - now).toLowerCase().replace(' left', ' from now')}
                           </span>
                         )}
@@ -309,7 +302,7 @@ export default function Deals() {
             <div className="card" style={{ padding: 32, textAlign: 'center', background: 'var(--white)' }}>
               <Tags size={28} style={{ color: 'var(--amber)', marginBottom: 8 }} />
               <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.85rem' }}>
-                You haven't claimed any deals yet. Grab one from the marketplace —
+                You haven't claimed any deals yet. Grab one from the marketplace - 
                 your kredits are automatically returned if you don't use it in time.
               </p>
             </div>
@@ -370,7 +363,6 @@ export default function Deals() {
                     display: 'flex', gap: 12, alignItems: 'flex-start',
                     borderLeft: '4px solid var(--green)',
                   }}>
-                    <span style={{ fontSize: '1.5rem', flexShrink: 0 }}>{offer.category_icon || '🔄'}</span>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <a href={`${EXCHANGE_BASE_URL}/offers/${offer.id}`}
                         style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}>

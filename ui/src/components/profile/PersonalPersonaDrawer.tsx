@@ -184,7 +184,7 @@ export function PersonalPersonaDrawer({
           marginBottom: 20,
         }}>
           <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.84rem', color: 'var(--muted)', margin: 0, lineHeight: 1.5 }}>
-            When posting as Personal, your display name is visible to other members. You can optionally share social profile links — these are shown on your public profile.
+            When posting as Personal, your display name is visible to other members. You can optionally share social profile links - these are shown on your public profile.
           </p>
         </div>
 

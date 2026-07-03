@@ -204,7 +204,7 @@ export default function MyProfile() {
         </button>
         <button className="stat-card stat-card--btn" onClick={() => setRatingsView('rating')} style={{ flex: 1, minWidth: 100, maxWidth: 180 }}>
           <div className="stat-num">
-            {(profile.rating_count ?? 0) > 0 ? (profile.rating_avg ?? 0).toFixed(1) : '—'}
+            {(profile.rating_count ?? 0) > 0 ? (profile.rating_avg ?? 0).toFixed(1) : ' - '}
           </div>
           <div className="stat-label">Rating</div>
         </button>

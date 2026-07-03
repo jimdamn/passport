@@ -11,14 +11,14 @@ import { Alert } from '../components/ui/Alert';
 import { Spinner } from '../components/ui/Spinner';
 
 // Empty-state illustrations only. These are clearly-labeled "Example" cards so a
-// first-time visitor sees the intent of the board when nothing is posted yet —
+// first-time visitor sees the intent of the board when nothing is posted yet - 
 // never styled or wired to look like a real merchant post (no contact, no tap).
 const SAMPLE_HAPPENINGS: { category: string; body: string }[] = [
-  { category: 'food_drink', body: 'Fresh sourdough out of the oven at 3 — still warm if you hurry.' },
+  { category: 'food_drink', body: 'Fresh sourdough out of the oven at 3 - still warm if you hurry.' },
   { category: 'live_music', body: 'Live acoustic set on the patio tonight, 6–8pm. Pull up a chair.' },
   { category: 'markets', body: 'Extra sweet corn just came in at the farm stand this morning.' },
   { category: 'sales', body: 'End-of-season flannels 20% off through the weekend.' },
-  { category: 'community', body: 'Pickup euchre at the coffee shop Thursday at 7 — all are welcome.' },
+  { category: 'community', body: 'Pickup euchre at the coffee shop Thursday at 7 - all are welcome.' },
 ];
 
 // A calm bulletin board: chronological, no countdowns, no urgency. Posts clear
@@ -31,7 +31,7 @@ function postedAgo(createdAt: number): string {
   return hrs === 1 ? '1 hour ago' : `${hrs} hours ago`;
 }
 
-// Distance is a quiet relevance filter, not an urgency signal — no "3 nearby!"
+// Distance is a quiet relevance filter, not an urgency signal - no "3 nearby!"
 // pressure. The "Any" option keeps the board unfiltered by distance. Filtering
 // happens server-side (the board refetches with the visitor's coords) so the
 // nearest posts can never be cut off by the result limit.
@@ -123,7 +123,7 @@ export default function Happenings() {
   const [error, setError] = useState('');
   const [open, setOpen] = useState<Happening | null>(null);
 
-  // Location filtering. Coords live only in component state — never persisted.
+  // Location filtering. Coords live only in component state - never persisted.
   // `source` records where they came from so the UI can be honest about whether
   // we're showing the live position or just a default from the saved profile.
   const [coords, setCoords] = useState<{ lat: number; lon: number } | null>(null);
@@ -136,13 +136,13 @@ export default function Happenings() {
   const [touched, setTouched] = useState(false);
 
   // Smart default for registered users: seed the board with their saved home
-  // area the first time their profile loads. It's a default, never a lock — live
+  // area the first time their profile loads. It's a default, never a lock - live
   // location overrides it, and clearing turns it off for good.
   useEffect(() => {
     if (touched || coords) return;
     if (user?.home_zip_lat != null && user?.home_zip_lon != null) {
       setCoords({ lat: user.home_zip_lat, lon: user.home_zip_lon });
-      setRadius(30); // home browsing is regional — a bit wider than live "near me"
+      setRadius(30); // home browsing is regional - a bit wider than live "near me"
       setSource('home');
     }
   }, [user, touched, coords]);
@@ -168,7 +168,7 @@ export default function Happenings() {
         if (user?.home_zip_lat != null && user?.home_zip_lon != null) {
           setCoords({ lat: user.home_zip_lat, lon: user.home_zip_lon });
           setSource('home');
-          setGeoError('Using your home area — allow location to use where you are now.');
+          setGeoError('Using your home area - allow location to use where you are now.');
         } else {
           setGeoError('Couldn’t get your location. Check your browser’s location permission.');
         }
@@ -207,20 +207,20 @@ export default function Happenings() {
   }, [tenant, filter, coords, radius]);
 
   // Distance filtering happens server-side; render the board as returned. Order
-  // stays chronological — distance is a filter, never a ranking, so it's calm.
+  // stays chronological - distance is a filter, never a ranking, so it's calm.
   return (
     <div className="main-content" style={{ maxWidth: 800, margin: '0 auto', paddingTop: 20, paddingBottom: 80 }}>
       <h1 style={{ margin: '0 0 4px', fontSize: '1.5rem', fontFamily: 'var(--font-serif)', color: 'var(--green)', display: 'flex', alignItems: 'center', gap: 8 }}>
         <CalendarDays size={22} /> Happenings
       </h1>
       <p style={{ margin: '0 0 16px', fontSize: '0.82rem', color: 'var(--muted)' }}>
-        What's going on around the region today — straight from local businesses. The board
+        What's going on around the region today - straight from local businesses. The board
         clears each night, so it's always about right now.
       </p>
 
       {error && <Alert type="error" style={{ marginBottom: 16 }}>{error}</Alert>}
 
-      {/* Category filter — calm chips, no counts or badges */}
+      {/* Category filter - calm chips, no counts or badges */}
       <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 8, marginBottom: 12, WebkitOverflowScrolling: 'touch' }}>
         {[{ key: 'all', label: 'All' }, ...HAPPENING_CATEGORIES].map(c => (
           <button key={c.key} onClick={() => setFilter(c.key)}
@@ -267,7 +267,7 @@ export default function Happenings() {
       {source === 'home' && !geoError && (
         <p style={{ margin: '0 0 12px', fontSize: '0.78rem', color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 5 }}>
           <MapPin size={12} style={{ color: 'var(--amber)' }} />
-          Showing your home area{user?.home_zip_location ? ` (${user.home_zip_location})` : ''} — tap “Use my location” if you’re out and about.
+          Showing your home area{user?.home_zip_location ? ` (${user.home_zip_location})` : ''} - tap “Use my location” if you’re out and about.
         </p>
       )}
       {geoError && (

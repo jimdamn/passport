@@ -23,7 +23,7 @@ export default function MerchantQrDrawer({ open, onClose }: Props) {
   }, [open]);
 
   // Fetch the QR SVG with the Authorization header (never put the token in a
-  // URL — query strings end up in logs and browser history). The blob object
+  // URL - query strings end up in logs and browser history). The blob object
   // URL also serves the print flyer and the download link.
   useEffect(() => {
     if (!open) return;

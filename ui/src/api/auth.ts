@@ -13,7 +13,7 @@ export async function ssoLogin(params: Record<string, string>): Promise<AuthResu
 }
 
 /**
- * Request an OTP — tenant_id is still passed so the Exchange adapter can
+ * Request an OTP - tenant_id is still passed so the Exchange adapter can
  * associate the login with the correct tenant, but KKAuth just needs email.
  */
 export async function otpRequest(email: string, display_name: string, location: string, tenant_id: string) {

@@ -77,21 +77,21 @@ function ExampleDisclaimer() {
         fontFamily: 'var(--font-sans)', fontSize: '0.78rem',
         color: 'var(--amber)', margin: 0, lineHeight: 1.5, fontWeight: 600,
       }}>
-        Example data shown below — your real ratings will appear here once you have data to display.
+        Example data shown below - your real ratings will appear here once you have data to display.
       </p>
     </div>
   );
 }
 
 const PLACEHOLDER_RATINGS: Review[] = [
-  { id: 'p1', score: 5, comment: 'Fantastic to work with — reliable, friendly, and exactly what I needed. Highly recommend!', created_at: 0, rater_display_name: 'Sarah M.', context_type: null, context_id: null },
+  { id: 'p1', score: 5, comment: 'Fantastic to work with - reliable, friendly, and exactly what I needed. Highly recommend!', created_at: 0, rater_display_name: 'Sarah M.', context_type: null, context_id: null },
   { id: 'p2', score: 4, comment: 'Great experience overall. Would definitely connect again.', created_at: 0, rater_display_name: 'Tom K.', context_type: null, context_id: null },
   { id: 'p3', score: 5, comment: null, created_at: 0, rater_display_name: 'Jamie R.', context_type: null, context_id: null },
 ];
 const PLACEHOLDER_AVG   = 4.7;
 const PLACEHOLDER_COUNT = 3;
 
-// ── Rating view — average + star breakdown ────────────────────────────────────
+// ── Rating view - average + star breakdown ────────────────────────────────────
 
 function RatingContent({ ratings, rating_avg, rating_count }: {
   ratings: Review[];
@@ -160,7 +160,7 @@ function RatingContent({ ratings, rating_avg, rating_count }: {
   );
 }
 
-// ── Reviews view — written comments ──────────────────────────────────────────
+// ── Reviews view - written comments ──────────────────────────────────────────
 
 function ReviewsContent({ ratings }: { ratings: Review[] }) {
   const reviews    = ratings.filter(r => r.comment);
@@ -272,7 +272,7 @@ export default function RatingsDrawer({
         }}
       />
 
-      {/* Slide-in panel — from the LEFT */}
+      {/* Slide-in panel - from the LEFT */}
       <aside
         aria-label={title}
         aria-hidden={!open}
