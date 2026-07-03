@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useTenant } from '../context/TenantContext';
+import { MapPin, Trees, Trophy, type LucideIcon } from 'lucide-react';
 
 // ─── Section component ────────────────────────────────────────────────────────────────────────────────
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -53,7 +54,7 @@ function Step({ n, label, detail }: { n: number; label: string; detail: string }
 }
 
 // ─── Tip card ─────────────────────────────────────────────────────────────────────────────────────
-function Tip({ icon, title, body }: { icon: string; title: string; body: string }) {
+function Tip({ icon: Icon, title, body }: { icon: LucideIcon; title: string; body: string }) {
   return (
     <div style={{
       background: 'var(--white)',
@@ -63,7 +64,7 @@ function Tip({ icon, title, body }: { icon: string; title: string; body: string 
       marginBottom: 12,
     }}>
       <p style={{ fontWeight: 'bold', marginBottom: 4 }}>
-        <span style={{ marginRight: 6 }}>{icon}</span>{title}
+        <Icon size={15} style={{ color: 'var(--amber)', verticalAlign: '-2px', marginRight: 6 }} />{title}
       </p>
       <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.88rem', color: 'var(--muted)', lineHeight: 1.55 }}>
         {body}
@@ -237,17 +238,17 @@ export default function Help() {
       {/* ── Tips ── */}
       <Section title="Explorer Tips for Getting the Most Out of the Passport">
         <Tip
-          icon="📍"
+          icon={MapPin}
           title="Daily Cooldown Limits"
           body="To prevent farming, you can collect from any single scannable merchant QR code once every 24 hours. But you are fully encouraged to visit as many different locations in the same day as you'd like!"
         />
         <Tip
-          icon="🌲"
+          icon={Trees}
           title="Diversify Your Stamps"
           body="Explore different categories like Dining, Boutiques, CSAs, and State Parks. Unlocking stamps in every area represents a true regional contributor!"
         />
         <Tip
-          icon="🏆"
+          icon={Trophy}
           title="Watch for Milestones"
           body="Our automatic badge engine monitors your accumulated scans and credit gains. Crossing thresholds automatically unlocks milestones like the 'Welcome Explorer' and 'Century Club' badges!"
         />
