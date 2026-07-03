@@ -346,12 +346,13 @@ export default function Explore() {
         </div>
       </div>
 
-      {/* Business Feed */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+      {/* Business Feed - title and sort note stacked so nothing fights for
+          width on a phone. */}
+      <div style={{ marginBottom: 12 }}>
         <p className="section-title" style={{ margin: 0 }}>
-          Network members near you ({filteredListings.length})
+          Nearby members ({filteredListings.length})
         </p>
-        <span style={{ fontSize: '0.75rem', color: 'var(--muted)', fontWeight: 500 }}>
+        <span style={{ fontSize: '0.72rem', color: 'var(--muted)', fontWeight: 500 }}>
           Sorted closest first
         </span>
       </div>
