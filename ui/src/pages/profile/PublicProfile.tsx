@@ -165,9 +165,6 @@ export default function PublicProfile() {
                   color: 'inherit',
                 }}
               >
-                <span style={{ fontSize: '1.3rem', flexShrink: 0 }}>
-                  {offer.category_icon || '🔄'}
-                </span>
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <div style={{
                     fontSize: '0.9rem', fontWeight: 600,

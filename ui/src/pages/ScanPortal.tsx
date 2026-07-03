@@ -543,7 +543,7 @@ export default function ScanPortal() {
           
           <div style={{ display: 'flex', gap: 12 }}>
             <button className="btn btn-primary" onClick={requestLocation} style={{ flex: 1, fontSize: '0.88rem' }}>
-              🔄 Retry Scan
+              Retry Scan
             </button>
             <Link to="/my-stamps" className="btn btn-secondary" style={{ flex: 1, fontSize: '0.88rem' }}>
               🗺️ My Stamps
