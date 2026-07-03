@@ -4,7 +4,13 @@ import { useAuth } from '../context/AuthContext';
 import { useTenant } from '../context/TenantContext';
 
 import { updateLocation } from '../api/profile';
-import { MapPin, Compass, Utensils, ShoppingBag, Trees, Landmark, Hotel, Wheat, Briefcase, CalendarDays, ChevronRight, Navigation, X } from 'lucide-react';
+import { MapPin, Compass, CalendarDays, ChevronRight, Navigation, X } from 'lucide-react';
+import { Spinner } from '../components/ui/Spinner';
+
+// Around Town follows the Happenings design language exactly: serif header
+// with an inline icon, calm text chip rows for every filter (btn-amber
+// active / btn-secondary idle), quiet status lines, white cards with a 4px
+// green left accent, centered spinner, calm empty states, 800px column.
 
 // A verified member business on the network - real data from KKAuth via the
 // network-members endpoint. No fabricated ratings, coordinates, or samples.
@@ -12,7 +18,6 @@ interface Business {
   member_uid: number;
   name: string;
   category: string;      // mapped to a category slug below
-  icon: string;
   description: string | null;
   address: string | null;
   zip: string | null;
@@ -22,12 +27,22 @@ interface Business {
   website: string | null;
 }
 
-// Map a business's free-text category from KKAuth onto the browse slugs.
-const CATEGORY_ICONS: Record<string, string> = {
-  dining: '🍔', shopping: '🛍️', recreation: '🌲', attractions: '🏛️',
-  lodging: '🏨', farmfood: '🌾', services: '💼',
-};
+const CATEGORIES = [
+  { key: 'all', label: 'All' },
+  { key: 'dining', label: 'Dining & Drinks' },
+  { key: 'shopping', label: 'Boutiques & Shops' },
+  { key: 'farmfood', label: 'Farm & Fresh' },
+  { key: 'recreation', label: 'Parks & Trails' },
+  { key: 'attractions', label: 'Attractions' },
+  { key: 'lodging', label: 'Lodging' },
+  { key: 'services', label: 'Services' },
+];
 
+function categoryLabel(slug: string): string {
+  return CATEGORIES.find(c => c.key === slug)?.label ?? 'Services';
+}
+
+// Map a business's free-text category from KKAuth onto the browse slugs.
 function categorySlug(raw: string | null): string {
   const c = (raw ?? '').toLowerCase();
   if (/food|dining|restaurant|cafe|coffee|bakery|brew|bar\b/.test(c)) return 'dining';
@@ -39,56 +54,72 @@ function categorySlug(raw: string | null): string {
   return 'services';
 }
 
-// Canonical Steuben County & Angola, Indiana Region coordinates
-const LOCAL_ZIP_COORDINATES: Record<string, { lat: number; lon: number; label: string }> = {
-  '46703': { lat: 41.6348, lon: -84.9997, label: 'Angola, IN' },
-  '46737': { lat: 41.7303, lon: -84.9316, label: 'Fremont, IN' },
-  '46742': { lat: 41.5342, lon: -84.8916, label: 'Hamilton, IN' },
-  '46747': { lat: 41.5317, lon: -85.0811, label: 'Hudson, IN' },
-  '46706': { lat: 41.3653, lon: -85.0636, label: 'Auburn, IN' },
-};
+const RADIUS_OPTIONS = [
+  { mi: 5, label: '5 mi' },
+  { mi: 15, label: '15 mi' },
+  { mi: 30, label: '30 mi' },
+  { mi: 0, label: 'Any' },
+];
 
-function getCoordinatesForZip(zip: string): { lat: number; lon: number; label: string } {
-  const cleaned = zip.trim();
-  if (LOCAL_ZIP_COORDINATES[cleaned]) {
-    return LOCAL_ZIP_COORDINATES[cleaned];
-  }
-  // Honest fallback for unknown zips: the region center - never an invented
-  // coordinate pretending to be the visitor's area.
-  return { lat: 41.6348, lon: -84.9997, label: 'Tri-State Lakes Region' };
-}
+// Known regional zip centers; unknown zips honestly fall back to the region
+// center - never an invented coordinate pretending to be the visitor's area.
+const LOCAL_ZIP_COORDINATES: Record<string, { lat: number; lon: number }> = {
+  '46703': { lat: 41.6348, lon: -84.9997 },
+  '46737': { lat: 41.7303, lon: -84.9316 },
+  '46742': { lat: 41.5342, lon: -84.8916 },
+  '46747': { lat: 41.5317, lon: -85.0811 },
+  '46706': { lat: 41.3653, lon: -85.0636 },
+};
+const REGION_CENTER = { lat: 41.6348, lon: -84.9997 };
 
 function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 3958.8; // Earth radius in miles
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = 
+  const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
     Math.sin(dLon / 2) * Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
 
-// (sample listings removed - the feed is real verified member businesses only)
-
 export default function Explore() {
-  const { user, updateUser } = useAuth();
+  const { user } = useAuth();
   const { tenant } = useTenant();
 
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [zipInput, setZipInput] = useState<string>('');
-  const [maxDistance, setMaxDistance] = useState<number>(25); // Default 25 miles
   const [dbMembers, setDbMembers] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
-  // Live device location - lets a member browsing outside their home area
-  // find what's near them with one tap (same pattern as Happenings).
-  const [liveCoords, setLiveCoords] = useState<{ lat: number; lon: number } | null>(null);
+
+  // Location filter, Happenings-style: live position is "near me"; a saved
+  // profile zip is a clearly-labeled home-area default that live location
+  // can override. Radius is a filter, never a ranking.
+  const [coords, setCoords] = useState<{ lat: number; lon: number } | null>(null);
+  const [source, setSource] = useState<'home' | 'live' | null>(null);
+  const [radius, setRadius] = useState(30);
   const [locating, setLocating] = useState(false);
   const [geoError, setGeoError] = useState('');
+  const [touched, setTouched] = useState(false);
+
+  // Smart default for registered users: seed with their saved home area the
+  // first time their profile loads. A default, never a lock.
+  useEffect(() => {
+    if (touched || coords) return;
+    if (user?.home_zip_lat != null && user?.home_zip_lon != null) {
+      setCoords({ lat: user.home_zip_lat, lon: user.home_zip_lon });
+      setRadius(30);
+      setSource('home');
+    } else if (user?.home_zip_location && LOCAL_ZIP_COORDINATES[user.home_zip_location]) {
+      setCoords(LOCAL_ZIP_COORDINATES[user.home_zip_location]);
+      setRadius(30);
+      setSource('home');
+    }
+  }, [user, touched, coords]);
 
   const useMyLocation = () => {
     setGeoError('');
+    setTouched(true);
     if (!('geolocation' in navigator)) {
       setGeoError("Location isn't available on this device.");
       return;
@@ -96,32 +127,33 @@ export default function Explore() {
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
       pos => {
-        setLiveCoords({ lat: pos.coords.latitude, lon: pos.coords.longitude });
+        setCoords({ lat: pos.coords.latitude, lon: pos.coords.longitude });
+        setSource('live');
         setLocating(false);
       },
       () => {
         setLocating(false);
-        setGeoError("Couldn't get your location. Check your browser's location permission.");
+        if (user?.home_zip_lat != null && user?.home_zip_lon != null) {
+          setCoords({ lat: user.home_zip_lat, lon: user.home_zip_lon });
+          setSource('home');
+          setGeoError('Using your home area - allow location to use where you are now.');
+        } else {
+          setGeoError("Couldn't get your location. Check your browser's location permission.");
+        }
       },
       { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 },
     );
   };
 
-  const clearLiveLocation = () => {
-    setLiveCoords(null);
+  const clearLocation = () => {
+    setTouched(true);
+    setCoords(null);
+    setSource(null);
     setGeoError('');
   };
 
-  // Synchronize filters with user preferences when user loads/changes
-  useEffect(() => {
-    if (user) {
-      setZipInput(user.home_zip_location || '');
-      setMaxDistance(user.home_distance_preference ?? 100);
-    } else {
-      setZipInput('46703'); // Angola, IN guest default
-      setMaxDistance(25);
-    }
-  }, [user?.home_zip_location, user?.home_distance_preference]);
+  // Persist a live-location visit as nothing; persist nothing here at all -
+  // the saved home area is managed from the profile, this page only reads it.
 
   // Fetch the verified member businesses of the network (KKAuth-sourced).
   useEffect(() => {
@@ -143,115 +175,48 @@ export default function Explore() {
     fetchDbMembers();
   }, [tenant]);
 
-  // Live Location DB updates on the fly for registered users
-  const handleZipChange = async (val: string) => {
-    const cleaned = val.replace(/\D/g, '').slice(0, 5);
-    setZipInput(cleaned);
-    // Typing a zip is an explicit choice - it takes over from live location.
-    if (liveCoords) clearLiveLocation();
-
-    if (user) {
-      if (cleaned.length === 5 || cleaned === '') {
-        try {
-          const res = await updateLocation({
-            home_zip_location: cleaned || null,
-            home_distance_preference: cleaned ? maxDistance : null
-          });
-          const p = res.data.profile;
-          updateUser({
-            home_zip_location: p.home_zip_location,
-            home_zip_lat: p.home_zip_lat,
-            home_zip_lon: p.home_zip_lon,
-            home_distance_preference: p.home_distance_preference,
-          });
-        } catch (err) {
-          console.error('Failed to save ZIP preference:', err);
-        }
-      }
-    }
-  };
-
-  const handleDistanceChange = async (d: number) => {
-    setMaxDistance(d);
-
-    if (user && zipInput.length === 5) {
-      try {
-        const res = await updateLocation({
-          home_zip_location: zipInput,
-          home_distance_preference: d
-        });
-        const p = res.data.profile;
-        updateUser({
-          home_zip_location: p.home_zip_location,
-          home_zip_lat: p.home_zip_lat,
-          home_zip_lon: p.home_zip_lon,
-          home_distance_preference: p.home_distance_preference,
-        });
-      } catch (err) {
-        console.error('Failed to save search-radius preference:', err);
-      }
-    }
-  };
-
-  // Where distances are measured FROM, in priority order: live device
-  // location, the saved home area (real geocode from their profile), a known
-  // regional zip, then the region center.
-  const activeZip = zipInput.trim() || '46703';
-  const userCoords = liveCoords
-    ?? (user?.home_zip_lat != null && user?.home_zip_lon != null && activeZip === user.home_zip_location
-      ? { lat: user.home_zip_lat, lon: user.home_zip_lon }
-      : getCoordinatesForZip(activeZip));
-  const hasLocationFilter = liveCoords != null || zipInput.length === 5;
+  const origin = coords ?? REGION_CENTER;
 
   // Real member businesses only - category from their own listing, real
   // coordinates when they share an address, nothing invented.
-  const allListings: Business[] = dbMembers.map((m: any) => {
-    const slug = categorySlug(m.category);
-    return {
-      member_uid: m.member_uid,
-      name: m.name,
-      category: slug,
-      icon: CATEGORY_ICONS[slug] ?? '💼',
-      description: m.description ?? null,
-      address: m.address ?? null,
-      zip: m.zip ?? null,
-      lat: m.lat ?? null,
-      lon: m.lon ?? null,
-      phone: m.phone ?? null,
-      website: m.website ?? null,
-    };
-  });
-
-  // Distance only when the business shares real coordinates; members without
-  // them are never distance-filtered out - they list after the located ones.
-  const filteredListings = allListings
-    .map(b => ({
-      ...b,
-      distance: b.lat != null && b.lon != null
-        ? calculateDistance(userCoords.lat, userCoords.lon, b.lat, b.lon)
-        : null,
-    }))
+  const listings = dbMembers
+    .map((m: any): Business & { distance: number | null } => {
+      const slug = categorySlug(m.category);
+      return {
+        member_uid: m.member_uid,
+        name: m.name,
+        category: slug,
+        description: m.description ?? null,
+        address: m.address ?? null,
+        zip: m.zip ?? null,
+        lat: m.lat ?? null,
+        lon: m.lon ?? null,
+        phone: m.phone ?? null,
+        website: m.website ?? null,
+        distance: m.lat != null && m.lon != null
+          ? calculateDistance(origin.lat, origin.lon, m.lat, m.lon)
+          : null,
+      };
+    })
     .filter(b => {
       if (selectedCategory !== 'all' && b.category !== selectedCategory) return false;
-      if (hasLocationFilter && b.distance != null && b.distance > maxDistance) return false;
+      // Distance is a filter, never a cut for members who don't share a location.
+      if (coords && radius > 0 && b.distance != null && b.distance > radius) return false;
       return true;
     })
     .sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity));
 
-  const categories = [
-    { slug: 'all', name: 'All Destinations', Icon: Compass },
-    { slug: 'dining', name: 'Dining & Drinks', Icon: Utensils },
-    { slug: 'shopping', name: 'Boutiques & Shops', Icon: ShoppingBag },
-    { slug: 'recreation', name: 'Parks & Trails', Icon: Trees },
-    { slug: 'attractions', name: 'Attractions', Icon: Landmark },
-    { slug: 'lodging', name: 'Lodging & B&Bs', Icon: Hotel },
-    { slug: 'farmfood', name: 'Farm & Fresh', Icon: Wheat },
-    { slug: 'services', name: 'Services', Icon: Briefcase }
-  ];
-
   return (
-    <div style={{ paddingBottom: 60 }}>
-      {/* Events live under Around Town — entry point into the Happenings page. */}
+    <div className="main-content" style={{ maxWidth: 800, margin: '0 auto', paddingTop: 20, paddingBottom: 80 }}>
+      <h1 style={{ margin: '0 0 4px', fontSize: '1.5rem', fontFamily: 'var(--font-serif)', color: 'var(--green)', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <Compass size={22} /> Around Town
+      </h1>
+      <p style={{ margin: '0 0 16px', fontSize: '0.82rem', color: 'var(--muted)' }}>
+        The member businesses of the Lake &amp; Locals network. Visit a member page to
+        book an appointment, share your experience, or see what they offer.
+      </p>
+
+      {/* Events entry - same calm card language as everything else */}
       <Link
         to="/happenings"
         className="card"
@@ -259,352 +224,137 @@ export default function Explore() {
           display: 'flex', alignItems: 'center', gap: 12,
           padding: '14px 16px', marginBottom: 16,
           textDecoration: 'none', color: 'inherit',
-          background: 'var(--white)', border: '1px solid var(--border)',
+          background: 'var(--white)', borderLeft: '4px solid var(--green)',
         }}
       >
-        <CalendarDays size={22} color="var(--amber)" style={{ flexShrink: 0 }} />
+        <CalendarDays size={20} color="var(--amber)" style={{ flexShrink: 0 }} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontWeight: 600, color: 'var(--green)', fontSize: '0.95rem' }}>Events &amp; Happenings</div>
-          <div style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>See what's going on around town</div>
+          <div style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>See what's going on around town today</div>
         </div>
-        <ChevronRight size={20} color="var(--amber)" style={{ flexShrink: 0 }} />
+        <ChevronRight size={18} color="var(--amber)" style={{ flexShrink: 0 }} />
       </Link>
 
-      {/* Search & Location Card (Matches the Premium Exchange Design!) */}
-      <div className="card" style={{ padding: '20px', marginBottom: '24px', background: 'var(--white)' }}>
-        <h1 className="page-title" style={{ marginBottom: 6, fontSize: '1.6rem', fontFamily: 'var(--font-serif)', color: 'var(--green)' }}>
-          Member Businesses
-        </h1>
-        <p style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: 20 }}>
-          The local businesses of the Lake &amp; Locals network. Visit their member pages
-          to book an appointment, share your experience, or see what they offer.
-        </p>
-
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 16
-        }}>
-          <div style={{
-            display: 'flex',
-            gap: 16,
-            alignItems: 'center',
-            flexWrap: 'wrap'
-          }}>
-            {/* Location field + live-location control */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: '1 1 200px' }}>
-              <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--green)' }}>
-                Location
-              </label>
-              {liveCoords ? (
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: 8, height: 38,
-                  padding: '0 10px', background: 'rgba(200, 134, 10, 0.08)',
-                  border: '1px solid var(--amber)', borderRadius: 'var(--r-sm)',
-                }}>
-                  <Navigation size={14} color="var(--amber)" style={{ flexShrink: 0 }} />
-                  <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--green)', flex: 1 }}>
-                    Using your location
-                  </span>
-                  <button onClick={clearLiveLocation} aria-label="Stop using my location"
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', padding: 4 }}>
-                    <X size={15} color="var(--muted)" />
-                  </button>
-                </div>
-              ) : (
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
-                    <input
-                      type="text"
-                      className="form-control"
-                      value={zipInput}
-                      onChange={e => handleZipChange(e.target.value)}
-                      placeholder="Zip, e.g. 46703"
-                      style={{ paddingLeft: 32, fontSize: '0.85rem', height: 38, width: '100%' }}
-                    />
-                    <MapPin size={15} color="var(--amber)" style={{ position: 'absolute', left: 10, top: 12 }} />
-                  </div>
-                  <button onClick={useMyLocation} disabled={locating}
-                    className="btn btn-sm btn-secondary"
-                    style={{ minHeight: 38, display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap', flexShrink: 0 }}>
-                    <Navigation size={13} /> {locating ? 'Locating…' : 'Near me'}
-                  </button>
-                </div>
-              )}
-              {geoError && (
-                <span style={{ fontSize: '0.72rem', color: 'var(--muted)' }}>{geoError}</span>
-              )}
-            </div>
-
-            {/* Distance Segment Control (Matching Exchange Design System!) */}
-            {hasLocationFilter && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: '2 1 300px' }}>
-                <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--green)' }}>
-                  Search Radius
-                </label>
-                <div className="seg-control" style={{ height: 38, display: 'flex', width: '100%' }}>
-                  {[10, 25, 50, 100].map(d => (
-                    <button
-                      key={d}
-                      type="button"
-                      className={`seg-control-btn ${maxDistance === d ? 'active' : ''}`}
-                      onClick={() => handleDistanceChange(d)}
-                      style={{ fontSize: '0.8rem', flex: 1 }}
-                    >
-                      {d} mi
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+      {/* Category filter - calm chips, no icons, no counts */}
+      <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 8, marginBottom: 12, WebkitOverflowScrolling: 'touch' }}>
+        {CATEGORIES.map(c => (
+          <button key={c.key} onClick={() => setSelectedCategory(c.key)}
+            className={`btn btn-sm ${selectedCategory === c.key ? 'btn-amber' : 'btn-secondary'}`}
+            style={{ minHeight: 32, whiteSpace: 'nowrap', flexShrink: 0 }}>
+            {c.label}
+          </button>
+        ))}
       </div>
 
-      {/* Category Picker horizontal carousel */}
-      <div style={{ marginBottom: 20 }}>
-        <p className="section-title" style={{ marginBottom: 10 }}>Categories</p>
-        <div style={{
-          display: 'flex',
-          gap: 10,
-          overflowX: 'auto',
-          paddingBottom: 8,
-          scrollbarWidth: 'none',
-          msOverflowStyle: 'none'
-        }}>
-          {categories.map(cat => {
-            const isSelected = selectedCategory === cat.slug;
-            return (
-              <button
-                key={cat.slug}
-                onClick={() => setSelectedCategory(cat.slug)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  padding: '8px 14px',
-                  background: isSelected ? 'var(--green)' : 'var(--white)',
-                  border: isSelected ? '1px solid var(--green)' : '1px solid var(--border)',
-                  borderRadius: '100px',
-                  color: isSelected ? 'var(--white)' : 'var(--green)',
-                  fontWeight: 600,
-                  fontSize: '0.8rem',
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                  transition: 'all 0.15s ease'
-                }}
-              >
-                <cat.Icon size={15} color={isSelected ? 'white' : 'var(--green)'} />
-                {cat.name}
+      {/* Location filter - identical control language to Happenings */}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: source === 'home' ? 6 : 12 }}>
+        {!coords ? (
+          <button onClick={useMyLocation} disabled={locating}
+            className="btn btn-sm btn-secondary"
+            style={{ minHeight: 32, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <Navigation size={13} /> {locating ? 'Locating…' : 'Near me'}
+          </button>
+        ) : (
+          <>
+            {RADIUS_OPTIONS.map(r => (
+              <button key={r.mi} onClick={() => setRadius(r.mi)}
+                className={`btn btn-sm ${radius === r.mi ? 'btn-amber' : 'btn-secondary'}`}
+                style={{ minHeight: 32, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                {r.label}
               </button>
-            );
-          })}
-        </div>
+            ))}
+            {source === 'home' && (
+              <button onClick={useMyLocation} disabled={locating}
+                className="btn btn-sm btn-secondary"
+                style={{ minHeight: 32, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                <Navigation size={13} /> {locating ? 'Locating…' : 'Use my location'}
+              </button>
+            )}
+            <button onClick={clearLocation}
+              className="btn btn-sm btn-secondary"
+              style={{ minHeight: 32, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <X size={13} /> Clear
+            </button>
+          </>
+        )}
       </div>
-
-      {/* Business Feed - title and sort note stacked so nothing fights for
-          width on a phone. */}
-      <div style={{ marginBottom: 12 }}>
-        <p className="section-title" style={{ margin: 0 }}>
-          Nearby members ({filteredListings.length})
+      {source === 'home' && !geoError && (
+        <p style={{ margin: '0 0 12px', fontSize: '0.78rem', color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 5 }}>
+          <MapPin size={12} style={{ color: 'var(--amber)' }} />
+          Showing your home area{user?.home_zip_location ? ` (${user.home_zip_location})` : ''} - tap "Use my location" if you're out and about.
         </p>
-        <span style={{ fontSize: '0.72rem', color: 'var(--muted)', fontWeight: 500 }}>
-          Sorted closest first
-        </span>
-      </div>
+      )}
+      {geoError && (
+        <p style={{ margin: '0 0 12px', fontSize: '0.78rem', color: 'var(--muted)' }}>{geoError}</p>
+      )}
 
       {loading ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minHeight: '400px' }}>
-          {[...Array(3)].map((_, i) => (
-            <div
-              key={i}
-              className="card"
-              style={{
-                background: 'var(--white)',
-                padding: '16px',
-                height: '144px',
-                border: '1px dashed var(--border)',
-                borderRadius: 'var(--r-md)',
-                opacity: 0.5,
-              }}
-            />
-          ))}
+        <div style={{ paddingTop: 32, textAlign: 'center' }}>
+          <Spinner size="lg" />
         </div>
-      ) : filteredListings.length === 0 ? (
-        <div className="empty-state" style={{ padding: '40px 20px', background: 'var(--white)' }}>
-          <div className="empty-state-icon">🧭</div>
-          <h3 style={{ fontFamily: 'var(--font-serif)', color: 'var(--green)', fontSize: '1.15rem', marginBottom: 6 }}>
-            No member businesses match
-          </h3>
-          <p style={{ fontSize: '0.8rem', color: 'var(--muted)', maxWidth: 280, margin: '0 auto 16px auto', lineHeight: 1.4 }}>
-            The network is growing - try widening your search distance or clearing the
-            category filter.
+      ) : listings.length === 0 ? (
+        <div className="card" style={{ padding: 24, textAlign: 'center', background: 'var(--white)' }}>
+          <Compass size={26} style={{ color: 'var(--amber)', marginBottom: 8 }} />
+          <p style={{ margin: '0 0 4px', fontSize: '0.9rem' }}>
+            {coords && radius > 0 ? `No member businesses within ${radius} miles.` : 'No member businesses match.'}
           </p>
-          <button
-            onClick={() => {
-              setZipInput('46703');
-              setMaxDistance(25);
-              setSelectedCategory('all');
-            }}
-            className="btn btn-amber"
-            style={{ minHeight: 38 }}
-          >
-            Reset Filters
-          </button>
+          <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.8rem' }}>
+            The network is growing - try a wider range or a different category.
+          </p>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {filteredListings.map(b => (
-            <Link
-              key={b.member_uid}
-              to={`/members/${b.member_uid}`}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {listings.map(b => (
+            <Link key={b.member_uid} to={`/members/${b.member_uid}`}
               className="card"
               style={{
-                background: 'var(--white)',
-                padding: '16px',
-                display: 'flex',
-                gap: 16,
-                position: 'relative',
-                transition: 'transform 0.15s, box-shadow 0.15s',
-                textDecoration: 'none',
-                color: 'inherit',
-              }}
-            >
-              {/* Category Icon box */}
-              <div style={{
-                width: 50,
-                height: 50,
-                background: 'rgba(200, 134, 10, 0.06)',
-                borderRadius: 'var(--r-md)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '1.5rem',
-                flexShrink: 0
+                background: 'var(--white)', padding: 16, textDecoration: 'none',
+                color: 'inherit', borderLeft: '4px solid var(--green)', display: 'block',
               }}>
-                {b.icon}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, gap: 8 }}>
+                <span style={{
+                  fontSize: '0.66rem', fontWeight: 700, textTransform: 'uppercase', padding: '2px 8px',
+                  borderRadius: 'var(--r-sm)', background: 'rgba(80,120,80,0.12)', color: 'var(--green)',
+                }}>
+                  {categoryLabel(b.category)}
+                </span>
+                {b.distance != null && coords && (
+                  <span style={{
+                    fontSize: '0.62rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5,
+                    padding: '2px 8px', borderRadius: 'var(--r-sm)',
+                    background: 'rgba(200,134,10,0.12)', color: 'var(--amber)',
+                  }}>
+                    {b.distance.toFixed(1)} mi
+                  </span>
+                )}
               </div>
 
-              {/* Body */}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                {/* Header line */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 4 }}>
-                  <h3 style={{
-                    fontSize: '1rem',
-                    fontWeight: 'bold',
-                    margin: 0,
-                    fontFamily: 'var(--font-serif)',
-                    color: 'var(--green)',
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis'
-                  }}>
-                    {b.name}
-                  </h3>
-                  {/* Distance badge - only when the business shares a location */}
-                  {b.distance != null && (
-                    <span style={{
-                      fontSize: '0.7rem',
-                      fontWeight: 600,
-                      color: 'var(--amber)',
-                      background: 'rgba(200, 134, 10, 0.08)',
-                      padding: '2px 8px',
-                      borderRadius: '100px',
-                      flexShrink: 0
-                    }}>
-                      {b.distance.toFixed(1)} mi
-                    </span>
-                  )}
-                </div>
+              <h3 style={{
+                margin: '0 0 4px', fontSize: '1.05rem', fontFamily: 'var(--font-serif)',
+                color: 'var(--green)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>
+                {b.name}
+              </h3>
 
-                {/* Verified member line */}
-                <div style={{ fontSize: '0.72rem', color: 'var(--sage)', marginBottom: 8 }}>
-                  Verified member business
-                </div>
+              <p style={{ margin: '0 0 10px', fontSize: '0.85rem', color: 'var(--muted)', lineHeight: 1.45 }}>
+                {b.description ?? 'A member business of the Lake & Locals network.'}
+              </p>
 
-                {/* Description */}
-                <p style={{
-                  fontSize: '0.78rem',
-                  color: 'var(--muted)',
-                  lineHeight: '1.4',
-                  margin: '0 0 12px 0'
-                }}>
-                  {b.description ?? 'A member business of the Lake & Locals network.'}
-                </p>
-
-                {/* Details Footer line */}
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 12,
-                  fontSize: '0.7rem',
-                  color: 'var(--muted)',
-                  borderTop: '1px solid var(--border)',
-                  paddingTop: 10,
-                  flexWrap: 'wrap'
-                }}>
-                  {/* Phone and website live on the member page - the card
-                      stays uncrowded on a phone: place, then the action. */}
-                  {b.address && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0, flex: 1 }}>
-                      <MapPin size={12} color="var(--sage)" style={{ flexShrink: 0 }} />
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.address}</span>
-                    </div>
-                  )}
-                  <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 2, color: 'var(--amber)', fontWeight: 600, flexShrink: 0 }}>
-                    View member page <ChevronRight size={12} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.75rem', color: 'var(--muted)' }}>
+                {b.address && (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0, flex: 1 }}>
+                    <MapPin size={12} color="var(--sage)" style={{ flexShrink: 0 }} />
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.address}</span>
                   </span>
-                </div>
+                )}
+                <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 2, color: 'var(--amber)', fontWeight: 600, flexShrink: 0 }}>
+                  View member page <ChevronRight size={12} />
+                </span>
               </div>
             </Link>
           ))}
         </div>
       )}
-
-      {/* Premium Business CTA Banner */}
-      <div className="card" style={{
-        background: 'linear-gradient(135deg, var(--green) 0%, #2c442e 100%)',
-        color: 'var(--cream)',
-        padding: '24px',
-        borderRadius: 'var(--r-lg)',
-        boxShadow: '0 4px 15px rgba(30, 51, 32, 0.15)',
-        textAlign: 'center',
-        marginTop: 12
-      }}>
-        <h3 style={{
-          fontFamily: 'var(--font-serif)',
-          fontSize: '1.2rem',
-          fontWeight: 'bold',
-          marginBottom: 8,
-          color: 'var(--white)'
-        }}>
-          Own a Regional Business or Organization?
-        </h3>
-        <p style={{
-          fontFamily: 'var(--font-sans)',
-          fontSize: '0.8rem',
-          lineHeight: '1.5',
-          opacity: 0.9,
-          maxWidth: 440,
-          margin: '0 auto 16px auto'
-        }}>
-          Join {tenant?.config.brand_name || 'Lake & Locals'}, a KrowdKraft network! Get your own customized QR code, reward checked-in visitors with {tenant?.config.credits_name ?? 'KrowdKredits'}, and showcase your shop in our regional explore passport.
-        </p>
-        <Link
-          to={user ? "/profile/apply-merchant" : "/auth/login?return_to=/profile/apply-merchant"}
-          className="btn btn-amber"
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            minHeight: 40,
-            padding: '0 24px',
-            fontWeight: 600
-          }}
-        >
-          Register Your Business &rarr;
-        </Link>
-      </div>
     </div>
   );
 }
