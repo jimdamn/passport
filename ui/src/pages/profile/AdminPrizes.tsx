@@ -247,7 +247,7 @@ export default function AdminPrizes() {
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 12, marginBottom: 12 }}>
             <div>
-              <label style={labelStyle}>Value ({form.prize_type.startsWith('kredits') ? 'kredits awarded' : 'dollar value, for records'})</label>
+              <label style={labelStyle}>Value ({form.prize_type.startsWith('kredits') ? 'KrowdKredits awarded' : 'dollar value, for records'})</label>
               <input type="number" className="form-input" style={inputStyle} value={form.value}
                 onChange={e => setForm(f => ({ ...f, value: e.target.value }))} />
             </div>

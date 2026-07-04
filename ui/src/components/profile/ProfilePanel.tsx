@@ -347,7 +347,7 @@ export default function ProfilePanel({ open, onClose, onSaved }: Props) {
               inputMode="numeric"
               onChange={e => setForm(f => ({ ...f, home_zip_location: e.target.value.replace(/\D/g, '').slice(0, 5) }))}
             />
-            <p className="form-hint">Used to filter nearby offers in the Exchange. Leave blank to see all.</p>
+            <p className="form-hint">Used to show what's near you across all Lake &amp; Locals apps. Leave blank to see everything.</p>
           </div>
 
           {form.home_zip_location.length === 5 && (

@@ -140,7 +140,7 @@ export default function DealsManager() {
     <div style={{ marginBottom: 28 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
         <h2 style={{ margin: 0, fontSize: '1.1rem', fontFamily: 'var(--font-serif)', color: 'var(--green)', display: 'flex', alignItems: 'center', gap: 6 }}>
-          <Tag size={17} /> My Kredit Deals
+          <Tag size={17} /> My KrowdKredit Deals
         </h2>
         <button onClick={openCreate} className="btn btn-amber btn-sm" style={{ display: 'flex', alignItems: 'center', gap: 6, minHeight: 34 }}>
           <Plus size={14} /> Add Deal
@@ -148,7 +148,7 @@ export default function DealsManager() {
       </div>
       <p style={{ margin: '0 0 12px', fontSize: '0.78rem', color: 'var(--muted)' }}>
         Deals are purchased with KrowdKredits. Short claim windows create urgency - if a
-        buyer doesn't redeem in time, their kredits refund and the slot returns to the pool.
+        buyer doesn't redeem in time, their KrowdKredits refund and the slot returns to the pool.
       </p>
 
       {error && <Alert type="error" style={{ marginBottom: 12 }}>{error}</Alert>}
@@ -168,7 +168,7 @@ export default function DealsManager() {
                 onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
             </div>
             <div>
-              <label style={labelStyle}>Price in kredits (min 1)</label>
+              <label style={labelStyle}>Price in KrowdKredits (min 1)</label>
               <input type="number" min="1" className="form-input" style={inputStyle} value={form.kredit_price}
                 onChange={e => setForm(f => ({ ...f, kredit_price: e.target.value }))} />
             </div>
@@ -229,7 +229,7 @@ export default function DealsManager() {
         {deals.length === 0 ? (
           <div className="card" style={{ padding: 24, textAlign: 'center', background: 'var(--white)' }}>
             <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.85rem' }}>
-              No deals yet. Post a kredit deal - slow Tuesday lunch? A hot deal with a
+              No deals yet. Post a KrowdKredit deal - slow Tuesday lunch? A hot deal with a
               30-minute window puts customers at your counter fast.
             </p>
           </div>
@@ -256,7 +256,7 @@ export default function DealsManager() {
                       </span>
                     </div>
                     <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--muted)' }}>
-                      {d.kredit_price} kredits
+                      {d.kredit_price} KrowdKredits
                       {' · '}{d.quantity_left === -1 ? 'Unlimited' : `${d.quantity_left} left`}
                       {' · '}Use within {claimWindowLabel(d.claim_window_minutes)}
                       {' · '}Claimed {d.times_purchased}× · Redeemed {d.times_redeemed}×

@@ -103,7 +103,7 @@ export default function AdminDeals() {
             </p>
             {d.details && <p style={{ margin: '0 0 4px', fontSize: '0.78rem', color: 'var(--text)' }}>{d.details}</p>}
             <p style={{ margin: 0, fontSize: '0.74rem', color: 'var(--muted)' }}>
-              {d.kredit_price} kredits
+              {d.kredit_price} KrowdKredits
               {' · '}{d.quantity_left === -1 ? 'Unlimited' : `${d.quantity_left} left`}
               {' · '}Limit {d.per_user_limit}/person
               {' · '}Use within {claimWindowLabel(d.claim_window_minutes)}

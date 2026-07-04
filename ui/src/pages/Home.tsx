@@ -39,8 +39,8 @@ export default function Home() {
       icon: <Tag size={28} style={{ color: 'var(--amber)' }} />,
       title: 'Deals',
       blurb: deals.length > 0
-        ? `${deals.length} live deal${deals.length === 1 ? '' : 's'} - spend your kredits at local businesses.`
-        : 'Spend your kredits on real deals at local businesses.',
+        ? `${deals.length} live deal${deals.length === 1 ? '' : 's'} - spend your KrowdKredits at local businesses.`
+        : 'Spend your KrowdKredits on real deals at local businesses.',
       to: '/deals',
     },
     {
@@ -117,7 +117,7 @@ export default function Home() {
                   </div>
                 </div>
                 <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--amber)', fontFamily: 'var(--font-serif)', whiteSpace: 'nowrap' }}>
-                  {deal.kredit_price} <span style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--muted)' }}>kredits</span>
+                  {deal.kredit_price} <span style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--muted)' }}>KrowdKredits</span>
                 </div>
               </button>
             ))}

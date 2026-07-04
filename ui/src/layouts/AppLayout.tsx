@@ -4,8 +4,10 @@ import Topbar from '../components/nav/Topbar';
 import BottomNav from '../components/nav/BottomNav';
 import { ProfilePanelProvider } from '../context/ProfilePanelContext';
 import ProfilePanel from '../components/profile/ProfilePanel';
+import { useAuth } from '../context/AuthContext';
 
 export default function AppLayout() {
+  const { user } = useAuth();
   const [profileOpen, setProfileOpen] = useState(false);
   const [isEmbedded, setIsEmbedded] = useState(false);
   const onSavedRef = useRef<(() => void) | undefined>(undefined);
@@ -39,11 +41,15 @@ export default function AppLayout() {
           <Outlet />
         </main>
         <BottomNav />
-        <ProfilePanel
-          open={profileOpen}
-          onClose={handlePanelClose}
-          onSaved={handlePanelSaved}
-        />
+        {/* The one true profile path (all other apps link here). Rendered only
+            for a signed-in user so logged-out pages carry no hidden panel DOM. */}
+        {user && (
+          <ProfilePanel
+            open={profileOpen}
+            onClose={handlePanelClose}
+            onSaved={handlePanelSaved}
+          />
+        )}
       </div>
     </ProfilePanelProvider>
   );

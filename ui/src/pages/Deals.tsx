@@ -71,7 +71,7 @@ function CodeModal({ title, code, expiresAt, onClose }: { title: string; code: s
           <Clock size={14} /> {formatRemaining(remaining)}
         </p>
         <p style={{ margin: '0 0 16px', fontSize: '0.72rem', color: 'var(--muted)' }}>
-          If it expires before you use it, your kredits come right back automatically.
+          If it expires before you use it, your KrowdKredits come right back automatically.
         </p>
         <button className="btn btn-secondary btn-sm" onClick={onClose} style={{ minHeight: 36, width: '100%' }}>Done</button>
       </div>
@@ -191,7 +191,7 @@ export default function Deals() {
   const claimStatusBadge = (cl: MyDealClaim) => {
     const expired = cl.status === 'refunded' || (cl.status === 'pending' && cl.expires_at <= now);
     if (cl.status === 'claimed') return <span style={{ color: 'var(--green)', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.72rem', fontWeight: 600 }}><CheckCircle size={11} /> Redeemed</span>;
-    if (expired) return <span style={{ color: 'var(--muted)', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.72rem', fontWeight: 600 }}><XCircle size={11} /> Expired - kredits returned</span>;
+    if (expired) return <span style={{ color: 'var(--muted)', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.72rem', fontWeight: 600 }}><XCircle size={11} /> Expired - KrowdKredits returned</span>;
     return <span style={{ color: 'var(--amber)', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.72rem', fontWeight: 600 }}><Clock size={11} /> {formatRemaining(cl.expires_at - now)}</span>;
   };
 
@@ -202,7 +202,7 @@ export default function Deals() {
       </h1>
       <p style={{ margin: '0 0 16px', fontSize: '0.82rem', color: 'var(--muted)' }}>
         Spend your KrowdKredits on real offers at member businesses. Every deal shows
-        its claim window up front - and if you don't use a claim in time, your kredits
+        its claim window up front - and if you don't use a claim in time, your KrowdKredits
         come right back.
       </p>
 
@@ -270,7 +270,7 @@ export default function Deals() {
                     </div>
                     <div style={{ textAlign: 'right', alignSelf: 'center' }}>
                       <div style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--amber)', fontFamily: 'var(--font-serif)', marginBottom: 6, whiteSpace: 'nowrap' }}>
-                        {deal.kredit_price} <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--muted)' }}>kredits</span>
+                        {deal.kredit_price} <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--muted)' }}>KrowdKredits</span>
                       </div>
                       {user ? (
                         <button
@@ -279,7 +279,7 @@ export default function Deals() {
                           disabled={working !== null || !canAfford}
                           onClick={() => setConfirming(deal)}
                         >
-                          {canAfford ? 'Get This Deal' : 'Not enough kredits'}
+                          {canAfford ? 'Get This Deal' : 'Not enough KrowdKredits'}
                         </button>
                       ) : (
                         <button className="btn btn-secondary btn-sm" style={{ minHeight: 34, whiteSpace: 'nowrap' }}
@@ -303,7 +303,7 @@ export default function Deals() {
               <Tags size={28} style={{ color: 'var(--amber)', marginBottom: 8 }} />
               <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.85rem' }}>
                 You haven't claimed any deals yet. Grab one from the marketplace - 
-                your kredits are automatically returned if you don't use it in time.
+                your KrowdKredits are automatically returned if you don't use it in time.
               </p>
             </div>
           ) : (
@@ -316,7 +316,7 @@ export default function Deals() {
                       {cl.deal_title}
                     </p>
                     <p style={{ margin: '0 0 4px', fontSize: '0.74rem', color: 'var(--muted)' }}>
-                      {cl.merchant_name ?? 'Local merchant'} · {cl.kredits_paid} kredits
+                      {cl.merchant_name ?? 'Local merchant'} · {cl.kredits_paid} KrowdKredits
                     </p>
                     {claimStatusBadge(cl)}
                   </div>
@@ -421,16 +421,16 @@ export default function Deals() {
               {confirming.merchant_name ?? 'Local merchant'}
             </p>
             <p style={{ margin: '0 0 16px', fontSize: '0.82rem', color: 'var(--text)' }}>
-              This costs <strong>{confirming.kredit_price} kredits</strong> and must be used within{' '}
+              This costs <strong>{confirming.kredit_price} KrowdKredits</strong> and must be used within{' '}
               <strong>{claimWindowLabel(confirming.claim_window_minutes)}</strong>. Don't make it in time?
-              Your kredits come back automatically.
+              Your KrowdKredits come back automatically.
             </p>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
               <button className="btn btn-secondary btn-sm" style={{ minHeight: 36 }} onClick={() => setConfirming(null)} disabled={working !== null}>
                 Cancel
               </button>
               <button className="btn btn-amber btn-sm" style={{ minHeight: 36 }} onClick={() => handlePurchase(confirming)} disabled={working !== null}>
-                {working ? 'Claiming...' : `Spend ${confirming.kredit_price} Kredits`}
+                {working ? 'Claiming...' : `Spend ${confirming.kredit_price} KrowdKredits`}
               </button>
             </div>
           </div>
