@@ -9,7 +9,6 @@ import { getMe } from '../../api/auth';
 import { getBalance } from '../../api/credits';
 import { Spinner } from '../../components/ui/Spinner';
 import StatsPanel, { type StatsPanelType } from '../../components/profile/StatsPanel';
-import RatingsDrawer, { type RatingsDrawerView } from '../../components/profile/RatingsDrawer';
 import BadgeStrip, { type Badge } from '../../components/ui/BadgeStrip';
 import QrDrawer from '../../components/ui/QrDrawer';
 import MerchantQrDrawer from '../../components/ui/MerchantQrDrawer';
@@ -92,7 +91,6 @@ export default function MyProfile() {
   });
 
   const [statsPanel,    setStatsPanel]    = useState<StatsPanelType | null>(null);
-  const [ratingsView,   setRatingsView]   = useState<RatingsDrawerView | null>(null);
 
   function handleLogout() {
     logout();
@@ -202,32 +200,12 @@ export default function MyProfile() {
           <div className="stat-num">{credits?.balance ?? user.credits_balance ?? 0}</div>
           <div className="stat-label">{creditsName}</div>
         </button>
-        <button className="stat-card stat-card--btn" onClick={() => setRatingsView('rating')} style={{ flex: 1, minWidth: 100, maxWidth: 180 }}>
-          <div className="stat-num">
-            {(profile.rating_count ?? 0) > 0 ? (profile.rating_avg ?? 0).toFixed(1) : ' - '}
-          </div>
-          <div className="stat-label">Rating</div>
-        </button>
-        <button className="stat-card stat-card--btn" onClick={() => setRatingsView('reviews')} style={{ flex: 1, minWidth: 100, maxWidth: 180 }}>
-          <div className="stat-num">{profile.rating_count ?? 0}</div>
-          <div className="stat-label">Reviews</div>
-        </button>
       </div>
 
       <StatsPanel
         open={statsPanel !== null}
         type={statsPanel}
         onClose={() => setStatsPanel(null)}
-      />
-
-      <RatingsDrawer
-        open={ratingsView !== null}
-        view={ratingsView ?? 'rating'}
-        onClose={() => setRatingsView(null)}
-        memberId={String(profile.id ?? user.id)}
-        memberName={profile.display_name ?? user.display_name ?? 'Me'}
-        tenantId={tenant?.id ?? ''}
-        isOwnProfile
       />
 
       <AnonymousPersonaDrawer

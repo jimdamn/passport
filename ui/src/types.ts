@@ -140,16 +140,6 @@ export interface MyTrade {
   partner_display_name: string;
 }
 
-export interface Review {
-  id: string;
-  score: number;
-  comment: string | null;
-  created_at: number;
-  rater_display_name: string | null;
-  context_type: string | null;
-  context_id: string | null;
-}
-
 export interface ApiResponse<T> {
   data: T;
   meta?: { page: number; limit: number; total: number };

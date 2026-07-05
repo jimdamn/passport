@@ -8,7 +8,7 @@ import { requireAuth } from '../../src/middleware/auth';
 import { authRouter } from '../../src/routers/auth';
 import { scanPlaque, registerClaim, attachClaim, getStamps } from '../../src/handlers/passport';
 import { getBalance, getBalanceOnly } from '../../src/handlers/credits';
-import { getMember, rateMember, getMemberRatings, provisionMember, getNetworkMembers } from '../../src/handlers/members';
+import { getMember, provisionMember, getNetworkMembers } from '../../src/handlers/members';
 import {
   createTestPlaque, removeTestPlaque,
   listPlaques, createPlaque, updatePlaque, deletePlaque,
@@ -137,8 +137,6 @@ app.get('/api/t/:tenant/happenings', resolveTenant, listHappenings);
 app.post('/api/t/:tenant/passport/claims/register', resolveTenant, registerClaim);
 app.get('/api/t/:tenant/network-members', resolveTenant, getNetworkMembers);
 app.get('/api/t/:tenant/members/:id', resolveTenant, getMember);
-app.get('/api/t/:tenant/members/:id/ratings', getMemberRatings);
-tenantApp.post('/members/:id/rate', rateMember);
 app.get('/api/t/:tenant/passport/members', resolveTenant, async (c) => {
   const tenant = c.get('tenant');
   // kkauth_uid is the public user id across all KrowdKraft apps — never expose

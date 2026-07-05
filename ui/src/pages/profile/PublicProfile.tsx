@@ -1,13 +1,10 @@
-import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useTenant } from '../../context/TenantContext';
-import { useAuth } from '../../context/AuthContext';
 import { getMember } from '../../api/profile';
 import { Spinner } from '../../components/ui/Spinner';
 import { Alert } from '../../components/ui/Alert';
 import BadgeStrip from '../../components/ui/BadgeStrip';
-import RatingsDrawer from '../../components/profile/RatingsDrawer';
 
 // Exchange is a separate Pages app on the shared domain; offer detail lives at /offers/:id.
 const EXCHANGE_BASE_URL = 'https://exchange.lakeandlocals.com';
@@ -49,8 +46,6 @@ function Avatar({ name, size = 64 }: { name: string; size?: number }) {
 export default function PublicProfile() {
   const { id } = useParams<{ id: string }>();
   const { tenant } = useTenant();
-  const { user: currentUser } = useAuth();
-  const [ratingsOpen, setRatingsOpen] = useState(false);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['member', tenant?.id, id],
@@ -108,17 +103,6 @@ export default function PublicProfile() {
             {member.bio}
           </p>
         )}
-
-        <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-          <button
-            className="btn btn-secondary btn-sm"
-            onClick={() => setRatingsOpen(true)}
-          >
-            {(member.rating_count ?? 0) > 0
-              ? `★ ${(member.rating_avg ?? 0).toFixed(1)} · ${member.rating_count} review${member.rating_count !== 1 ? 's' : ''}`
-              : 'Reviews'}
-          </button>
-        </div>
       </div>
 
       {business_links && (
@@ -182,17 +166,6 @@ export default function PublicProfile() {
           </div>
         </div>
       )}
-
-      <RatingsDrawer
-        open={ratingsOpen}
-        view="reviews"
-        onClose={() => setRatingsOpen(false)}
-        memberId={id!}
-        memberName={member.display_name}
-        tenantId={tenant?.id ?? ''}
-        currentUserId={currentUser?.id}
-        isOwnProfile={currentUser?.id === String(member.id)}
-      />
 
     </div>
   );
