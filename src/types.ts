@@ -8,6 +8,7 @@ export interface Env {
   KKAUTH_APP_KEY: string;     // app_key for KKAuth (apps table)
   KKCREDITS_APP_KEY: string;  // X-App-Key for KKCredits API calls
   KKGAME_APP_KEY: string;     // X-App-Key for KKGame API calls
+  CLAIM_TOKEN_SECRET?: string; // shared with kk-business: verifies visit-claim tokens (P-1/J-5)
   INTERNAL_SECRET: string;   // Shared secret for KKAuth internal calls
   HUB_URL?: string;          // Business Hub origin (member business links)
   COOKIE_DOMAIN: string;     // e.g. .lakeandlocals.com — shared across all KrowdKraft apps

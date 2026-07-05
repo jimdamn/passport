@@ -15,6 +15,7 @@ import {
   listPrizes, createPrize, updatePrize, deletePrize,
 } from '../../src/handlers/admin';
 import { lookupClaim, confirmClaim } from '../../src/handlers/redeem';
+import { claimVisit } from '../../src/handlers/claim-visit';
 import { listMyPrizes, createMyPrize, updateMyPrize, deleteMyPrize, listMyClaims, getMyBusiness, updateMyBusiness } from '../../src/handlers/merchant';
 import {
   listDeals, purchaseDeal, listMyDealClaims, regenerateDealClaimCode,
@@ -96,6 +97,7 @@ tenantApp.get('/admin/prizes', listPrizes);
 tenantApp.post('/admin/prizes', createPrize);
 tenantApp.put('/admin/prizes/:id', updatePrize);
 tenantApp.delete('/admin/prizes/:id', deletePrize);
+tenantApp.post('/claim/visit', claimVisit);
 tenantApp.post('/redeem/lookup', lookupClaim);
 tenantApp.post('/redeem/confirm', confirmClaim);
 tenantApp.get('/merchant/business', getMyBusiness);
