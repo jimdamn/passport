@@ -41,7 +41,7 @@ export async function getMember(c: AppContext) {
     } catch {}
   }
 
-  let business_links: { business_name: string; booking_url: string | null; endorse_url: string | null } | null = null;
+  let business_links: { business_name: string; booking_url: string | null; endorse_url: string | null; store_url?: string | null } | null = null;
   if (hubLinksRes?.ok) {
     try {
       const json = await hubLinksRes.json<{ data: typeof business_links }>();

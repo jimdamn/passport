@@ -71,7 +71,7 @@ export default function PublicProfile() {
 
   const { member, badges = [], active_offers = [], business_links = null } = data.data as {
     member: any; badges?: any[]; active_offers?: ActiveOffer[];
-    business_links?: { business_name: string; booking_url: string | null; endorse_url: string | null } | null;
+    business_links?: { business_name: string; booking_url: string | null; endorse_url: string | null; store_url?: string | null } | null;
   };
 
   return (
@@ -120,6 +120,12 @@ export default function PublicProfile() {
               <a href={business_links.booking_url} className="btn btn-amber"
                  style={{ flex: '1 1 200px', textAlign: 'center' }}>
                 Book an appointment
+              </a>
+            )}
+            {business_links.store_url && (
+              <a href={business_links.store_url} className="btn btn-amber"
+                 style={{ flex: '1 1 200px', textAlign: 'center' }}>
+                Shop online
               </a>
             )}
             {business_links.endorse_url && (
