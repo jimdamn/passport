@@ -6,8 +6,9 @@
  *
  * Flow: verify the shared-secret token → first-claimant gate (visit_claims,
  * one claim per ticket EVER across all users) → award via the existing
- * KKGame plumbing (action 'local_purchase', ref pos_ticket). The award size
- * lives in KKGame config, never in the token.
+ * KKGame plumbing (action 'local_purchase', ref pos_ticket). The award is
+ * spend-scaled from the token's server-signed total_cents (one kredit per
+ * dollar, min 1, max 20 per visit); KKGame's daily cap still enforces.
  *
  * Friendly states, never errors-as-walls: claimed / already-yours /
  * already-claimed / expired-or-invalid.
@@ -99,8 +100,17 @@ export async function claimVisit(c: AppContext) {
     });
   }
 
-  // Award through the same plumbing every Passport action uses. Award size
-  // is KKGame config ('local_purchase' action, J-6), never client input.
+  // Award through the same plumbing every Passport action uses. The size is
+  // spend-scaled: one KrowdKredit per dollar, minimum 1, capped at 20 per
+  // visit (Jim's issuance rule, 2026-07-05). total_cents is trusted - it
+  // rides inside the server-signed visit token, never client input. The
+  // multiplier skip makes the award exact; KKGame's daily cap still applies.
+  // Legacy tokens without an amount fall back to KKGame's base award.
+  const dollarCredits =
+    typeof visit.total_cents === 'number' && visit.total_cents > 0
+      ? Math.max(1, Math.min(20, Math.floor(visit.total_cents / 100)))
+      : undefined;
+
   const game = await recordGameAction(c.env, {
     user_id: userId,
     action_id: 'local_purchase',
@@ -109,6 +119,8 @@ export async function claimVisit(c: AppContext) {
     tenant_id: visit.tenant_id,
     ref_type: 'pos_ticket',
     ref_id: visit.ticket_id,
+    credits_override: dollarCredits,
+    skip_credit_multipliers: dollarCredits !== undefined ? true : undefined,
   });
 
   if (!game) {

@@ -25,6 +25,10 @@ export async function recordGameAction(
     tenant_id?: string | null;
     ref_type?: string | null;
     ref_id?: string | null;
+    /** Exact credit amount computed server-side (e.g. spend-scaled visit
+     * claims). Daily caps and cooldowns still enforce in KKGame. */
+    credits_override?: number;
+    skip_credit_multipliers?: boolean;
   }
 ): Promise<GameActionResult | null> {
   try {
