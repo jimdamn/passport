@@ -404,6 +404,13 @@ authRouter.post('/refresh', async (c) => {
   // Forward the refresh cookie to KKAuth so it can rotate the token
   const cookieHeader = c.req.header('Cookie') ?? '';
 
+  // No refresh cookie at all: an anonymous visitor probing for a session.
+  // Answer 200 with data:null instead of 401 so the browser console stays
+  // clean on every anonymous page load (browsers print all 4xx responses).
+  if (!/(?:^|;\s*)kkauth_refresh=/.test(cookieHeader)) {
+    return c.json({ data: null });
+  }
+
   const res = await c.env.KKAUTH.fetch(
     new Request('https://kkauth/otp/refresh', {
       method: 'POST',
@@ -417,6 +424,12 @@ authRouter.post('/refresh', async (c) => {
   );
 
   if (!res.ok) {
+    // Dead or expired session reads as "no session", not an error - same
+    // clean-console reasoning as the missing-cookie case above. Real
+    // failures (KKAuth 5xx) still surface as errors.
+    if (res.status === 401 || res.status === 403) {
+      return c.json({ data: null });
+    }
     const kkBody = await res.json<any>();
     return c.json(kkBody, res.status as any);
   }

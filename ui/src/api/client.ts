@@ -18,6 +18,7 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
       const refreshRes = await fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' });
       if (refreshRes.ok) {
         const { data } = await refreshRes.json();
+        if (!data) throw new Error('no session'); // caught below - logged-out path
         setToken(data.access_token);
         headers['Authorization'] = `Bearer ${data.access_token}`;
         const retry = await fetch(`/api${path}`, { ...init, headers, credentials: 'include' });

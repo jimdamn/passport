@@ -25,8 +25,10 @@ export async function otpVerify(email: string, otp: string, tenant_id: string, d
   return res.data;
 }
 
-export async function refreshToken(): Promise<{ access_token: string; user: Partial<User> }> {
-  const res = await apiFetch<ApiResponse<{ access_token: string; user: Partial<User> }>>('/auth/refresh', { method: 'POST' });
+export async function refreshToken(): Promise<{ access_token: string; user: Partial<User> } | null> {
+  // data is null when there is no session (anonymous visitor or expired
+  // cookie) - the server answers 200 either way to keep the console clean.
+  const res = await apiFetch<ApiResponse<{ access_token: string; user: Partial<User> } | null>>('/auth/refresh', { method: 'POST' });
   return res.data;
 }
 

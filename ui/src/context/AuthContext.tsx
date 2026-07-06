@@ -27,6 +27,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Full Exchange user data (credits_balance, trade_count, etc.) is loaded
         // at the page level once tenant context is available.
         const result = await refreshToken();
+        if (!result) return; // no session - stay logged out
         setToken(result.access_token);
         setTokenState(result.access_token);
         // Cast to User - Exchange-specific fields will be undefined until /me is called
