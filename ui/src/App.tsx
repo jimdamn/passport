@@ -27,6 +27,7 @@ import Deals from './pages/Deals';
 import Happenings from './pages/Happenings';
 import LendAHand from './pages/LendAHand';
 import AdminDeals from './pages/profile/AdminDeals';
+import AdminVolunteer from './pages/profile/AdminVolunteer';
 import AdminHappenings from './pages/profile/AdminHappenings';
 
 export default function App() {
@@ -60,6 +61,7 @@ export default function App() {
         <Route path="/profile/admin/plaques" element={<AdminPlaques />} />
         <Route path="/profile/admin/prizes" element={<AdminPrizes />} />
         <Route path="/profile/admin/deals" element={<AdminDeals />} />
+        <Route path="/profile/admin/volunteer" element={<AdminVolunteer />} />
         <Route path="/profile/admin/happenings" element={<AdminHappenings />} />
         <Route path="/claim/visit" element={<ClaimVisit />} />
         <Route path="/redeem" element={<RedeemClaim />} />

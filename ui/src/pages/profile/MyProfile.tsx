@@ -287,6 +287,9 @@ export default function MyProfile() {
             <Link to="/profile/admin/deals" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
               Deal Review
             </Link>
+            <Link to="/profile/admin/volunteer" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
+              Volunteer Shift Review
+            </Link>
             <Link to="/profile/admin/happenings" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
               Happenings
             </Link>

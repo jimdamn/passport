@@ -75,3 +75,28 @@ export function getMyShifts(): Promise<MyShift[]> {
 export function checkinUrl(confirmToken: string): string {
   return `https://business.lakeandlocals.com/volunteer/checkin/${confirmToken}`;
 }
+
+// ── Steward review (admin only; kk-business enforces is_admin server-side) ──
+
+export interface PendingShift {
+  id: number;
+  business_name: string;
+  title: string;
+  description: string;
+  location: string;
+  event_date: number;
+  duration_hours: number;
+  spots_total: number;
+  credits_reward: number;
+}
+
+export function stewardPendingShifts(): Promise<PendingShift[]> {
+  return req<PendingShift[]>('/steward/volunteer', {}, true);
+}
+
+export function stewardReviewShift(id: number, status: 'active' | 'rejected', note?: string): Promise<{ ok: boolean }> {
+  return req<{ ok: boolean }>(`/steward/volunteer/${id}/review`, {
+    method: 'POST',
+    body: JSON.stringify({ status, note }),
+  }, true);
+}
