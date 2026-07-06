@@ -192,6 +192,18 @@ export default function Help() {
         </div>
       </Section>
 
+      {/* ── Lend a Hand ── */}
+      <Section title="Lend a Hand: Volunteer Shifts">
+        <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.92rem', lineHeight: 1.6, marginBottom: 16 }}>
+          Local businesses sometimes need a few extra hands - event set-up, a work
+          bee, a clean-up morning. Those shifts appear under Lend a Hand (from
+          Around Town), and each carries a flat KrowdKredit thank-you.
+        </p>
+        <Step n={1} label="Claim a spot" detail="Open shifts show the when, the where, and the thank-you. One tap holds your spot; you can give it back any time before the shift." />
+        <Step n={2} label="Show your QR when you arrive" detail="Your spot lives under My shifts with a QR code. The organizer scans it and your KrowdKredits land on the spot." />
+        <Step n={3} label="Busy organizer? You're covered" detail="If a hectic event means nobody scanned you, don't worry - unconfirmed volunteers are resolved automatically within a few days of the event. Showing up is never wasted." />
+      </Section>
+
       {/* ── Deferred claims ── */}
       <Section title="Street Scans & Deferred Claims">
         <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.92rem', lineHeight: 1.6, marginBottom: 16 }}>

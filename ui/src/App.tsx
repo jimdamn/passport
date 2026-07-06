@@ -25,6 +25,7 @@ import EmbedDrawer from './pages/EmbedDrawer';
 import Explore from './pages/Explore';
 import Deals from './pages/Deals';
 import Happenings from './pages/Happenings';
+import LendAHand from './pages/LendAHand';
 import AdminDeals from './pages/profile/AdminDeals';
 import AdminHappenings from './pages/profile/AdminHappenings';
 
@@ -49,6 +50,7 @@ export default function App() {
         <Route path="/explore" element={<Explore />} />
         <Route path="/deals" element={<Deals />} />
         <Route path="/happenings" element={<Happenings />} />
+        <Route path="/lend-a-hand" element={<LendAHand />} />
         <Route path="/my-stamps" element={<MyStamps />} />
         <Route path="/scan" element={<ScanPortal />} />
         <Route path="/profile" element={<MyProfile />} />
