@@ -849,6 +849,17 @@ authRouter.get('/merchant/qr-code', async (c) => {
 
   const { data: business } = await res.json<{ data: { id: number; name: string } }>();
 
+  // KKAuth confirms the business is verified, but the scannable check-in
+  // location (plaque) lives in Passport's D1 and is created at approval. Without
+  // an active plaque row, /scan would 404 - so never hand out a signed QR that
+  // cannot be scanned. The plaque id is the stringified business id.
+  const plaque = await c.env.DB.prepare(
+    'SELECT 1 FROM passport_plaques WHERE id = ? AND is_active = 1'
+  ).bind(String(business.id)).first();
+  if (!plaque) {
+    throw new HTTPException(404, { message: 'No active check-in location exists for this business yet' });
+  }
+
   // Sign the scan payload — QR_SIGNING_SECRET lives in Passport, not KKAuth
   const sig = await hmacHex(c.env.QR_SIGNING_SECRET, `/scan:${business.id}`);
   const domain = c.env.COOKIE_DOMAIN ? c.env.COOKIE_DOMAIN.replace(/^\./, '') : 'lakeandlocals.com';
