@@ -56,3 +56,52 @@ export async function recordGameAction(
     return null;
   }
 }
+
+export interface HuntRollResult {
+  eligible: boolean;
+  won: boolean;
+  amount?: number;   // issued KrowdKredits (post-emission) when won
+  balance?: number;
+  roll_id?: string;
+}
+
+/**
+ * rollHunt — Digital Treasure Hunt appearance roll in KKGame via Service Binding.
+ * Entirely server-authoritative; the reveal arrives through the KKAuth game-toast
+ * channel. Failure is non-fatal; returns null on error.
+ */
+export async function rollHunt(
+  env: Env,
+  params: {
+    user_id: number;
+    tenant_id: string;
+    source_app: string;
+    network_id?: string;
+    page_ref?: string;
+  }
+): Promise<HuntRollResult | null> {
+  try {
+    const res = await env.KKGAME.fetch(
+      new Request('https://kkgame/hunt/roll', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-App-Key': env.KKGAME_APP_KEY,
+        },
+        body: JSON.stringify(params),
+      })
+    );
+
+    if (!res.ok) {
+      const errorMsg = await res.text();
+      console.error(`[Passport Game] KKGame hunt roll failed (${res.status}):`, errorMsg);
+      return null;
+    }
+
+    const payload = await res.json<{ data: HuntRollResult }>();
+    return payload.data;
+  } catch (err) {
+    console.error('[Passport Game] KKGame hunt roll call error:', err);
+    return null;
+  }
+}

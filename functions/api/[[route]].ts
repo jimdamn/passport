@@ -28,6 +28,7 @@ import {
 } from '../../src/handlers/happenings';
 
 import { listExchangeOffers } from '../../src/handlers/exchange';
+import { rollHunt } from '../../src/lib/game';
 
 import { logger } from '../../src/lib/logger';
 
@@ -124,6 +125,24 @@ tenantApp.delete('/merchant/happenings/:id', deleteHappening);
 tenantApp.get('/admin/happenings', adminListHappenings);
 tenantApp.put('/admin/happenings/:id', adminUpdateHappening);
 tenantApp.delete('/admin/happenings/:id', adminDeleteHappening);
+
+// Digital Treasure Hunt — thin proxy to KKGame. Called on route changes for
+// logged-in users; the win reveal arrives via the KKAuth game-toast channel,
+// so a miss (the overwhelmingly common case) needs no client handling.
+tenantApp.post('/hunt/roll', async (c) => {
+  const user = c.get('user');
+  const tenant = c.get('tenant');
+  const body = await c.req.json<{ page_ref?: string }>().catch(() => ({} as { page_ref?: string }));
+
+  const result = await rollHunt(c.env, {
+    user_id: Number(user.sub),
+    tenant_id: tenant.id,
+    source_app: 'passport',
+    page_ref: typeof body.page_ref === 'string' ? body.page_ref.slice(0, 200) : undefined,
+  });
+
+  return c.json({ data: result ?? { eligible: false, won: false } });
+});
 
 // Cron backstop for deal-claim expiry (X-Internal-Secret protected)
 app.post('/api/internal/deals/sweep', internalSweep);

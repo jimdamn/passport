@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useTenant } from '../context/TenantContext';
-import { MapPin, Trees, Trophy, type LucideIcon } from 'lucide-react';
+import { MapPin, Trees, Trophy, Gem, Clock, Sparkles, type LucideIcon } from 'lucide-react';
 
 // ─── Section component ────────────────────────────────────────────────────────────────────────────────
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -190,6 +190,32 @@ export default function Help() {
             </div>
           ))}
         </div>
+      </Section>
+
+      {/* ── Hidden Treasure Chests ── */}
+      <Section title="Hidden Treasure Chests">
+        <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.92rem', lineHeight: 1.6, marginBottom: 16 }}>
+          Every once in a while, just from browsing the Passport while signed in, a
+          treasure chest bursts onto your screen. No scanning, no searching, no
+          special page to visit. It simply finds you while you explore, and it
+          always pays: every chest that appears carries real {creditsName}, deposited
+          into your wallet on the spot.
+        </p>
+        <Tip
+          icon={Gem}
+          title="Every Chest Pays"
+          body={`There are no empty chests. If one appears, you have already won - most hold 5 to 10 ${creditsName}, and lucky finds pay up to 25.`}
+        />
+        <Tip
+          icon={Sparkles}
+          title="Just Keep Exploring"
+          body="Chests appear at random as you move between pages - roughly one in every forty. There is no trick to summon one; browsing deals, happenings, and member pages like you normally would is the whole game."
+        />
+        <Tip
+          icon={Clock}
+          title="A Daily Limit Keeps It Fair"
+          body="You can find up to three chests per day. That keeps the treasure meaningful for everyone and the rewards honest."
+        />
       </Section>
 
       {/* ── Lend a Hand ── */}
