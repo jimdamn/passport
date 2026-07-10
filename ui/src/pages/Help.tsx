@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useTenant } from '../context/TenantContext';
-import { MapPin, Trees, Trophy, Gem, Clock, Sparkles, type LucideIcon } from 'lucide-react';
+import { MapPin, Trees, Trophy, Gem, Sparkles, type LucideIcon } from 'lucide-react';
 
 // ─── Section component ────────────────────────────────────────────────────────────────────────────────
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -209,12 +209,7 @@ export default function Help() {
         <Tip
           icon={Sparkles}
           title="Just Keep Exploring"
-          body="Chests appear at random as you move between pages - roughly one in every forty. There is no trick to summon one; browsing deals, happenings, and member pages like you normally would is the whole game."
-        />
-        <Tip
-          icon={Clock}
-          title="A Daily Limit Keeps It Fair"
-          body="You can find up to three chests per day. That keeps the treasure meaningful for everyone and the rewards honest."
+          body="Chests appear at random as you move between pages. There is no trick to summon one; browsing deals, happenings, and member pages like you normally would is the whole game."
         />
       </Section>
 
