@@ -29,6 +29,10 @@ import {
 
 import { listExchangeOffers } from '../../src/handlers/exchange';
 import { rollHunt } from '../../src/lib/game';
+import {
+  listKwestHunts, getKwestHunt, getKwestRules, startKwest, ackKwest, getKwestState, revealKwest,
+  attachKwestGuest,
+} from '../../src/handlers/kwest';
 
 import { logger } from '../../src/lib/logger';
 
@@ -126,6 +130,9 @@ tenantApp.get('/admin/happenings', adminListHappenings);
 tenantApp.put('/admin/happenings/:id', adminUpdateHappening);
 tenantApp.delete('/admin/happenings/:id', adminDeleteHappening);
 
+// KrowdKwest - guest progress migrates onto the account on sign-in.
+tenantApp.post('/kwest/attach', attachKwestGuest);
+
 // Digital Treasure Hunt — thin proxy to KKGame. Called on route changes for
 // logged-in users; the win reveal arrives via the KKAuth game-toast channel,
 // so a miss (the overwhelmingly common case) needs no client handling.
@@ -156,6 +163,16 @@ app.get('/api/t/:tenant/happenings', resolveTenant, listHappenings);
 app.post('/api/t/:tenant/passport/claims/register', resolveTenant, registerClaim);
 app.get('/api/t/:tenant/network-members', resolveTenant, getNetworkMembers);
 app.get('/api/t/:tenant/members/:id', resolveTenant, getMember);
+// KrowdKwest - real-world GPS clue hunt. Guest-friendly (no account
+// required to play); a finish requires signing in (see attach, above).
+app.get('/api/t/:tenant/kwest', resolveTenant, listKwestHunts);
+app.get('/api/t/:tenant/kwest/:slug', resolveTenant, getKwestHunt);
+app.get('/api/t/:tenant/kwest/:slug/rules', resolveTenant, getKwestRules);
+app.post('/api/t/:tenant/kwest/:slug/start', resolveTenant, startKwest);
+app.post('/api/t/:tenant/kwest/:slug/ack', resolveTenant, ackKwest);
+app.get('/api/t/:tenant/kwest/:slug/state', resolveTenant, getKwestState);
+app.post('/api/t/:tenant/kwest/:slug/reveal', resolveTenant, revealKwest);
+
 app.get('/api/t/:tenant/passport/members', resolveTenant, async (c) => {
   const tenant = c.get('tenant');
   // kkauth_uid is the public user id across all KrowdKraft apps — never expose

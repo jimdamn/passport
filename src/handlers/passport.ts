@@ -5,6 +5,7 @@ import { nanoid } from 'nanoid';
 import { hmacHex, timingSafeEqual } from '../lib/hmac';
 import { recordGameAction } from '../lib/game';
 import { sendClaimEmail } from '../lib/email';
+import { distanceKm } from '../lib/geo';
 
 type AppContext = Context<{ Bindings: Env }>;
 
@@ -14,21 +15,6 @@ async function sha256(message: string): Promise<string> {
   const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
-// Distance helper (Haversine formula) in kilometers
-function getDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371; // Earth's radius in km
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
 }
 
 type DrawnPrize = {
@@ -130,7 +116,7 @@ export async function scanPlaque(c: AppContext) {
 
     // Home-based merchants use an 8 km radius; fixed-location plaques use 500 m.
     const geofenceRadius = plaque.skip_geofence ? 8000 : 500;
-    const distanceMeters = getDistance(lat, lon, plaque.lat, plaque.lon) * 1000;
+    const distanceMeters = distanceKm(lat, lon, plaque.lat, plaque.lon) * 1000;
     if (distanceMeters > geofenceRadius) {
       locationVerified = false;
     }
@@ -142,7 +128,7 @@ export async function scanPlaque(c: AppContext) {
     const cfLat = parseFloat(String(c.req.raw.cf?.latitude ?? ''));
     const cfLon = parseFloat(String(c.req.raw.cf?.longitude ?? ''));
     if (!isNaN(cfLat) && !isNaN(cfLon)) {
-      const edgeDistKm = getDistance(cfLat, cfLon, plaque.lat, plaque.lon);
+      const edgeDistKm = distanceKm(cfLat, cfLon, plaque.lat, plaque.lon);
       if (edgeDistKm > 300) {
         locationVerified = false;
       }
