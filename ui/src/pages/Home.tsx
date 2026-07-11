@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTenant } from '../context/TenantContext';
 import { getDeals, claimWindowLabel, type Deal } from '../api/deals';
-import { Map, Tag, Award, Flame, Store, CalendarDays } from 'lucide-react';
+import { Map, Tag, Award, Flame, Store, CalendarDays, Compass } from 'lucide-react';
 
 export default function Home() {
   const { user } = useAuth();
@@ -48,6 +48,12 @@ export default function Home() {
       title: 'Happenings',
       blurb: 'Today’s events, markets, and live updates - posted by local businesses.',
       to: '/happenings',
+    },
+    {
+      icon: <Compass size={28} style={{ color: 'var(--amber)' }} />,
+      title: 'KrowdKwest',
+      blurb: 'Real-world clue hunts - solve, travel, and confirm you made it.',
+      to: '/kwest',
     },
     {
       icon: <Award size={28} style={{ color: 'var(--amber)' }} />,

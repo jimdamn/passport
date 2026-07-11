@@ -36,8 +36,8 @@ function assert(cond, message) {
   }
 }
 
-function token(uid, email, isAdmin = false) {
-  return `test:${uid}:${email}:${isAdmin ? 1 : 0}`;
+function token(uid, email, isAdmin = false, persona = 'a') {
+  return `test:${uid}:${email}:${isAdmin ? 1 : 0}:${persona}`;
 }
 
 async function api(method, path, { body, bearer } = {}) {
@@ -120,14 +120,14 @@ VALUES (
 
 function seedAll() {
   const cleanup = `
-DELETE FROM kwest_reveals WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget'));
-DELETE FROM kwest_finishes WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget'));
-DELETE FROM kwest_claims WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget'));
-DELETE FROM kwest_acknowledgements WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget'));
-DELETE FROM kwest_progress WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget'));
-DELETE FROM kwest_minigame_plays WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget'));
-DELETE FROM kwest_steps WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget'));
-DELETE FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget');
+DELETE FROM kwest_reveals WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget','gauntlet-persona'));
+DELETE FROM kwest_finishes WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget','gauntlet-persona'));
+DELETE FROM kwest_claims WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget','gauntlet-persona'));
+DELETE FROM kwest_acknowledgements WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget','gauntlet-persona'));
+DELETE FROM kwest_progress WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget','gauntlet-persona'));
+DELETE FROM kwest_minigame_plays WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget','gauntlet-persona'));
+DELETE FROM kwest_steps WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget','gauntlet-persona'));
+DELETE FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget','gauntlet-persona');
 `;
   const core = [
     huntInsert('gauntlet-core', 'Gauntlet Core', 100000),
@@ -146,7 +146,11 @@ DELETE FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core'
     stepInsert('gauntlet-budget', 1, 41.9000, -85.0000, 0),
     stepInsert('gauntlet-budget', 2, 41.9100, -85.0100, 1),
   ].join('\n');
-  sql(cleanup + core + race + budget);
+  const persona = [
+    huntInsert('gauntlet-persona', 'Gauntlet Persona', 100000),
+    stepInsert('gauntlet-persona', 1, 41.9000, -85.0000, 1),
+  ].join('\n');
+  sql(cleanup + core + race + budget + persona);
 }
 
 // ------------------------------------------------------------------
@@ -336,6 +340,59 @@ function testOracleTripwire() {
   }
 }
 
+async function testPersonaDisplayChoiceAndRetro() {
+  console.log('\n-- persona-aware finish default, display-choice, retro --');
+
+  // Anonymous-persona finisher (persona flag 'a', the default).
+  const anonUid = 6001;
+  const anonBearer = token(anonUid, 'anon@test.com');
+  await startAckReveal('gauntlet-persona', anonBearer);
+  const anonFinish = await reveal('gauntlet-persona', anonBearer, undefined, { lat: 41.9000, lng: -85.0000 });
+  assert(anonFinish.json.data.finished === true, 'anon-persona player finishes on the single-step hunt');
+  assert(anonFinish.json.data.display_prompt.default_choice === 'anonymous', 'no real persona set -> default choice is anonymous');
+  assert(anonFinish.json.data.display_prompt.anonymous_name === `Anon ${anonUid}`, 'anonymous_name comes from the stubbed profile');
+
+  const anonSnapshot = sqlQuery(
+    `SELECT display_choice, display_name_snapshot FROM kwest_finishes WHERE hunt_id = (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug='gauntlet-persona') AND user_id='${anonUid}'`
+  )[0];
+  assert(anonSnapshot.display_choice === 'anonymous' && anonSnapshot.display_name_snapshot === `Anon ${anonUid}`, 'anon finisher snapshot matches the anonymous name');
+
+  // Real-persona finisher (persona flag 'p').
+  const realUid = 6002;
+  const realBearer = token(realUid, 'real@test.com', false, 'p');
+  await startAckReveal('gauntlet-persona', realBearer);
+  const realFinish = await reveal('gauntlet-persona', realBearer, undefined, { lat: 41.9000, lng: -85.0000 });
+  assert(realFinish.json.data.display_prompt.default_choice === 'real', 'a filled-in personal persona -> default choice is real');
+  assert(realFinish.json.data.display_prompt.real_name === `Real Name ${realUid}`, 'real_name comes from the stubbed profile');
+
+  const realSnapshot = sqlQuery(
+    `SELECT display_name_snapshot FROM kwest_finishes WHERE hunt_id = (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug='gauntlet-persona') AND user_id='${realUid}'`
+  )[0];
+  assert(realSnapshot.display_name_snapshot === `Real Name ${realUid}`, 'real finisher snapshot uses the real name');
+
+  // Editing the choice re-snapshots the name, until display_locked flips.
+  const switchToAnon = await api('POST', `/api/t/${TENANT}/kwest/gauntlet-persona/display-choice`, {
+    body: { choice: 'anonymous' }, bearer: realBearer,
+  });
+  assert(switchToAnon.json.data.updated === true && switchToAnon.json.data.display_name === `Anon ${realUid}`, 'switching to anonymous re-snapshots the name');
+
+  sql(`UPDATE kwest_finishes SET display_locked = 1 WHERE hunt_id = (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug='gauntlet-persona') AND user_id = '${realUid}';`);
+  const blockedSwitch = await api('POST', `/api/t/${TENANT}/kwest/gauntlet-persona/display-choice`, {
+    body: { choice: 'real' }, bearer: realBearer,
+  });
+  assert(blockedSwitch.json.data.updated === false && blockedSwitch.json.data.reason === 'locked', 'display choice is frozen once display_locked=1');
+
+  // Retro: unpublished by default, then populated once flipped.
+  const beforePublish = await api('GET', `/api/t/${TENANT}/kwest/gauntlet-persona/retro`);
+  assert(beforePublish.json.data.published === false, 'retro is unpublished before the lifecycle sweep (increment 5) or admin flip (increment 4)');
+
+  sql(`UPDATE kwest_hunts SET retro_published = 1 WHERE tenant_id='${TENANT}' AND slug='gauntlet-persona';`);
+  const afterPublish = await api('GET', `/api/t/${TENANT}/kwest/gauntlet-persona/retro`);
+  assert(afterPublish.json.data.published === true, 'retro reports published once the flag is set');
+  const names = afterPublish.json.data.winners.map((w) => w.display_name);
+  assert(names.includes(`Anon ${anonUid}`) && names.includes(`Anon ${realUid}`), `retro winners list includes both finishers by their frozen snapshots (got ${JSON.stringify(names)})`);
+}
+
 async function main() {
   console.log('Seeding gauntlet test hunts...');
   seedAll();
@@ -348,6 +405,7 @@ async function main() {
   await testConcurrentFinishRace();
   await testBudgetCapExhaustion();
   await testSimCoordRejection();
+  await testPersonaDisplayChoiceAndRetro();
   testOracleTripwire();
 
   console.log(`\n${failures === 0 ? 'GAUNTLET GREEN' : `GAUNTLET RED - ${failures} failure(s)`}`);

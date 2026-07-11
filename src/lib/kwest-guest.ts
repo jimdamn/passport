@@ -12,7 +12,7 @@
 
 import type { Context } from 'hono';
 import { nanoid } from 'nanoid';
-import type { Env, KKAuthPayload } from '../types';
+import type { Env, KKAuthPayload, KKAuthProfile } from '../types';
 
 type AppContext = Context<{ Bindings: Env }>;
 
@@ -30,6 +30,8 @@ export interface ResolvedPlayer {
   userId: string | null;       // KKAuth uid as string, or null for guests
   isAdmin: boolean;
   guestId: string | null;
+  hasRealPersona: boolean;     // active_persona 'personal' with a filled-in personal_persona - the finish display-choice default
+  personaNames: { real: string; anonymous: string } | null; // null for guests (they can't finish)
 }
 
 function b64urlEncode(bytes: Uint8Array): string {
@@ -122,34 +124,64 @@ export async function resolveGuestId(env: Env, tenantId: string, guestToken: str
   return payload.gid;
 }
 
+export interface PersonaInfo {
+  userId: string;
+  isAdmin: boolean;
+  hasRealPersona: boolean;
+  personaNames: { real: string; anonymous: string };
+}
+
+/**
+ * Verify a raw Bearer token against KKAuth and compute the persona/admin
+ * info KrowdKwest needs. Shared by tryVerifyBearer (guest-friendly routes)
+ * and the authenticated display-choice handler (which needs
+ * anonymous_display_name - a field requireAuth's own context doesn't carry).
+ */
+export async function fetchPersonaInfo(env: Env, token: string): Promise<PersonaInfo | null> {
+  try {
+    const res = await env.KKAUTH.fetch(
+      new Request('https://kkauth/internal/verify-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Internal-Secret': env.INTERNAL_SECRET },
+        body: JSON.stringify({ token }),
+      })
+    );
+    if (!res.ok) return null;
+    const json = await res.json<{ data: { payload: KKAuthPayload; profile: KKAuthProfile } }>();
+    const uid = String(Number(json.data.payload.sub));
+    const adminEmails = env.ADMIN_EMAILS ?? 'gottabuylocal@gmail.com';
+    const isAdmin = adminEmails.split(',').map(e => e.trim().toLowerCase()).includes(json.data.payload.email.toLowerCase());
+
+    // "Has a real persona been set?" (dev plan Section 6): active_persona is
+    // 'personal' AND the personal_persona row actually has something filled in -
+    // not just the row existing with every field null.
+    const pp = json.data.profile?.personal_persona;
+    const hasRealPersona =
+      json.data.profile?.active_persona === 'personal' &&
+      !!pp && !!(pp.facebook_url || pp.x_handle || pp.linkedin_url || pp.website_url);
+
+    const personaNames = {
+      real: json.data.payload.name || json.data.payload.email.split('@')[0],
+      anonymous: json.data.profile?.anonymous_display_name ?? 'A L&L Member',
+    };
+
+    return { userId: uid, isAdmin, hasRealPersona, personaNames };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Best-effort Bearer verification for guest-friendly public routes (which
  * do not run the requireAuth middleware, since anonymous callers must be
  * allowed through). An invalid/expired/absent token is NOT an error here -
  * it just means "anonymous caller", so guest resolution proceeds.
  */
-async function tryVerifyBearer(c: AppContext): Promise<{ userId: string; isAdmin: boolean } | null> {
+async function tryVerifyBearer(c: AppContext): Promise<PersonaInfo | null> {
   const authHeader = c.req.header('Authorization');
   const token = authHeader?.replace('Bearer ', '').trim();
   if (!token) return null;
-
-  try {
-    const res = await c.env.KKAUTH.fetch(
-      new Request('https://kkauth/internal/verify-token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Internal-Secret': c.env.INTERNAL_SECRET },
-        body: JSON.stringify({ token }),
-      })
-    );
-    if (!res.ok) return null;
-    const json = await res.json<{ data: { payload: KKAuthPayload } }>();
-    const uid = String(Number(json.data.payload.sub));
-    const adminEmails = c.env.ADMIN_EMAILS ?? 'gottabuylocal@gmail.com';
-    const isAdmin = adminEmails.split(',').map(e => e.trim().toLowerCase()).includes(json.data.payload.email.toLowerCase());
-    return { userId: uid, isAdmin };
-  } catch {
-    return null;
-  }
+  return fetchPersonaInfo(c.env, token);
 }
 
 /**
@@ -163,13 +195,16 @@ export async function resolvePlayerKey(c: AppContext, guestToken?: string | null
 
   const user = await tryVerifyBearer(c);
   if (user) {
-    return { playerKey: `u:${user.userId}`, userId: user.userId, isAdmin: user.isAdmin, guestId: null };
+    return {
+      playerKey: `u:${user.userId}`, userId: user.userId, isAdmin: user.isAdmin,
+      guestId: null, hasRealPersona: user.hasRealPersona, personaNames: user.personaNames,
+    };
   }
 
   if (guestToken) {
     const gid = await resolveGuestId(c.env, tenant.id, guestToken);
     if (gid) {
-      return { playerKey: `g:${gid}`, userId: null, isAdmin: false, guestId: gid };
+      return { playerKey: `g:${gid}`, userId: null, isAdmin: false, guestId: gid, hasRealPersona: false, personaNames: null };
     }
   }
 

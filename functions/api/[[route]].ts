@@ -31,7 +31,7 @@ import { listExchangeOffers } from '../../src/handlers/exchange';
 import { rollHunt } from '../../src/lib/game';
 import {
   listKwestHunts, getKwestHunt, getKwestRules, startKwest, ackKwest, getKwestState, revealKwest,
-  attachKwestGuest,
+  getKwestRetro, attachKwestGuest, setKwestDisplayChoice, getMyKwestProgress,
 } from '../../src/handlers/kwest';
 
 import { logger } from '../../src/lib/logger';
@@ -132,6 +132,12 @@ tenantApp.delete('/admin/happenings/:id', adminDeleteHappening);
 
 // KrowdKwest - guest progress migrates onto the account on sign-in.
 tenantApp.post('/kwest/attach', attachKwestGuest);
+tenantApp.post('/kwest/:slug/display-choice', setKwestDisplayChoice);
+// NOTE: GET /kwest/mine is registered on the root app, BEFORE the
+// guest-friendly GET /kwest/:slug pattern below - Hono resolves overlapping
+// patterns by registration order (first match wins), not static-over-dynamic
+// priority, so mounting it here (after tenantApp's routes are flattened in)
+// would lose to :slug and 404 as "Hunt not found". See getMyKwestProgress.
 
 // Digital Treasure Hunt — thin proxy to KKGame. Called on route changes for
 // logged-in users; the win reveal arrives via the KKAuth game-toast channel,
@@ -166,12 +172,18 @@ app.get('/api/t/:tenant/members/:id', resolveTenant, getMember);
 // KrowdKwest - real-world GPS clue hunt. Guest-friendly (no account
 // required to play); a finish requires signing in (see attach, above).
 app.get('/api/t/:tenant/kwest', resolveTenant, listKwestHunts);
+// Registered BEFORE the guest-friendly GET /kwest/:slug pattern below -
+// Hono resolves overlapping patterns by registration order, not
+// static-over-dynamic priority, so "mine" would otherwise be swallowed as a
+// slug and 404. requireAuth chained inline since this route isn't on tenantApp.
+app.get('/api/t/:tenant/kwest/mine', resolveTenant, requireAuth, getMyKwestProgress);
 app.get('/api/t/:tenant/kwest/:slug', resolveTenant, getKwestHunt);
 app.get('/api/t/:tenant/kwest/:slug/rules', resolveTenant, getKwestRules);
 app.post('/api/t/:tenant/kwest/:slug/start', resolveTenant, startKwest);
 app.post('/api/t/:tenant/kwest/:slug/ack', resolveTenant, ackKwest);
 app.get('/api/t/:tenant/kwest/:slug/state', resolveTenant, getKwestState);
 app.post('/api/t/:tenant/kwest/:slug/reveal', resolveTenant, revealKwest);
+app.get('/api/t/:tenant/kwest/:slug/retro', resolveTenant, getKwestRetro);
 
 app.get('/api/t/:tenant/passport/members', resolveTenant, async (c) => {
   const tenant = c.get('tenant');

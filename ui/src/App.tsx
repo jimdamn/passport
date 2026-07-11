@@ -29,6 +29,10 @@ import LendAHand from './pages/LendAHand';
 import AdminDeals from './pages/profile/AdminDeals';
 import AdminVolunteer from './pages/profile/AdminVolunteer';
 import AdminHappenings from './pages/profile/AdminHappenings';
+import KwestHome from './pages/kwest/KwestHome';
+import KwestHelp from './pages/kwest/KwestHelp';
+import KwestHunt from './pages/kwest/KwestHunt';
+import KwestRetro from './pages/kwest/KwestRetro';
 
 export default function App() {
   const { isLoading } = useAuth();
@@ -52,6 +56,10 @@ export default function App() {
         <Route path="/deals" element={<Deals />} />
         <Route path="/happenings" element={<Happenings />} />
         <Route path="/lend-a-hand" element={<LendAHand />} />
+        <Route path="/kwest" element={<KwestHome />} />
+        <Route path="/kwest/help" element={<KwestHelp />} />
+        <Route path="/kwest/:slug/retro" element={<KwestRetro />} />
+        <Route path="/kwest/:slug" element={<KwestHunt />} />
         <Route path="/my-stamps" element={<MyStamps />} />
         <Route path="/scan" element={<ScanPortal />} />
         <Route path="/profile" element={<MyProfile />} />

@@ -55,6 +55,7 @@ export interface KKAuthProfile {
     linkedin_url: string | null;
     website_url: string | null;
   } | null;
+  anonymous_display_name?: string; // KKAuth's anonymous_persona.display_name, default 'A L&L Member'
 }
 
 export interface Tenant {

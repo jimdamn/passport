@@ -1,8 +1,9 @@
 /**
- * KrowdKwest - player-facing handlers. Increment 1 scope: list/detail/rules,
- * start/ack/state, reveal (the heart), and authenticated attach. Admin CRUD,
- * mini-game play, retrospective, and lifecycle cron endpoints land in later
- * increments per KROWDKWEST-DEVELOPMENT-PLAN.md Section 11.
+ * KrowdKwest - player-facing handlers. Increment 1: list/detail/rules,
+ * start/ack/state, reveal (the heart), and authenticated attach. Increment 2
+ * adds display-choice, mine, and retro to support the play UI. Admin CRUD,
+ * mini-game play, and lifecycle cron endpoints land in later increments per
+ * KROWDKWEST-DEVELOPMENT-PLAN.md Section 11.
  *
  * Progression secrecy: every player-facing SELECT on kwest_steps uses an
  * explicit column list. target_lat/target_lng/radius_m are read ONLY inside
@@ -15,7 +16,7 @@ import { HTTPException } from 'hono/http-exception';
 import { nanoid } from 'nanoid';
 import type { Env } from '../types';
 import { distanceMeters } from '../lib/geo';
-import { resolvePlayerKey, mintGuestKey, resolveGuestId } from '../lib/kwest-guest';
+import { resolvePlayerKey, mintGuestKey, resolveGuestId, fetchPersonaInfo } from '../lib/kwest-guest';
 import { awardWithBudget, stepRewardAmount } from '../lib/kwest-economy';
 import { notifyKwestFinish } from '../lib/kwest-notify';
 import { KWEST_SHORT_DISCLAIMER, KWEST_OFFICIAL_RULES } from '../lib/kwest-rules';
@@ -187,6 +188,51 @@ export async function getKwestRules(c: AppContext) {
       rules_version: hunt.rules_version,
       short_disclaimer: KWEST_SHORT_DISCLAIMER,
       official_rules: KWEST_OFFICIAL_RULES,
+    },
+  });
+}
+
+/**
+ * GET /api/t/:tenant/kwest/:slug/retro - winners list, only when
+ * retro_published=1 (flipped by the increment-5 lifecycle sweep, or by an
+ * admin in increment 4). No coordinates, no clue answers - a hunt's
+ * locations stay unpublished so clues can be reused.
+ */
+export async function getKwestRetro(c: AppContext) {
+  const tenant = c.get('tenant');
+  const slug = c.req.param('slug');
+  const hunt = await getHuntRow(c.env, tenant.id, slug);
+  if (!hunt) throw new HTTPException(404, { message: 'Hunt not found.' });
+
+  if (!hunt.retro_published) {
+    return c.json({ data: { published: false } });
+  }
+
+  // Only the 20 prize tiers get named in the retro - beyond that, finishers
+  // are counted into the thank-you, not individually listed by rank.
+  const { results } = await c.env.DB.prepare(`
+    SELECT finish_rank, prize_kind, display_choice, display_name_snapshot
+    FROM kwest_finishes
+    WHERE hunt_id = ? AND is_test = 0 AND finish_rank <= 20
+    ORDER BY finish_rank
+  `).bind(hunt.id).all<{
+    finish_rank: number; prize_kind: string; display_choice: string; display_name_snapshot: string;
+  }>();
+
+  const totalFinishers = await countRealFinishes(c.env, hunt.id);
+
+  return c.json({
+    data: {
+      published: true,
+      hunt_name: hunt.name,
+      narrative: hunt.narrative,
+      grand_prize_description: hunt.grand_prize_description,
+      total_finishers: totalFinishers,
+      winners: (results ?? []).map(r => ({
+        rank: r.finish_rank,
+        prize_kind: r.prize_kind,
+        display_name: r.display_name_snapshot,
+      })),
     },
   });
 }
@@ -481,8 +527,12 @@ export async function revealKwest(c: AppContext) {
 
   const isTestFinish = isTestPlayer ? 1 : 0;
   let finishRank: number | null = null;
-  const defaultDisplayChoice = 'anonymous'; // real-persona default check lands in increment 2 (DisplayChoiceDrawer)
-  const nameSnapshot = `Member ${userId}`;
+  // Real persona if one is set (dev plan Section 6); anonymous default
+  // otherwise. Editable via /display-choice until official end.
+  const defaultDisplayChoice: 'anonymous' | 'real' = resolved.hasRealPersona ? 'real' : 'anonymous';
+  const nameSnapshot = defaultDisplayChoice === 'real'
+    ? (resolved.personaNames?.real ?? `Member ${userId}`)
+    : (resolved.personaNames?.anonymous ?? 'A L&L Member');
 
   for (let attempt = 0; attempt < 2 && finishRank === null; attempt++) {
     try {
@@ -567,7 +617,13 @@ export async function revealKwest(c: AppContext) {
       finished: true,
       rank,
       prize_kind: prizeKind,
-      display_prompt: { default_choice: defaultDisplayChoice },
+      prize_kredits: prizeKredits,
+      grand_prize_description: prizeKind === 'grand' ? hunt.grand_prize_description : null,
+      display_prompt: {
+        default_choice: defaultDisplayChoice,
+        real_name: resolved.personaNames?.real ?? null,
+        anonymous_name: resolved.personaNames?.anonymous ?? 'A L&L Member',
+      },
     },
   });
 }
@@ -640,4 +696,63 @@ export async function attachKwestGuest(c: AppContext) {
   ).bind(userId, gid).run();
 
   return c.json({ data: { attached: true } });
+}
+
+/**
+ * POST /api/t/:tenant/kwest/:slug/display-choice {choice:'anonymous'|'real'}
+ * Allowed only while display_locked=0; re-snapshots display_name_snapshot.
+ */
+export async function setKwestDisplayChoice(c: AppContext) {
+  const user = c.get('user');
+  const tenant = c.get('tenant');
+  const userId = user.sub;
+  const slug = c.req.param('slug');
+  const body = await c.req.json<{ choice?: string }>().catch(() => ({} as { choice?: string }));
+
+  if (body.choice !== 'anonymous' && body.choice !== 'real') {
+    throw new HTTPException(400, { message: "choice must be 'anonymous' or 'real'." });
+  }
+
+  const hunt = await getHuntRow(c.env, tenant.id, slug);
+  if (!hunt) throw new HTTPException(404, { message: 'Hunt not found.' });
+
+  const finish = await c.env.DB.prepare(
+    'SELECT display_locked FROM kwest_finishes WHERE hunt_id = ? AND user_id = ?'
+  ).bind(hunt.id, userId).first<{ display_locked: number }>();
+  if (!finish) throw new HTTPException(404, { message: "You haven't finished this hunt." });
+  if (finish.display_locked) {
+    return c.json({ data: { updated: false, reason: 'locked' } });
+  }
+
+  const authHeader = c.req.header('Authorization');
+  const token = authHeader?.replace('Bearer ', '').trim();
+  const persona = token ? await fetchPersonaInfo(c.env, token) : null;
+  const nameSnapshot = body.choice === 'real'
+    ? (persona?.personaNames.real ?? user.name ?? `Member ${userId}`)
+    : (persona?.personaNames.anonymous ?? 'A L&L Member');
+
+  await c.env.DB.prepare(
+    'UPDATE kwest_finishes SET display_choice = ?, display_name_snapshot = ? WHERE hunt_id = ? AND user_id = ?'
+  ).bind(body.choice, nameSnapshot, hunt.id, userId).run();
+
+  return c.json({ data: { updated: true, choice: body.choice, display_name: nameSnapshot } });
+}
+
+/** GET /api/t/:tenant/kwest/mine - the signed-in player's progress across hunts, for /kwest home. */
+export async function getMyKwestProgress(c: AppContext) {
+  const user = c.get('user');
+  const tenant = c.get('tenant');
+  const userId = user.sub;
+
+  const { results } = await c.env.DB.prepare(`
+    SELECT h.slug, h.name, h.status, p.current_seq, p.finished_at,
+           f.finish_rank, f.prize_kind
+    FROM kwest_progress p
+    JOIN kwest_hunts h ON h.id = p.hunt_id
+    LEFT JOIN kwest_finishes f ON f.hunt_id = p.hunt_id AND f.user_id = p.user_id AND f.is_test = 0
+    WHERE p.tenant_id = ? AND p.player_key = ? AND p.is_test = 0
+    ORDER BY p.updated_at DESC
+  `).bind(tenant.id, `u:${userId}`).all<any>();
+
+  return c.json({ data: results ?? [] });
 }
