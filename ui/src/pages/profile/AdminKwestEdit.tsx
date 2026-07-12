@@ -48,7 +48,7 @@ export default function AdminKwestEdit() {
   const [steps, setSteps] = useState<AdminKwestStep[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
+  const [notice, setNotice] = useState<React.ReactNode>('');
   const [working, setWorking] = useState(false);
 
   const [huntForm, setHuntForm] = useState<Record<string, string>>({});
@@ -220,7 +220,12 @@ export default function AdminKwestEdit() {
     setWorking(true); setError(''); setNotice('');
     try {
       await createAdminKwestTestRun(tenant.id, huntId);
-      setNotice('Test run ready - play it for real at the link below (your finish will be flagged is_test and never affects real ranks or awards).');
+      setNotice(
+        <>
+          Test run ready - <Link to={`/kwest/${hunt?.slug}`} style={{ fontWeight: 600, color: 'var(--green)' }}>play it now</Link>{' '}
+          (your finish will be flagged is_test and never affects real ranks or awards).
+        </>
+      );
     } catch (err: any) {
       setError(err.message || 'Failed to start the test run.');
     } finally {
@@ -284,9 +289,10 @@ export default function AdminKwestEdit() {
             <button className="btn btn-secondary btn-sm" style={{ minHeight: 34 }} disabled={working} onClick={() => handleStatusChange('archived')}>Archive</button>
           )}
           <button className="btn btn-secondary btn-sm" style={{ minHeight: 34 }} disabled={working} onClick={handleStartTestRun}>Start Test Run</button>
-          {hunt.status !== 'draft' && (
-            <Link to={`/kwest/${hunt.slug}`} className="btn btn-secondary btn-sm" style={{ minHeight: 34, display: 'inline-flex', alignItems: 'center' }}>Play it</Link>
-          )}
+          {/* Test runs work on a hunt in ANY status, draft included (that's the
+              whole point - rehearse before going live), so this link is never
+              gated on hunt.status. */}
+          <Link to={`/kwest/${hunt.slug}`} className="btn btn-secondary btn-sm" style={{ minHeight: 34, display: 'inline-flex', alignItems: 'center' }}>Play it</Link>
         </div>
       </div>
 
