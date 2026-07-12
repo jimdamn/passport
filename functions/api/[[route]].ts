@@ -33,6 +33,12 @@ import {
   listKwestHunts, getKwestHunt, getKwestRules, startKwest, ackKwest, getKwestState, revealKwest,
   getKwestRetro, attachKwestGuest, setKwestDisplayChoice, getMyKwestProgress, playKwestMinigame,
 } from '../../src/handlers/kwest';
+import {
+  adminListHunts, adminCreateHunt, adminGetHunt, adminUpdateHunt, adminDeleteHunt,
+  adminListSteps, adminCreateStep, adminUpdateStep, adminDeleteStep, adminReorderSteps, adminRecordFieldTest,
+  adminSetHuntStatus, adminCreateTestRun, adminGetDashboard, adminPlayerLookup, adminHealthCheck,
+  adminListClaims, adminUpdateClaim, adminSetRetroPublished, adminSetWeatherPause,
+} from '../../src/handlers/kwest-admin';
 
 import { logger } from '../../src/lib/logger';
 
@@ -138,6 +144,28 @@ tenantApp.post('/kwest/:slug/display-choice', setKwestDisplayChoice);
 // patterns by registration order (first match wins), not static-over-dynamic
 // priority, so mounting it here (after tenantApp's routes are flattened in)
 // would lose to :slug and 404 as "Hunt not found". See getMyKwestProgress.
+
+// KrowdKwest admin (increment 4)
+tenantApp.get('/admin/kwest', adminListHunts);
+tenantApp.post('/admin/kwest', adminCreateHunt);
+tenantApp.get('/admin/kwest/:id', adminGetHunt);
+tenantApp.put('/admin/kwest/:id', adminUpdateHunt);
+tenantApp.delete('/admin/kwest/:id', adminDeleteHunt);
+tenantApp.post('/admin/kwest/:id/status', adminSetHuntStatus);
+tenantApp.get('/admin/kwest/:id/steps', adminListSteps);
+tenantApp.post('/admin/kwest/:id/steps', adminCreateStep);
+tenantApp.put('/admin/kwest/steps/:stepId', adminUpdateStep);
+tenantApp.delete('/admin/kwest/steps/:stepId', adminDeleteStep);
+tenantApp.post('/admin/kwest/:id/steps/reorder', adminReorderSteps);
+tenantApp.post('/admin/kwest/steps/:stepId/field-test', adminRecordFieldTest);
+tenantApp.post('/admin/kwest/:id/test-run', adminCreateTestRun);
+tenantApp.post('/admin/kwest/:id/health-check', adminHealthCheck);
+tenantApp.get('/admin/kwest/:id/dashboard', adminGetDashboard);
+tenantApp.get('/admin/kwest/:id/players', adminPlayerLookup);
+tenantApp.get('/admin/kwest/:id/claims', adminListClaims);
+tenantApp.post('/admin/kwest/claims/:claimId', adminUpdateClaim);
+tenantApp.post('/admin/kwest/:id/retro', adminSetRetroPublished);
+tenantApp.post('/admin/kwest/:id/weather-pause', adminSetWeatherPause);
 
 // Digital Treasure Hunt — thin proxy to KKGame. Called on route changes for
 // logged-in users; the win reveal arrives via the KKAuth game-toast channel,

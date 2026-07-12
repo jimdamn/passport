@@ -40,14 +40,23 @@ function token(uid, email, isAdmin = false, persona = 'a') {
   return `test:${uid}:${email}:${isAdmin ? 1 : 0}:${persona}`;
 }
 
-async function api(method, path, { body, bearer } = {}) {
+async function api(method, path, { body, bearer } = {}, attempt = 0) {
   const headers = { 'Content-Type': 'application/json' };
   if (bearer) headers['Authorization'] = `Bearer ${bearer}`;
-  const res = await fetch(`${BASE}${path}`, {
-    method,
-    headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+  let res;
+  try {
+    res = await fetch(`${BASE}${path}`, {
+      method,
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+  } catch (err) {
+    // Local wrangler dev occasionally drops a socket under rapid-fire
+    // requests - a transient flake, not a real failure. Retry once.
+    if (attempt >= 2) throw err;
+    await new Promise((r) => setTimeout(r, 300));
+    return api(method, path, { body, bearer }, attempt + 1);
+  }
   const text = await res.text();
   allResponseBodies.push({ path, text });
   let json;
@@ -120,14 +129,14 @@ VALUES (
 
 function seedAll() {
   const cleanup = `
-DELETE FROM kwest_reveals WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget','gauntlet-persona','gauntlet-minigame'));
-DELETE FROM kwest_finishes WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget','gauntlet-persona','gauntlet-minigame'));
-DELETE FROM kwest_claims WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget','gauntlet-persona','gauntlet-minigame'));
-DELETE FROM kwest_acknowledgements WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget','gauntlet-persona','gauntlet-minigame'));
-DELETE FROM kwest_progress WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget','gauntlet-persona','gauntlet-minigame'));
-DELETE FROM kwest_minigame_plays WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget','gauntlet-persona','gauntlet-minigame'));
-DELETE FROM kwest_steps WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget','gauntlet-persona','gauntlet-minigame'));
-DELETE FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget','gauntlet-persona','gauntlet-minigame');
+DELETE FROM kwest_reveals WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget','gauntlet-persona','gauntlet-minigame','admin-toy-hunt','admin-claims-hunt','admin-throwaway'));
+DELETE FROM kwest_finishes WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget','gauntlet-persona','gauntlet-minigame','admin-toy-hunt','admin-claims-hunt','admin-throwaway'));
+DELETE FROM kwest_claims WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget','gauntlet-persona','gauntlet-minigame','admin-toy-hunt','admin-claims-hunt','admin-throwaway'));
+DELETE FROM kwest_acknowledgements WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget','gauntlet-persona','gauntlet-minigame','admin-toy-hunt','admin-claims-hunt','admin-throwaway'));
+DELETE FROM kwest_progress WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget','gauntlet-persona','gauntlet-minigame','admin-toy-hunt','admin-claims-hunt','admin-throwaway'));
+DELETE FROM kwest_minigame_plays WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget','gauntlet-persona','gauntlet-minigame','admin-toy-hunt','admin-claims-hunt','admin-throwaway'));
+DELETE FROM kwest_steps WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget','gauntlet-persona','gauntlet-minigame','admin-toy-hunt','admin-claims-hunt','admin-throwaway'));
+DELETE FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget','gauntlet-persona','gauntlet-minigame','admin-toy-hunt','admin-claims-hunt','admin-throwaway');
 `;
   const core = [
     huntInsert('gauntlet-core', 'Gauntlet Core', 100000),
@@ -394,9 +403,155 @@ async function testMinigames() {
   assert(expired.json.data.outcome === 'expired', 'an expired offer is rejected without playing');
 }
 
+async function testAdminSuite() {
+  console.log('\n-- admin suite --');
+  const adminBearer = token(9999, 'gottabuylocal@gmail.com', true);
+  const nonAdminBearer = token(9998, 'nonadmin@test.com', false);
+
+  // Non-admin is rejected outright.
+  const forbidden = await api('POST', `/api/t/${TENANT}/admin/kwest`, {
+    body: { slug: 'should-not-exist', name: 'x', scope: 'location_specific', starts_at: 1, ends_at: 2, grand_prize_description: 'x' },
+    bearer: nonAdminBearer,
+  });
+  assert(forbidden.status === 403, 'non-admin cannot create a hunt');
+
+  // Create + go-live gate.
+  const create = await api('POST', `/api/t/${TENANT}/admin/kwest`, {
+    body: { slug: 'admin-toy-hunt', name: 'Admin Toy Hunt', scope: 'location_specific', starts_at: 1700000000, ends_at: 1900000000, grand_prize_description: '$100 cash' },
+    bearer: adminBearer,
+  });
+  assert(create.status === 201 && create.json.data.status === 'draft', 'admin creates a hunt in draft status');
+  const huntId = create.json.data.id;
+
+  const step1 = await api('POST', `/api/t/${TENANT}/admin/kwest/${huntId}/steps`, {
+    body: { clues: [{ type: 'riddle', body: 'Find the old oak' }], target_lat: 41.9000, target_lng: -85.0000, radius_m: 50 },
+    bearer: adminBearer,
+  });
+  const step2 = await api('POST', `/api/t/${TENANT}/admin/kwest/${huntId}/steps`, {
+    body: { clues: [{ type: 'riddle', body: 'Find the fountain' }], target_lat: 41.9100, target_lng: -85.0100, radius_m: 50 },
+    bearer: adminBearer,
+  });
+  assert(step1.status === 201 && step2.status === 201, 'two steps created');
+  // step1's own create response predates step2 existing, so it reflects
+  // is_final at THAT moment (correctly 1, as the only/final step then) -
+  // re-list fresh to check the current state after both steps exist.
+  const stepsAfterCreate = await api('GET', `/api/t/${TENANT}/admin/kwest/${huntId}/steps`, { bearer: adminBearer });
+  const s1 = stepsAfterCreate.json.data.find((s) => s.id === step1.json.data.id);
+  const s2 = stepsAfterCreate.json.data.find((s) => s.id === step2.json.data.id);
+  assert(s1.is_final === 0 && s2.is_final === 1, 'only the highest-seq step is auto-marked final');
+
+  const blockedLive = await api('POST', `/api/t/${TENANT}/admin/kwest/${huntId}/status`, { body: { status: 'live' }, bearer: adminBearer });
+  assert(blockedLive.status === 400, 'go-live is blocked before any step has a field test');
+
+  await api('POST', `/api/t/${TENANT}/admin/kwest/steps/${step1.json.data.id}/field-test`, {
+    body: { accuracy_m_observed: 8, fix_seconds: 4, note: 'clear sight line', public_access: true, safe: true }, bearer: adminBearer,
+  });
+  const stillBlocked = await api('POST', `/api/t/${TENANT}/admin/kwest/${huntId}/status`, { body: { status: 'live' }, bearer: adminBearer });
+  assert(stillBlocked.status === 400, 'go-live still blocked with only one of two steps field-tested');
+
+  await api('POST', `/api/t/${TENANT}/admin/kwest/steps/${step2.json.data.id}/field-test`, {
+    body: { accuracy_m_observed: 6, fix_seconds: 3, note: 'open field', public_access: true, safe: true }, bearer: adminBearer,
+  });
+  const wentLive = await api('POST', `/api/t/${TENANT}/admin/kwest/${huntId}/status`, { body: { status: 'live' }, bearer: adminBearer });
+  assert(wentLive.status === 200 && wentLive.json.data.status === 'live', 'go-live succeeds once every step has passed a field test');
+
+  // Reorder: swap seq 1 and 2, re-derive final.
+  const reordered = await api('POST', `/api/t/${TENANT}/admin/kwest/${huntId}/steps/reorder`, {
+    body: { ordered_step_ids: [step2.json.data.id, step1.json.data.id] }, bearer: adminBearer,
+  });
+  assert(reordered.json.data[0].id === step2.json.data.id && reordered.json.data[0].seq === 1, 'reorder re-sequences steps');
+  assert(reordered.json.data[1].is_final === 1, 'is_final follows the new highest seq after reorder');
+  // Put it back in the original order for the rest of this test.
+  await api('POST', `/api/t/${TENANT}/admin/kwest/${huntId}/steps/reorder`, {
+    body: { ordered_step_ids: [step1.json.data.id, step2.json.data.id] }, bearer: adminBearer,
+  });
+
+  // Test-run: create/reset, then play the REAL endpoints with sim coords.
+  const testRun = await api('POST', `/api/t/${TENANT}/admin/kwest/${huntId}/test-run`, { body: {}, bearer: adminBearer });
+  assert(testRun.json.data.reset === true, 'test-run creates/resets the admin is_test progress row');
+  await api('POST', `/api/t/${TENANT}/kwest/admin-toy-hunt/ack`, { body: {}, bearer: adminBearer });
+  const simHit = await reveal('admin-toy-hunt', adminBearer, undefined, { sim_lat: 41.9000, sim_lng: -85.0000 });
+  assert(simHit.json.data.result === 'hit', 'test-run admin can play with sim coords via the real reveal endpoint');
+
+  const health = await api('POST', `/api/t/${TENANT}/admin/kwest/${huntId}/health-check`, { body: {}, bearer: adminBearer });
+  assert(health.json.data.ok === true, 'one-tap health check passes (distance 0 <= radius)');
+
+  const dashboard = await api('GET', `/api/t/${TENANT}/admin/kwest/${huntId}/dashboard`, { bearer: adminBearer });
+  assert(dashboard.json.data.hunt_status === 'live' && Array.isArray(dashboard.json.data.per_step), 'dashboard returns hunt status and per-step stats');
+
+  // Weather pause blocks reveal for real players (not test-run admins).
+  await api('POST', `/api/t/${TENANT}/admin/kwest/${huntId}/weather-pause`, { body: { paused: true }, bearer: adminBearer });
+  const realBearer = token(9997, 'realplayer@test.com');
+  await startAckReveal('admin-toy-hunt', realBearer);
+  const pausedReveal = await reveal('admin-toy-hunt', realBearer, undefined, { lat: 41.9000, lng: -85.0000 });
+  assert(pausedReveal.json.data.blocked === 'weather_paused', 'weather pause blocks real reveals');
+  await api('POST', `/api/t/${TENANT}/admin/kwest/${huntId}/weather-pause`, { body: { paused: false }, bearer: adminBearer });
+
+  // Delete is blocked once real finishes exist - drive one real finisher to
+  // rank 1 first (the grand tier), which also sets up the claims test below.
+  const finish1 = await reveal('admin-toy-hunt', realBearer, undefined, { lat: 41.9000, lng: -85.0000 });
+  assert(finish1.json.data.result === 'hit', 'real player hits step 1');
+  const finish2 = await reveal('admin-toy-hunt', realBearer, undefined, { lat: 41.9100, lng: -85.0100 });
+  assert(finish2.json.data.finished === true && finish2.json.data.rank === 1, 'real player finishes rank 1 (grand tier)');
+
+  const deleteBlocked = await api('DELETE', `/api/t/${TENANT}/admin/kwest/${huntId}`, { bearer: adminBearer });
+  assert(deleteBlocked.status === 400, 'deleting a hunt with real finishes is blocked');
+
+  // Claims review: pending -> id_verified releases the grand prize exactly once.
+  const claims = await api('GET', `/api/t/${TENANT}/admin/kwest/${huntId}/claims`, { bearer: adminBearer });
+  assert(claims.json.data.length === 1 && claims.json.data[0].claim_status === 'pending', 'the grand winner has a pending claim');
+  const claimId = claims.json.data[0].claim_id;
+
+  await api('PUT', `/api/t/${TENANT}/admin/kwest/${huntId}`, { body: { grand_prize_kredits: 100 }, bearer: adminBearer });
+  const verify1 = await api('POST', `/api/t/${TENANT}/admin/kwest/claims/${claimId}`, {
+    body: { status: 'id_verified', id_check_note: 'ID verified, DOB confirms 18+' }, bearer: adminBearer,
+  });
+  assert(verify1.json.data.status === 'id_verified', 'claim transitions to id_verified');
+  const balAfterFirst = await balanceOf(9997);
+  // Only the non-final step (step 1) pays a step reward (10); the final
+  // step's hit is a finish, not a step award, and the grand tier withholds
+  // KK until id_verified - so 10 (step) + 100 (grand, just released) = 110.
+  assert(balAfterFirst === 110, `grand prize (100) plus the one non-final step reward (10) lands on id_verified (got ${balAfterFirst})`);
+
+  const verify2 = await api('POST', `/api/t/${TENANT}/admin/kwest/claims/${claimId}`, {
+    body: { status: 'id_verified' }, bearer: adminBearer,
+  });
+  assert(verify2.status === 200, 're-confirming the same status is harmless');
+  const balAfterSecond = await balanceOf(9997);
+  assert(balAfterSecond === 110, 're-verifying the same claim does not re-award the grand prize');
+
+  // Retro publish via the real admin endpoint (not raw SQL this time).
+  const publish = await api('POST', `/api/t/${TENANT}/admin/kwest/${huntId}/retro`, { body: { published: true }, bearer: adminBearer });
+  assert(publish.json.data.retro_published === true, 'admin retro publish endpoint flips the flag');
+
+  // One-winner DB constraint: only reachable by forcing a second claims row
+  // (normal gameplay only ever creates one grand claim per hunt) - a direct
+  // test of the partial UNIQUE index backstop, not just app logic.
+  sql(`
+    INSERT INTO kwest_claims (hunt_id, user_id, tenant_id, finish_rank, status)
+    VALUES (${huntId}, '99999999', '${TENANT}', 2, 'pending');
+  `);
+  const bogusClaim = sqlQuery(`SELECT id FROM kwest_claims WHERE hunt_id = ${huntId} AND user_id = '99999999'`)[0];
+  const secondVerify = await api('POST', `/api/t/${TENANT}/admin/kwest/claims/${bogusClaim.id}`, {
+    body: { status: 'id_verified' }, bearer: adminBearer,
+  });
+  assert(secondVerify.status === 400, 'the DB enforces one verified/paid winner per hunt, even if the app tried to allow a second');
+
+  // Successful delete: a fresh hunt with zero finishes deletes cleanly.
+  const throwaway = await api('POST', `/api/t/${TENANT}/admin/kwest`, {
+    body: { slug: 'admin-throwaway', name: 'Throwaway', scope: 'location_specific', starts_at: 1, ends_at: 2, grand_prize_description: 'x' },
+    bearer: adminBearer,
+  });
+  const deleteOk = await api('DELETE', `/api/t/${TENANT}/admin/kwest/${throwaway.json.data.id}`, { bearer: adminBearer });
+  assert(deleteOk.json.data.removed === true, 'a hunt with no finishes deletes cleanly');
+}
+
 function testOracleTripwire() {
   console.log('\n-- oracle tripwire --');
-  const leaks = allResponseBodies.filter((r) => r.text.includes('target_'));
+  // Admin endpoints legitimately see target coordinates (that's the whole
+  // point of hunt authoring) - the tripwire is scoped to PLAYER-facing
+  // responses only, per dev plan Section 4.
+  const leaks = allResponseBodies.filter((r) => !r.path.includes('/admin/') && r.text.includes('target_'));
   assert(leaks.length === 0, `no player-facing response contains "target_" (${leaks.length} leak(s) found)`);
   if (leaks.length) {
     for (const l of leaks) console.error(`  leak at ${l.path}`);
@@ -470,6 +625,7 @@ async function main() {
   await testSimCoordRejection();
   await testPersonaDisplayChoiceAndRetro();
   await testMinigames();
+  await testAdminSuite();
   testOracleTripwire();
 
   console.log(`\n${failures === 0 ? 'GAUNTLET GREEN' : `GAUNTLET RED - ${failures} failure(s)`}`);

@@ -14,9 +14,11 @@ import StepCelebration from '../../components/kwest/StepCelebration';
 import FinishCelebration from '../../components/kwest/FinishCelebration';
 import DisplayChoiceDrawer from '../../components/kwest/DisplayChoiceDrawer';
 import MiniGameShell from '../../components/kwest/MiniGameShell';
+import TestModeRibbon from '../../components/kwest/TestModeRibbon';
 import { Spinner } from '../../components/ui/Spinner';
 import { Alert } from '../../components/ui/Alert';
 import { Compass, MonitorSmartphone, CloudRain, PartyPopper, ScrollText, LocateFixed } from 'lucide-react';
+import { createAdminKwestTestRun } from '../../api/adminKwest';
 
 function ClueList({ clues }: { clues: Clue[] }) {
   return (
@@ -57,6 +59,7 @@ export default function KwestHunt() {
   const [showStepCelebration, setShowStepCelebration] = useState(false);
   const [pendingMinigameOffer, setPendingMinigameOffer] = useState<MinigameOffer | null>(null);
   const [showMinigame, setShowMinigame] = useState(false);
+  const [resettingTestRun, setResettingTestRun] = useState(false);
 
   const attaching = useRef(false);
 
@@ -237,6 +240,19 @@ export default function KwestHunt() {
     await setKwestDisplayChoice(tenantId, slug, choice);
   };
 
+  const handleResetTestRun = async () => {
+    if (!hunt || resettingTestRun) return;
+    setResettingTestRun(true);
+    try {
+      await createAdminKwestTestRun(tenantId, hunt.id);
+      await loadState();
+    } catch (err: any) {
+      setError(err.message || 'Could not reset the test run.');
+    } finally {
+      setResettingTestRun(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="main-content" style={{ paddingTop: 48, textAlign: 'center' }}>
@@ -255,6 +271,7 @@ export default function KwestHunt() {
 
   return (
     <div className="main-content" style={{ maxWidth: 640, paddingTop: 20, paddingBottom: 80 }}>
+      {state?.is_test && <TestModeRibbon onReset={handleResetTestRun} resetting={resettingTestRun} />}
       <h1 style={{ margin: '0 0 4px', fontSize: '1.5rem', fontFamily: 'var(--font-serif)', color: 'var(--green)', display: 'flex', alignItems: 'center', gap: 8 }}>
         <Compass size={22} style={{ color: 'var(--amber)' }} /> {hunt.name}
       </h1>

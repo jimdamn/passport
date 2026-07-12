@@ -30,6 +30,7 @@ export interface KwestHuntSummary {
 }
 
 export interface KwestHuntDetail {
+  id: number;
   slug: string;
   name: string;
   narrative: string;
@@ -79,6 +80,7 @@ export interface KwestStateResult {
   is_final?: boolean;
   weather_paused?: boolean;
   all_prizes_claimed?: boolean;
+  is_test?: boolean;
 }
 
 export interface MinigameOffer {

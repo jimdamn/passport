@@ -299,6 +299,9 @@ export default function MyProfile() {
             <Link to="/profile/admin/test-plaque" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
               Test Plaque
             </Link>
+            <Link to="/profile/admin/kwest" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
+              KrowdKwest
+            </Link>
           </div>
         </div>
       )}

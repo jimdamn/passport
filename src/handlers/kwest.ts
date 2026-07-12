@@ -163,6 +163,7 @@ export async function getKwestHunt(c: AppContext) {
 
   return c.json({
     data: {
+      id: hunt.id,
       slug: hunt.slug,
       name: hunt.name,
       narrative: hunt.narrative,
@@ -356,6 +357,7 @@ export async function getKwestState(c: AppContext) {
       is_final: !!step.is_final,
       weather_paused: !!hunt.weather_paused,
       all_prizes_claimed: finishCount >= 20,
+      is_test: !!progress.is_test,
     },
   });
 }

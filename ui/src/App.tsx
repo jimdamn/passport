@@ -33,6 +33,10 @@ import KwestHome from './pages/kwest/KwestHome';
 import KwestHelp from './pages/kwest/KwestHelp';
 import KwestHunt from './pages/kwest/KwestHunt';
 import KwestRetro from './pages/kwest/KwestRetro';
+import AdminKwest from './pages/profile/AdminKwest';
+import AdminKwestEdit from './pages/profile/AdminKwestEdit';
+import AdminKwestFieldTest from './pages/profile/AdminKwestFieldTest';
+import AdminKwestDashboard from './pages/profile/AdminKwestDashboard';
 
 export default function App() {
   const { isLoading } = useAuth();
@@ -71,6 +75,10 @@ export default function App() {
         <Route path="/profile/admin/deals" element={<AdminDeals />} />
         <Route path="/profile/admin/volunteer" element={<AdminVolunteer />} />
         <Route path="/profile/admin/happenings" element={<AdminHappenings />} />
+        <Route path="/profile/admin/kwest" element={<AdminKwest />} />
+        <Route path="/profile/admin/kwest/:id" element={<AdminKwestEdit />} />
+        <Route path="/profile/admin/kwest/:id/field-test" element={<AdminKwestFieldTest />} />
+        <Route path="/profile/admin/kwest/:id/dashboard" element={<AdminKwestDashboard />} />
         <Route path="/claim/visit" element={<ClaimVisit />} />
         <Route path="/redeem" element={<RedeemClaim />} />
         <Route path="/merchant" element={<MerchantDashboard />} />
