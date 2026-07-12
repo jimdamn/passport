@@ -10,7 +10,11 @@
  * concurrent double-reveal, concurrent finish race (10 parallel -> ranks
  * 1-10 unique/gapless), budget cap exhaustion, oracle tripwire (no
  * "target_" in any player-facing response), sim-coord rejection for
- * non-test callers.
+ * non-test callers, the full admin suite (CRUD, go-live gate, test mode,
+ * dashboard, claims review), and lifecycle/retention with a simulated clock
+ * (scheduled->live via both the lazy read path and the cron sweep, live->ended
+ * on both the scheduled-end and rank-20 branches, display_locked freeze,
+ * 30-day coordinate retention truncation).
  *
  * Usage: node scripts/kwest-gauntlet.mjs
  */
@@ -87,6 +91,26 @@ async function resetStubs() {
   await fetch('http://127.0.0.1:8791/__stub/reset');
 }
 
+// Matches .dev.vars INTERNAL_SECRET for local dev only.
+const INTERNAL_SECRET = 'local-dev-test-secret-not-real';
+
+async function apiInternal(path, secret = INTERNAL_SECRET, attempt = 0) {
+  const headers = {};
+  if (secret !== null) headers['X-Internal-Secret'] = secret;
+  let res;
+  try {
+    res = await fetch(`${BASE}${path}`, { method: 'POST', headers });
+  } catch (err) {
+    if (attempt >= 2) throw err;
+    await new Promise((r) => setTimeout(r, 300));
+    return apiInternal(path, secret, attempt + 1);
+  }
+  const text = await res.text();
+  let json;
+  try { json = JSON.parse(text); } catch { json = { __raw: text }; }
+  return { status: res.status, json };
+}
+
 async function balanceOf(uid, attempt = 0) {
   try {
     const res = await fetch(`http://127.0.0.1:8791/internal/balance/${uid}`);
@@ -127,16 +151,24 @@ VALUES (
 `;
 }
 
+const ALL_SLUGS = [
+  'gauntlet-core', 'gauntlet-race', 'gauntlet-budget', 'gauntlet-persona', 'gauntlet-minigame',
+  'admin-toy-hunt', 'admin-claims-hunt', 'admin-throwaway',
+  'lifecycle-scheduled', 'lifecycle-ended-time', 'lifecycle-ended-rank20', 'lifecycle-notyet',
+  'retention-old', 'retention-fresh',
+];
+const SLUG_LIST = ALL_SLUGS.map((s) => `'${s}'`).join(',');
+
 function seedAll() {
   const cleanup = `
-DELETE FROM kwest_reveals WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget','gauntlet-persona','gauntlet-minigame','admin-toy-hunt','admin-claims-hunt','admin-throwaway'));
-DELETE FROM kwest_finishes WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget','gauntlet-persona','gauntlet-minigame','admin-toy-hunt','admin-claims-hunt','admin-throwaway'));
-DELETE FROM kwest_claims WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget','gauntlet-persona','gauntlet-minigame','admin-toy-hunt','admin-claims-hunt','admin-throwaway'));
-DELETE FROM kwest_acknowledgements WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget','gauntlet-persona','gauntlet-minigame','admin-toy-hunt','admin-claims-hunt','admin-throwaway'));
-DELETE FROM kwest_progress WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget','gauntlet-persona','gauntlet-minigame','admin-toy-hunt','admin-claims-hunt','admin-throwaway'));
-DELETE FROM kwest_minigame_plays WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget','gauntlet-persona','gauntlet-minigame','admin-toy-hunt','admin-claims-hunt','admin-throwaway'));
-DELETE FROM kwest_steps WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget','gauntlet-persona','gauntlet-minigame','admin-toy-hunt','admin-claims-hunt','admin-throwaway'));
-DELETE FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget','gauntlet-persona','gauntlet-minigame','admin-toy-hunt','admin-claims-hunt','admin-throwaway');
+DELETE FROM kwest_reveals WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN (${SLUG_LIST}));
+DELETE FROM kwest_finishes WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN (${SLUG_LIST}));
+DELETE FROM kwest_claims WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN (${SLUG_LIST}));
+DELETE FROM kwest_acknowledgements WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN (${SLUG_LIST}));
+DELETE FROM kwest_progress WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN (${SLUG_LIST}));
+DELETE FROM kwest_minigame_plays WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN (${SLUG_LIST}));
+DELETE FROM kwest_steps WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN (${SLUG_LIST}));
+DELETE FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN (${SLUG_LIST});
 `;
   const core = [
     huntInsert('gauntlet-core', 'Gauntlet Core', 100000),
@@ -546,6 +578,129 @@ async function testAdminSuite() {
   assert(deleteOk.json.data.removed === true, 'a hunt with no finishes deletes cleanly');
 }
 
+async function testLifecycleAndRetention() {
+  console.log('\n-- lifecycle & retention (simulated clock) --');
+
+  // Internal-secret gate: missing/wrong secret is rejected without doing anything.
+  const noSecret = await apiInternal('/api/internal/kwest/lifecycle', null);
+  assert(noSecret.status === 401, 'lifecycle endpoint rejects a missing X-Internal-Secret');
+  const wrongSecret = await apiInternal('/api/internal/kwest/lifecycle', 'not-the-real-secret');
+  assert(wrongSecret.status === 401, 'lifecycle endpoint rejects a wrong X-Internal-Secret');
+
+  const huntRow = (slug) =>
+    sqlQuery(`SELECT status, retro_published FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug='${slug}'`)[0];
+
+  sql(`
+-- scheduled -> live: starts_at already in the past.
+INSERT INTO kwest_hunts
+  (tenant_id, slug, name, narrative, scope, status, starts_at, ends_at, grand_prize_description, rules_version)
+VALUES
+  ('${TENANT}', 'lifecycle-scheduled', 'Lifecycle Scheduled', '', 'location_specific', 'scheduled',
+   unixepoch() - 100, unixepoch() + 2592000, '$1', 1);
+
+-- live -> ended via the SCHEDULED-END branch: ends_at in the past, no rank-20 official_end_at.
+INSERT INTO kwest_hunts
+  (tenant_id, slug, name, narrative, scope, status, starts_at, ends_at, official_end_at, grand_prize_description, rules_version)
+VALUES
+  ('${TENANT}', 'lifecycle-ended-time', 'Lifecycle Ended By Time', '', 'location_specific', 'live',
+   unixepoch() - 999999, unixepoch() - 100, NULL, '$1', 1);
+
+-- live -> ended via the RANK-20 branch: official_end_at in the past even
+-- though the scheduled ends_at is still far in the future - proves
+-- COALESCE(official_end_at, ends_at) governs, not ends_at alone.
+INSERT INTO kwest_hunts
+  (tenant_id, slug, name, narrative, scope, status, starts_at, ends_at, official_end_at, grand_prize_description, rules_version)
+VALUES
+  ('${TENANT}', 'lifecycle-ended-rank20', 'Lifecycle Ended By Rank20', '', 'location_specific', 'live',
+   unixepoch() - 999999, unixepoch() + 999999, unixepoch() - 100, '$1', 1);
+
+-- Negative case: still within both ends_at and official_end_at - must stay live.
+INSERT INTO kwest_hunts
+  (tenant_id, slug, name, narrative, scope, status, starts_at, ends_at, official_end_at, grand_prize_description, rules_version)
+VALUES
+  ('${TENANT}', 'lifecycle-notyet', 'Lifecycle Not Yet', '', 'location_specific', 'live',
+   unixepoch() - 999999, unixepoch() + 999999, unixepoch() + 999999, '$1', 1);
+
+-- A real (non-test) finish on the rank-20 hunt, to prove display_locked
+-- flips to 1 in the SAME sweep that ends the hunt.
+INSERT INTO kwest_finishes
+  (hunt_id, user_id, tenant_id, finish_rank, finished_at, prize_kind, prize_kredits, display_choice, display_name_snapshot, display_locked, is_test)
+VALUES
+  ((SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug='lifecycle-ended-rank20'),
+   '77777', '${TENANT}', 1, unixepoch() - 200, 'grand', 0, 'anonymous', 'Rank20 Finisher', 0, 0);
+`);
+
+  // Lazy path first: a plain hunt-detail read (no cron involved) runs the
+  // SAME sweep inline, mirroring deals.ts's lazy-expiry-on-read pattern (dev
+  // plan Section 9's "belt-and-suspenders"). The sweep isn't scoped to the
+  // one hunt being read, so a single read transitions every due hunt.
+  await api('GET', `/api/t/${TENANT}/kwest/lifecycle-scheduled`, {});
+  assert(huntRow('lifecycle-scheduled').status === 'live', 'a plain GET /kwest/:slug read lazily flips scheduled -> live, with no cron call at all');
+  assert(huntRow('lifecycle-ended-time').status === 'ended', 'the same lazy read also ends other due hunts - the sweep is global, not scoped to the hunt being read');
+
+  const sweep1 = await apiInternal('/api/internal/kwest/lifecycle');
+  assert(sweep1.status === 200 && typeof sweep1.json.data.processed === 'number', 'lifecycle sweep returns {data:{processed}}');
+  assert(sweep1.json.data.processed === 0, `the cron sweep is idempotent - nothing left to do since the lazy read already caught everything (got ${sweep1.json.data.processed})`);
+
+  assert(huntRow('lifecycle-ended-time').status === 'ended', 'live -> ended at scheduled ends_at when no rank-20 official_end_at is set');
+  assert(huntRow('lifecycle-ended-time').retro_published === 1, 'ending a hunt publishes its retrospective in the same sweep');
+  assert(huntRow('lifecycle-ended-rank20').status === 'ended', 'live -> ended at official_end_at even though the scheduled ends_at is still far off (rank-20 branch)');
+  assert(huntRow('lifecycle-notyet').status === 'live', 'a hunt whose end has not yet arrived (either branch) stays live');
+
+  const finishLock = sqlQuery(
+    `SELECT display_locked FROM kwest_finishes WHERE hunt_id = (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug='lifecycle-ended-rank20') AND user_id = '77777'`
+  )[0];
+  assert(Number(finishLock.display_locked) === 1, 'display_locked flips to 1 on all finishes in the same sweep that ends the hunt');
+
+  const sweep2 = await apiInternal('/api/internal/kwest/lifecycle');
+  assert(sweep2.json.data.processed === 0, 're-running the sweep with nothing due processes 0 (idempotent, no re-transition)');
+
+  // Retention: only reveals whose hunt ended more than 30 days ago get truncated.
+  sql(`
+INSERT INTO kwest_hunts
+  (tenant_id, slug, name, narrative, scope, status, starts_at, ends_at, official_end_at, grand_prize_description, rules_version)
+VALUES
+  ('${TENANT}', 'retention-old', 'Retention Old', '', 'location_specific', 'ended',
+   unixepoch() - 9999999, unixepoch() - 2678400, unixepoch() - 2678400, '$1', 1),
+  ('${TENANT}', 'retention-fresh', 'Retention Fresh', '', 'location_specific', 'ended',
+   unixepoch() - 999999, unixepoch() - 864000, unixepoch() - 864000, '$1', 1);
+
+INSERT INTO kwest_steps (hunt_id, tenant_id, seq, clues_json, target_lat, target_lng, radius_m, is_final)
+VALUES
+  ((SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug='retention-old'), '${TENANT}', 1, '[]', 41.9, -85.0, 50, 1),
+  ((SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug='retention-fresh'), '${TENANT}', 1, '[]', 41.9, -85.0, 50, 1);
+
+INSERT INTO kwest_reveals (hunt_id, step_id, tenant_id, player_key, result, device_lat, device_lng, distance_m, edge_lat, edge_lng)
+VALUES
+  ((SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug='retention-old'),
+   (SELECT id FROM kwest_steps WHERE hunt_id=(SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug='retention-old')),
+   '${TENANT}', 'u:70001', 'hit', 41.9, -85.0, 0, 41.9, -85.0),
+  ((SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug='retention-fresh'),
+   (SELECT id FROM kwest_steps WHERE hunt_id=(SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug='retention-fresh')),
+   '${TENANT}', 'u:70002', 'hit', 41.9, -85.0, 0, 41.9, -85.0);
+`);
+
+  const retention1 = await apiInternal('/api/internal/kwest/retention');
+  assert(retention1.status === 200 && retention1.json.data.processed === 1, `retention sweep truncates exactly the >30-day-old reveal (got ${retention1.json.data.processed})`);
+
+  const oldReveal = sqlQuery(
+    `SELECT device_lat, device_lng, edge_lat, edge_lng, distance_m FROM kwest_reveals WHERE hunt_id = (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug='retention-old')`
+  )[0];
+  assert(
+    oldReveal.device_lat === null && oldReveal.device_lng === null && oldReveal.edge_lat === null && oldReveal.edge_lng === null,
+    'raw coordinates are NULLed on the reveal past the 30-day retention window'
+  );
+  assert(Number(oldReveal.distance_m) === 0, 'distance_m (the aggregate admins actually use) is left untouched');
+
+  const freshReveal = sqlQuery(
+    `SELECT device_lat, device_lng FROM kwest_reveals WHERE hunt_id = (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug='retention-fresh')`
+  )[0];
+  assert(freshReveal.device_lat !== null && freshReveal.device_lng !== null, 'a reveal still inside the 30-day window is left alone');
+
+  const retention2 = await apiInternal('/api/internal/kwest/retention');
+  assert(retention2.json.data.processed === 0, 're-running retention with nothing newly due processes 0');
+}
+
 function testOracleTripwire() {
   console.log('\n-- oracle tripwire --');
   // Admin endpoints legitimately see target coordinates (that's the whole
@@ -626,6 +781,7 @@ async function main() {
   await testPersonaDisplayChoiceAndRetro();
   await testMinigames();
   await testAdminSuite();
+  await testLifecycleAndRetention();
   testOracleTripwire();
 
   console.log(`\n${failures === 0 ? 'GAUNTLET GREEN' : `GAUNTLET RED - ${failures} failure(s)`}`);

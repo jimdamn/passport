@@ -21,6 +21,7 @@ import { awardWithBudget, stepRewardAmount, drawMinigameOutcome } from '../lib/k
 import { notifyKwestFinish } from '../lib/kwest-notify';
 import { KWEST_SHORT_DISCLAIMER, KWEST_OFFICIAL_RULES } from '../lib/kwest-rules';
 import { KWEST_TEASE_LINES, teaseLine } from '../lib/kwest-copy';
+import { kwestLifecycleSweep } from './kwest-internal';
 import { logger } from '../lib/logger';
 
 type AppContext = Context<{ Bindings: Env }>;
@@ -136,6 +137,9 @@ function getGuestTokenParam(c: AppContext, bodyToken?: string | null): string | 
 /** GET /api/t/:tenant/kwest - live hunts + published retrospectives, public fields only. */
 export async function listKwestHunts(c: AppContext) {
   const tenant = c.get('tenant');
+  // Lazy lifecycle check (belt-and-suspenders alongside the cron sweep),
+  // mirroring deals.ts's lazy-expiry-on-read pattern.
+  await kwestLifecycleSweep(c.env);
   const { results } = await c.env.DB.prepare(`
     SELECT slug, name, narrative, scope, location_label, status, starts_at, ends_at,
            sponsor_name, grand_prize_description, retro_published
@@ -150,6 +154,7 @@ export async function listKwestHunts(c: AppContext) {
 export async function getKwestHunt(c: AppContext) {
   const tenant = c.get('tenant');
   const slug = c.req.param('slug');
+  await kwestLifecycleSweep(c.env);
   const hunt = await getHuntRow(c.env, tenant.id, slug);
   if (!hunt) throw new HTTPException(404, { message: 'Hunt not found.' });
 

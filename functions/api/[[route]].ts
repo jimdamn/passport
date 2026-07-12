@@ -39,6 +39,7 @@ import {
   adminSetHuntStatus, adminCreateTestRun, adminGetDashboard, adminPlayerLookup, adminHealthCheck,
   adminListClaims, adminUpdateClaim, adminSetRetroPublished, adminSetWeatherPause,
 } from '../../src/handlers/kwest-admin';
+import { internalKwestLifecycle, internalKwestRetention } from '../../src/handlers/kwest-internal';
 
 import { logger } from '../../src/lib/logger';
 
@@ -188,6 +189,9 @@ tenantApp.post('/hunt/roll', async (c) => {
 // Cron backstop for deal-claim expiry (X-Internal-Secret protected)
 app.post('/api/internal/deals/sweep', internalSweep);
 app.post('/api/internal/members/provision', provisionMember);
+// Cron backstop for KrowdKwest lifecycle + retention (X-Internal-Secret protected)
+app.post('/api/internal/kwest/lifecycle', internalKwestLifecycle);
+app.post('/api/internal/kwest/retention', internalKwestRetention);
 
 // Public Passport Scan & Claims APIs (Tenant-scoped, Guest-friendly)
 app.post('/api/t/:tenant/passport/scan', resolveTenant, scanPlaque);
