@@ -8,7 +8,11 @@
 import type { Env } from '../types';
 import { logger } from './logger';
 
-const CHEST_ICON_URL = 'https://passport.lakeandlocals.com/site-assets/kwest/chest.png';
+// Reuses the same chest art already live in R2 from the digital ambient-chest
+// Treasure Hunt (see TREASURE-HUNT-HANDOFF.md) - no separate KrowdKwest-only
+// upload needed, and it keeps the "you found a chest" visual language
+// consistent across both features.
+const CHEST_ICON_URL = 'https://passport.lakeandlocals.com/site-assets/treasure-chest-128.png';
 
 export async function notifyKwestFinish(
   env: Env,
