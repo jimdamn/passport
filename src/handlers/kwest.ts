@@ -1,9 +1,9 @@
 /**
  * KrowdKwest - player-facing handlers. Increment 1: list/detail/rules,
  * start/ack/state, reveal (the heart), and authenticated attach. Increment 2
- * adds display-choice, mine, and retro to support the play UI. Admin CRUD,
- * mini-game play, and lifecycle cron endpoints land in later increments per
- * KROWDKWEST-DEVELOPMENT-PLAN.md Section 11.
+ * adds display-choice, mine, and retro to support the play UI. Increment 3
+ * adds the mini-game play endpoint. Admin CRUD and lifecycle cron endpoints
+ * land in later increments per KROWDKWEST-DEVELOPMENT-PLAN.md Section 11.
  *
  * Progression secrecy: every player-facing SELECT on kwest_steps uses an
  * explicit column list. target_lat/target_lng/radius_m are read ONLY inside
@@ -17,9 +17,10 @@ import { nanoid } from 'nanoid';
 import type { Env } from '../types';
 import { distanceMeters } from '../lib/geo';
 import { resolvePlayerKey, mintGuestKey, resolveGuestId, fetchPersonaInfo } from '../lib/kwest-guest';
-import { awardWithBudget, stepRewardAmount } from '../lib/kwest-economy';
+import { awardWithBudget, stepRewardAmount, drawMinigameOutcome } from '../lib/kwest-economy';
 import { notifyKwestFinish } from '../lib/kwest-notify';
 import { KWEST_SHORT_DISCLAIMER, KWEST_OFFICIAL_RULES } from '../lib/kwest-rules';
+import { KWEST_TEASE_LINES, teaseLine } from '../lib/kwest-copy';
 import { logger } from '../lib/logger';
 
 type AppContext = Context<{ Bindings: Env }>;
@@ -84,6 +85,10 @@ async function getHuntRow(env: Env, tenantId: string, slug: string | undefined):
   return env.DB.prepare(
     'SELECT * FROM kwest_hunts WHERE tenant_id = ? AND slug = ?'
   ).bind(tenantId, slug).first<KwestHuntRow>();
+}
+
+async function getHuntRowById(env: Env, huntId: number): Promise<KwestHuntRow | null> {
+  return env.DB.prepare('SELECT * FROM kwest_hunts WHERE id = ?').bind(huntId).first<KwestHuntRow>();
 }
 
 // INTERNAL ONLY - includes target_lat/target_lng/radius_m for the reveal
@@ -489,18 +494,18 @@ export async function revealKwest(c: AppContext) {
       }
     }
 
-    let minigameOffer: { offer_id: string; game: string } | null = null;
+    let minigameOffer: { offer_id: string; game: string; tease: string } | null = null;
     if (!isTestPlayer && step.minigame_enabled && userId) {
       if (Math.floor(Math.random() * 10000) < hunt.minigame_offer_bp) {
         const game = MINIGAMES[Math.floor(Math.random() * MINIGAMES.length)];
-        const teaseVariant = Math.floor(Math.random() * 5);
+        const teaseVariant = Math.floor(Math.random() * KWEST_TEASE_LINES.length);
         const offerId = nanoid(16);
         await c.env.DB.prepare(`
           INSERT INTO kwest_minigame_plays
             (offer_id, hunt_id, step_id, tenant_id, player_key, user_id, game, tease_variant, expires_at, is_test)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, unixepoch() + 1800, 0)
         `).bind(offerId, hunt.id, step.id, tenant.id, playerKey, userId, game, teaseVariant).run();
-        minigameOffer = { offer_id: offerId, game };
+        minigameOffer = { offer_id: offerId, game, tease: teaseLine(teaseVariant) };
       }
     }
 
@@ -626,6 +631,96 @@ export async function revealKwest(c: AppContext) {
       },
     },
   });
+}
+
+interface KwestMinigamePlayRow {
+  offer_id: string;
+  hunt_id: number;
+  step_id: number;
+  tenant_id: string;
+  player_key: string;
+  user_id: string | null;
+  game: 'chest_pick' | 'compass_stop' | 'scratch_off';
+  tease_variant: number;
+  status: string;
+  expires_at: number;
+  is_test: number;
+}
+
+function validMinigameInput(game: string, input: unknown): boolean {
+  const i = input as Record<string, unknown> | null | undefined;
+  if (game === 'chest_pick') return typeof i?.chest === 'number' && [0, 1, 2].includes(i.chest);
+  if (game === 'compass_stop') return typeof i?.t_ms === 'number' && isFinite(i.t_ms as number);
+  if (game === 'scratch_off') return i?.scratched === true;
+  return false;
+}
+
+/**
+ * POST /api/t/:tenant/kwest/minigame/:offerId {input} - the interaction is
+ * presentation only; the server decides the result (dev plan Section 5).
+ * Exactly-once via the atomic status flip below, plus KKCredits' own
+ * (user_id, ref_type, ref_id) idempotency on the award.
+ */
+export async function playKwestMinigame(c: AppContext) {
+  const tenant = c.get('tenant');
+  const offerId = c.req.param('offerId');
+  const body = await c.req.json<{ input?: unknown; guest_token?: string }>().catch(() => ({} as any));
+
+  const resolved = await resolvePlayerKey(c, body.guest_token);
+  if (!resolved) throw new HTTPException(403, { message: 'This offer is not yours.' });
+
+  const offer = await c.env.DB.prepare(
+    'SELECT * FROM kwest_minigame_plays WHERE offer_id = ?'
+  ).bind(offerId).first<KwestMinigamePlayRow>();
+  if (!offer || offer.tenant_id !== tenant.id) throw new HTTPException(404, { message: 'This offer could not be found.' });
+  if (offer.player_key !== resolved.playerKey) throw new HTTPException(403, { message: 'This offer is not yours.' });
+
+  if (offer.status === 'played') {
+    return c.json({ data: { outcome: 'already_played' } });
+  }
+  if (offer.status === 'expired' || offer.expires_at < Math.floor(Date.now() / 1000)) {
+    await c.env.DB.prepare(
+      "UPDATE kwest_minigame_plays SET status = 'expired' WHERE offer_id = ? AND status = 'offered'"
+    ).bind(offerId).run();
+    return c.json({ data: { outcome: 'expired' } });
+  }
+
+  if (!validMinigameInput(offer.game, body.input)) {
+    throw new HTTPException(400, { message: 'Invalid input for this game.' });
+  }
+
+  // Exactly-once: only the request that wins this race actually plays.
+  const flip = await c.env.DB.prepare(
+    "UPDATE kwest_minigame_plays SET status = 'played', played_at = unixepoch(), input_json = ? WHERE offer_id = ? AND status = 'offered'"
+  ).bind(JSON.stringify(body.input ?? null), offerId).run();
+  if ((flip.meta?.changes ?? 0) !== 1) {
+    return c.json({ data: { outcome: 'already_played' } });
+  }
+
+  const hunt = await getHuntRowById(c.env, offer.hunt_id);
+  let outcomeKredits = 0;
+
+  if (!offer.is_test && hunt && offer.user_id) {
+    outcomeKredits = drawMinigameOutcome(hunt.minigame_max_award);
+    if (outcomeKredits > 0) {
+      try {
+        const awarded = await awardWithBudget(
+          c.env, hunt.id, tenant.id, offer.user_id, outcomeKredits,
+          `KrowdKwest mini-game: ${offer.game}`, 'kwest_bonus', offer.offer_id,
+        );
+        outcomeKredits = awarded.awarded;
+      } catch (err) {
+        logger.error(`kwest minigame award failed: ${err instanceof Error ? err.message : String(err)}`);
+        outcomeKredits = 0;
+      }
+    }
+  }
+
+  await c.env.DB.prepare(
+    'UPDATE kwest_minigame_plays SET outcome_kredits = ? WHERE offer_id = ?'
+  ).bind(outcomeKredits, offerId).run();
+
+  return c.json({ data: { outcome: 'played', game: offer.game, outcome_kredits: outcomeKredits } });
 }
 
 // ============================================================

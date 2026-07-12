@@ -95,16 +95,16 @@ async function balanceOf(uid, attempt = 0) {
 // other's budget/rank state.
 // ------------------------------------------------------------------
 
-function huntInsert(slug, name, budgetCap) {
+function huntInsert(slug, name, budgetCap, minigameBp = 0, minigameMaxAward = 10) {
   return `
 INSERT INTO kwest_hunts
   (tenant_id, slug, name, narrative, scope, status, starts_at, ends_at,
    grand_prize_kredits, grand_prize_description, rank2_10_kredits, rank11_20_kredits,
-   step_reward_default, minigame_offer_bp, kk_budget_cap, kk_spent, rules_version)
+   step_reward_default, minigame_offer_bp, minigame_max_award, kk_budget_cap, kk_spent, rules_version)
 VALUES
   ('${TENANT}', '${slug}', '${name}', 'Test narrative', 'location_specific', 'live',
    unixepoch() - 3600, unixepoch() + 2592000,
-   100, '$100 cash', 50, 10, 10, 0, ${budgetCap}, 0, 1);
+   100, '$100 cash', 50, 10, 10, ${minigameBp}, ${minigameMaxAward}, ${budgetCap}, 0, 1);
 `;
 }
 
@@ -120,14 +120,14 @@ VALUES (
 
 function seedAll() {
   const cleanup = `
-DELETE FROM kwest_reveals WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget','gauntlet-persona'));
-DELETE FROM kwest_finishes WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget','gauntlet-persona'));
-DELETE FROM kwest_claims WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget','gauntlet-persona'));
-DELETE FROM kwest_acknowledgements WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget','gauntlet-persona'));
-DELETE FROM kwest_progress WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget','gauntlet-persona'));
-DELETE FROM kwest_minigame_plays WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget','gauntlet-persona'));
-DELETE FROM kwest_steps WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget','gauntlet-persona'));
-DELETE FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget','gauntlet-persona');
+DELETE FROM kwest_reveals WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget','gauntlet-persona','gauntlet-minigame'));
+DELETE FROM kwest_finishes WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget','gauntlet-persona','gauntlet-minigame'));
+DELETE FROM kwest_claims WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget','gauntlet-persona','gauntlet-minigame'));
+DELETE FROM kwest_acknowledgements WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget','gauntlet-persona','gauntlet-minigame'));
+DELETE FROM kwest_progress WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget','gauntlet-persona','gauntlet-minigame'));
+DELETE FROM kwest_minigame_plays WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget','gauntlet-persona','gauntlet-minigame'));
+DELETE FROM kwest_steps WHERE hunt_id IN (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget','gauntlet-persona','gauntlet-minigame'));
+DELETE FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core','gauntlet-race','gauntlet-budget','gauntlet-persona','gauntlet-minigame');
 `;
   const core = [
     huntInsert('gauntlet-core', 'Gauntlet Core', 100000),
@@ -150,7 +150,12 @@ DELETE FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug IN ('gauntlet-core'
     huntInsert('gauntlet-persona', 'Gauntlet Persona', 100000),
     stepInsert('gauntlet-persona', 1, 41.9000, -85.0000, 1),
   ].join('\n');
-  sql(cleanup + core + race + budget + persona);
+  const minigame = [
+    huntInsert('gauntlet-minigame', 'Gauntlet Minigame', 100000, 10000, 20), // 100% offer chance
+    stepInsert('gauntlet-minigame', 1, 41.9000, -85.0000, 0),
+    stepInsert('gauntlet-minigame', 2, 41.9100, -85.0100, 1),
+  ].join('\n');
+  sql(cleanup + core + race + budget + persona + minigame);
 }
 
 // ------------------------------------------------------------------
@@ -331,6 +336,64 @@ async function testSimCoordRejection() {
   assert(plainUserSim.status === 400, 'non-admin cannot use sim coords');
 }
 
+async function testMinigames() {
+  console.log('\n-- mini-games --');
+  const uid = 5001;
+  const bearer = token(uid, 'minigamer@test.com');
+  await startAckReveal('gauntlet-minigame', bearer);
+
+  const r1 = await reveal('gauntlet-minigame', bearer, undefined, { lat: 41.9000, lng: -85.0000 });
+  assert(r1.json.data.result === 'hit', 'step 1 hit on the minigame hunt');
+  const offer = r1.json.data.minigame_offer;
+  assert(!!offer && !!offer.offer_id && !!offer.game && !!offer.tease, `a 100%-chance hunt always includes a minigame offer (got ${JSON.stringify(offer)})`);
+
+  const inputByGame = {
+    chest_pick: { chest: 1 },
+    compass_stop: { t_ms: 1234 },
+    scratch_off: { scratched: true },
+  };
+
+  // Wrong input shape for the offered game -> 400.
+  const badInput = await api('POST', `/api/t/${TENANT}/kwest/minigame/${offer.offer_id}`, {
+    body: { input: { nonsense: true } }, bearer,
+  });
+  assert(badInput.status === 400, 'invalid input shape for the offered game is rejected');
+
+  // Someone else can't play your offer.
+  const otherBearer = token(5002, 'other@test.com');
+  const stolen = await api('POST', `/api/t/${TENANT}/kwest/minigame/${offer.offer_id}`, {
+    body: { input: inputByGame[offer.game] }, bearer: otherBearer,
+  });
+  assert(stolen.status === 403, "another player cannot play someone else's offer");
+
+  const played = await api('POST', `/api/t/${TENANT}/kwest/minigame/${offer.offer_id}`, {
+    body: { input: inputByGame[offer.game] }, bearer,
+  });
+  assert(played.json.data.outcome === 'played', 'the rightful owner can play the offer');
+  assert(typeof played.json.data.outcome_kredits === 'number', 'a numeric outcome (possibly 0) comes back');
+
+  const replay = await api('POST', `/api/t/${TENANT}/kwest/minigame/${offer.offer_id}`, {
+    body: { input: inputByGame[offer.game] }, bearer,
+  });
+  assert(replay.json.data.outcome === 'already_played', 'replaying the same offer is a no-op, not a second award');
+
+  // A separate expired offer is rejected without ever being played. Forced
+  // directly via SQL (mirroring the shape the reveal handler itself would
+  // have created) since a real offer's expiry is 30 minutes out.
+  const offerId2 = `test-expired-${uid}`;
+  sql(`
+    INSERT INTO kwest_minigame_plays (offer_id, hunt_id, step_id, tenant_id, player_key, user_id, game, tease_variant, status, expires_at, is_test)
+    VALUES ('${offerId2}',
+      (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug='gauntlet-minigame'),
+      (SELECT id FROM kwest_steps WHERE hunt_id=(SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug='gauntlet-minigame') AND seq=1),
+      '${TENANT}', 'u:${uid}', '${uid}', 'chest_pick', 0, 'offered', unixepoch() - 10, 0);
+  `);
+  const expired = await api('POST', `/api/t/${TENANT}/kwest/minigame/${offerId2}`, {
+    body: { input: { chest: 0 } }, bearer,
+  });
+  assert(expired.json.data.outcome === 'expired', 'an expired offer is rejected without playing');
+}
+
 function testOracleTripwire() {
   console.log('\n-- oracle tripwire --');
   const leaks = allResponseBodies.filter((r) => r.text.includes('target_'));
@@ -406,6 +469,7 @@ async function main() {
   await testBudgetCapExhaustion();
   await testSimCoordRejection();
   await testPersonaDisplayChoiceAndRetro();
+  await testMinigames();
   testOracleTripwire();
 
   console.log(`\n${failures === 0 ? 'GAUNTLET GREEN' : `GAUNTLET RED - ${failures} failure(s)`}`);

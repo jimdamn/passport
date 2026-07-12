@@ -75,3 +75,15 @@ export async function awardWithBudget(
 export function stepRewardAmount(hunt: { step_reward_default: number }, step: { step_reward: number | null }): number {
   return step.step_reward ?? hunt.step_reward_default;
 }
+
+// Mini-games are a rare, random EXTRA - a play may win zero, never a
+// guarantee (dev plan Section 5). The player's in-game interaction (chest
+// choice, stop timing, scratch) is presentation only; this is the one place
+// that decides the actual outcome. Odds live only here, never in copy.
+const MINIGAME_WIN_CHANCE = 0.3;
+
+export function drawMinigameOutcome(maxAward: number): number {
+  if (maxAward <= 0) return 0;
+  if (Math.random() >= MINIGAME_WIN_CHANCE) return 0;
+  return Math.max(1, Math.ceil(Math.random() * maxAward));
+}

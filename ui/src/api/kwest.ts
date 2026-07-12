@@ -84,6 +84,7 @@ export interface KwestStateResult {
 export interface MinigameOffer {
   offer_id: string;
   game: 'chest_pick' | 'compass_stop' | 'scratch_off';
+  tease: string;
 }
 
 export interface KwestRevealResult {
@@ -169,4 +170,9 @@ export function getMyKwestProgress(tenant: string) {
 }
 export function getKwestRetro(tenant: string, slug: string) {
   return api.get<ApiResponse<KwestRetroResult>>(`/t/${tenant}/kwest/${slug}/retro`);
+}
+export function playKwestMinigame(tenant: string, offerId: string, input: unknown) {
+  return api.post<ApiResponse<{ outcome: string; game?: string; outcome_kredits?: number }>>(
+    `/t/${tenant}/kwest/minigame/${offerId}`, withGuestToken({ input })
+  );
 }

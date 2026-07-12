@@ -4,14 +4,16 @@ import { useAuth } from '../../context/AuthContext';
 import { useTenant } from '../../context/TenantContext';
 import {
   getKwestHunt, getKwestRules, startKwest, ackKwest, getKwestState, revealKwest,
-  attachKwestGuest, setKwestDisplayChoice, getGuestToken, setGuestToken,
+  attachKwestGuest, setKwestDisplayChoice, playKwestMinigame, getGuestToken, setGuestToken,
   type KwestHuntDetail, type KwestRules, type KwestStateResult, type KwestRevealResult, type Clue,
+  type MinigameOffer,
 } from '../../api/kwest';
 import AckModal from '../../components/kwest/AckModal';
 import RulesModal from '../../components/kwest/RulesModal';
 import StepCelebration from '../../components/kwest/StepCelebration';
 import FinishCelebration from '../../components/kwest/FinishCelebration';
 import DisplayChoiceDrawer from '../../components/kwest/DisplayChoiceDrawer';
+import MiniGameShell from '../../components/kwest/MiniGameShell';
 import { Spinner } from '../../components/ui/Spinner';
 import { Alert } from '../../components/ui/Alert';
 import { Compass, MonitorSmartphone, CloudRain, PartyPopper, ScrollText, LocateFixed } from 'lucide-react';
@@ -53,6 +55,8 @@ export default function KwestHunt() {
   const [showDisplayChoice, setShowDisplayChoice] = useState(false);
   const [stepReward, setStepReward] = useState(0);
   const [showStepCelebration, setShowStepCelebration] = useState(false);
+  const [pendingMinigameOffer, setPendingMinigameOffer] = useState<MinigameOffer | null>(null);
+  const [showMinigame, setShowMinigame] = useState(false);
 
   const attaching = useRef(false);
 
@@ -203,13 +207,29 @@ export default function KwestHunt() {
         return;
       }
       setStepReward(data.step_reward ?? 0);
+      setPendingMinigameOffer(data.minigame_offer ?? null);
       setShowStepCelebration(true);
     }
   }
 
   const handleStepContinue = async () => {
     setShowStepCelebration(false);
+    if (pendingMinigameOffer) {
+      setShowMinigame(true);
+    } else {
+      await loadState();
+    }
+  };
+
+  const handleMinigameClose = async () => {
+    setShowMinigame(false);
+    setPendingMinigameOffer(null);
     await loadState();
+  };
+
+  const handlePlayMinigame = async (offerId: string, input: unknown) => {
+    const res = await playKwestMinigame(tenantId, offerId, input);
+    return res.data;
   };
 
   const handleChooseDisplay = async (choice: 'anonymous' | 'real') => {
@@ -328,6 +348,15 @@ export default function KwestHunt() {
       <AckModal open={showAck} huntName={hunt.name} rules={rules} onAgree={handleAgree} agreeing={agreeing} />
       <RulesModal open={showRules} onClose={() => setShowRules(false)} rules={rules} />
       <StepCelebration open={showStepCelebration} reward={stepReward} creditsName={creditsName} onContinue={handleStepContinue} />
+      {showMinigame && pendingMinigameOffer && (
+        <MiniGameShell
+          open={showMinigame}
+          offer={pendingMinigameOffer}
+          creditsName={creditsName}
+          onClose={handleMinigameClose}
+          onPlay={handlePlayMinigame}
+        />
+      )}
       <FinishCelebration
         open={showFinishCelebration}
         result={finishResult}

@@ -31,7 +31,7 @@ import { listExchangeOffers } from '../../src/handlers/exchange';
 import { rollHunt } from '../../src/lib/game';
 import {
   listKwestHunts, getKwestHunt, getKwestRules, startKwest, ackKwest, getKwestState, revealKwest,
-  getKwestRetro, attachKwestGuest, setKwestDisplayChoice, getMyKwestProgress,
+  getKwestRetro, attachKwestGuest, setKwestDisplayChoice, getMyKwestProgress, playKwestMinigame,
 } from '../../src/handlers/kwest';
 
 import { logger } from '../../src/lib/logger';
@@ -184,6 +184,7 @@ app.post('/api/t/:tenant/kwest/:slug/ack', resolveTenant, ackKwest);
 app.get('/api/t/:tenant/kwest/:slug/state', resolveTenant, getKwestState);
 app.post('/api/t/:tenant/kwest/:slug/reveal', resolveTenant, revealKwest);
 app.get('/api/t/:tenant/kwest/:slug/retro', resolveTenant, getKwestRetro);
+app.post('/api/t/:tenant/kwest/minigame/:offerId', resolveTenant, playKwestMinigame);
 
 app.get('/api/t/:tenant/passport/members', resolveTenant, async (c) => {
   const tenant = c.get('tenant');
