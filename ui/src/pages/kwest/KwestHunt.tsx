@@ -51,6 +51,8 @@ export default function KwestHunt() {
   const [showRules, setShowRules] = useState(false);
   const [acquiring, setAcquiring] = useState(false);
   const [revealing, setRevealing] = useState(false);
+  const [simLat, setSimLat] = useState('');
+  const [simLng, setSimLng] = useState('');
 
   const [finishResult, setFinishResult] = useState<KwestRevealResult | null>(null);
   const [showFinishCelebration, setShowFinishCelebration] = useState(false);
@@ -188,6 +190,32 @@ export default function KwestHunt() {
       },
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
     );
+  };
+
+  // Desk-testing without traveling: admin test runs (state.is_test) accept
+  // typed-in coordinates instead of the device's real GPS, per
+  // KROWDKWEST-DEVELOPMENT-PLAN.md Section 7a. The physical field-test
+  // screen (/profile/admin/kwest/:id/field-test) is the separate, real-GPS
+  // counterpart for actually visiting a stop.
+  const handleSimReveal = async () => {
+    if (!slug || revealing) return;
+    const lat = parseFloat(simLat);
+    const lng = parseFloat(simLng);
+    if (!isFinite(lat) || !isFinite(lng)) {
+      setError('Enter a valid simulated latitude and longitude.');
+      return;
+    }
+    setError('');
+    setMessage('');
+    setRevealing(true);
+    try {
+      const res = await revealKwest(tenantId, slug, { sim_lat: lat, sim_lng: lng });
+      await handleRevealResponse(res.data);
+    } catch (err: any) {
+      setError(err.message || 'Could not process the simulated reveal.');
+    } finally {
+      setRevealing(false);
+    }
   };
 
   async function handleRevealResponse(data: KwestRevealResult) {
@@ -357,6 +385,27 @@ export default function KwestHunt() {
             <LocateFixed size={18} />
             {acquiring ? 'Finding your location...' : revealing ? 'Checking...' : 'Reveal'}
           </button>
+          {state.is_test && (
+            <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px dashed var(--border)' }}>
+              <p style={{ margin: '0 0 8px', fontSize: '0.78rem', fontWeight: 600, color: 'var(--amber)' }}>
+                Test mode: simulate coordinates instead of using your real GPS.{' '}
+                <Link to={`/profile/admin/kwest/${hunt.id}`} style={{ fontWeight: 600 }}>See step coordinates</Link>
+              </p>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                <input
+                  className="form-input" style={{ minHeight: 36, margin: 0 }} type="number" step="any"
+                  placeholder="Sim latitude" value={simLat} onChange={e => setSimLat(e.target.value)}
+                />
+                <input
+                  className="form-input" style={{ minHeight: 36, margin: 0 }} type="number" step="any"
+                  placeholder="Sim longitude" value={simLng} onChange={e => setSimLng(e.target.value)}
+                />
+              </div>
+              <button className="btn btn-secondary btn-block" style={{ minHeight: 40 }} disabled={revealing} onClick={handleSimReveal}>
+                {revealing ? 'Checking...' : 'Reveal (simulated)'}
+              </button>
+            </div>
+          )}
         </div>
       ) : (
         <div style={{ textAlign: 'center', padding: 24 }}><Spinner /></div>
