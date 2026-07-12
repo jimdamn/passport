@@ -17,8 +17,8 @@ import MiniGameShell from '../../components/kwest/MiniGameShell';
 import TestModeRibbon from '../../components/kwest/TestModeRibbon';
 import { Spinner } from '../../components/ui/Spinner';
 import { Alert } from '../../components/ui/Alert';
-import { Compass, MonitorSmartphone, CloudRain, PartyPopper, ScrollText, LocateFixed } from 'lucide-react';
-import { createAdminKwestTestRun } from '../../api/adminKwest';
+import { Compass, MonitorSmartphone, CloudRain, PartyPopper, ScrollText, LocateFixed, Wand2 } from 'lucide-react';
+import { createAdminKwestTestRun, getAdminKwestSteps, type AdminKwestStep } from '../../api/adminKwest';
 
 function ClueList({ clues }: { clues: Clue[] }) {
   return (
@@ -53,6 +53,8 @@ export default function KwestHunt() {
   const [revealing, setRevealing] = useState(false);
   const [simLat, setSimLat] = useState('');
   const [simLng, setSimLng] = useState('');
+  const [showManualSim, setShowManualSim] = useState(false);
+  const [adminSteps, setAdminSteps] = useState<AdminKwestStep[] | null>(null);
 
   const [finishResult, setFinishResult] = useState<KwestRevealResult | null>(null);
   const [showFinishCelebration, setShowFinishCelebration] = useState(false);
@@ -108,6 +110,20 @@ export default function KwestHunt() {
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug, tenantId]);
+
+  // Test runs: fetch every step's target coordinates once (admin-only, same
+  // data already visible in the hunt editor's map) so the simulated-reveal
+  // button can jump straight to the current step's exact target with no
+  // typing required - Jim's rightly not going to hand-enter coordinates for
+  // every step of every test pass.
+  useEffect(() => {
+    if (!state?.is_test || !user?.is_admin || !hunt || adminSteps) return;
+    getAdminKwestSteps(tenantId, hunt.id)
+      .then(res => setAdminSteps(res.data || []))
+      .catch(() => {});
+  }, [state?.is_test, user?.is_admin, hunt, tenantId, adminSteps]);
+
+  const currentTargetStep = adminSteps?.find(s => s.seq === state?.seq) ?? null;
 
   // A guest who signed in mid-hunt: migrate their progress onto the account,
   // then reload state as the now-authenticated player.
@@ -193,18 +209,12 @@ export default function KwestHunt() {
   };
 
   // Desk-testing without traveling: admin test runs (state.is_test) accept
-  // typed-in coordinates instead of the device's real GPS, per
+  // simulated coordinates instead of the device's real GPS, per
   // KROWDKWEST-DEVELOPMENT-PLAN.md Section 7a. The physical field-test
   // screen (/profile/admin/kwest/:id/field-test) is the separate, real-GPS
   // counterpart for actually visiting a stop.
-  const handleSimReveal = async () => {
+  async function simReveal(lat: number, lng: number) {
     if (!slug || revealing) return;
-    const lat = parseFloat(simLat);
-    const lng = parseFloat(simLng);
-    if (!isFinite(lat) || !isFinite(lng)) {
-      setError('Enter a valid simulated latitude and longitude.');
-      return;
-    }
     setError('');
     setMessage('');
     setRevealing(true);
@@ -216,6 +226,25 @@ export default function KwestHunt() {
     } finally {
       setRevealing(false);
     }
+  }
+
+  // One click, no typing: jumps straight to the current step's exact target.
+  // This is the button to mash your way through an entire test run.
+  const handleSimRevealAtTarget = () => {
+    if (!currentTargetStep) return;
+    simReveal(currentTargetStep.target_lat, currentTargetStep.target_lng);
+  };
+
+  // Manual override, tucked behind a toggle, for the rarer case of wanting
+  // to test a near/miss response with specific coordinates.
+  const handleSimRevealManual = () => {
+    const lat = parseFloat(simLat);
+    const lng = parseFloat(simLng);
+    if (!isFinite(lat) || !isFinite(lng)) {
+      setError('Enter a valid simulated latitude and longitude.');
+      return;
+    }
+    simReveal(lat, lng);
   };
 
   async function handleRevealResponse(data: KwestRevealResult) {
@@ -388,22 +417,43 @@ export default function KwestHunt() {
           {state.is_test && (
             <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px dashed var(--border)' }}>
               <p style={{ margin: '0 0 8px', fontSize: '0.78rem', fontWeight: 600, color: 'var(--amber)' }}>
-                Test mode: simulate coordinates instead of using your real GPS.{' '}
-                <Link to={`/profile/admin/kwest/${hunt.id}`} style={{ fontWeight: 600 }}>See step coordinates</Link>
+                Test mode: no need to travel or use your real GPS.
               </p>
-              <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                <input
-                  className="form-input" style={{ minHeight: 36, margin: 0 }} type="number" step="any"
-                  placeholder="Sim latitude" value={simLat} onChange={e => setSimLat(e.target.value)}
-                />
-                <input
-                  className="form-input" style={{ minHeight: 36, margin: 0 }} type="number" step="any"
-                  placeholder="Sim longitude" value={simLng} onChange={e => setSimLng(e.target.value)}
-                />
-              </div>
-              <button className="btn btn-secondary btn-block" style={{ minHeight: 40 }} disabled={revealing} onClick={handleSimReveal}>
-                {revealing ? 'Checking...' : 'Reveal (simulated)'}
+              <button
+                className="btn btn-secondary btn-block"
+                style={{ minHeight: 44, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+                disabled={revealing || !currentTargetStep}
+                onClick={handleSimRevealAtTarget}
+              >
+                <Wand2 size={16} />
+                {revealing ? 'Checking...' : !currentTargetStep ? 'Loading target...' : 'Reveal (jump to target)'}
               </button>
+              <button
+                style={{
+                  background: 'none', border: 'none', padding: 0, marginTop: 8, cursor: 'pointer',
+                  fontSize: '0.78rem', color: 'var(--green)', textDecoration: 'underline',
+                }}
+                onClick={() => setShowManualSim(v => !v)}
+              >
+                {showManualSim ? 'Hide' : 'Testing a near-miss? Enter custom coordinates'}
+              </button>
+              {showManualSim && (
+                <div style={{ marginTop: 8 }}>
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                    <input
+                      className="form-input" style={{ minHeight: 36, margin: 0 }} type="number" step="any"
+                      placeholder="Sim latitude" value={simLat} onChange={e => setSimLat(e.target.value)}
+                    />
+                    <input
+                      className="form-input" style={{ minHeight: 36, margin: 0 }} type="number" step="any"
+                      placeholder="Sim longitude" value={simLng} onChange={e => setSimLng(e.target.value)}
+                    />
+                  </div>
+                  <button className="btn btn-secondary btn-block" style={{ minHeight: 40 }} disabled={revealing} onClick={handleSimRevealManual}>
+                    {revealing ? 'Checking...' : 'Reveal (custom coordinates)'}
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
