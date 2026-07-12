@@ -84,7 +84,13 @@ export default function ScratchOff({ onSubmit, disabled }: Props) {
         onPointerUp={() => { scratching.current = false; }}
         onPointerLeave={() => { scratching.current = false; }}
       />
-      <p style={{ margin: '10px 0 0', fontSize: '0.72rem', color: 'var(--muted)' }}>{Math.min(100, Math.round((progress / REVEAL_THRESHOLD) * 100))}% cleared</p>
+      <div style={{ margin: '10px auto 0', width: 160, height: 6, borderRadius: 3, background: 'var(--border)', overflow: 'hidden' }}>
+        <div style={{
+          height: '100%', borderRadius: 3, background: 'var(--amber)',
+          width: `${Math.min(100, Math.round((progress / REVEAL_THRESHOLD) * 100))}%`,
+          transition: 'width 0.15s ease-out',
+        }} />
+      </div>
     </div>
   );
 }

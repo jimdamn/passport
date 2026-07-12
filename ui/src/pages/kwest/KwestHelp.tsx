@@ -106,6 +106,13 @@ export default function KwestHelp() {
         <Step n={4} label="Keep going" detail="Every solved clue pays real KrowdKredits. The last clue is the finish." />
       </Section>
 
+      <Section title="Extra Surprises">
+        <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.92rem', lineHeight: 1.6 }}>
+          Every so often along the way, you might get the chance to play a quick bonus game
+          for a few extra KrowdKredits. It's a nice surprise, never a requirement.
+        </p>
+      </Section>
+
       <Section title="How Winners Work">
         <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.92rem', lineHeight: 1.6, marginBottom: 16 }}>
           The first players to finish each hunt win a prize. The grand prize is a real prize plus

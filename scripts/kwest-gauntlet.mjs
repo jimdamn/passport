@@ -354,6 +354,40 @@ async function testBudgetCapExhaustion() {
   assert(Number(hunt.kk_spent) <= Number(hunt.kk_budget_cap), `kk_spent (${hunt.kk_spent}) never exceeds kk_budget_cap (${hunt.kk_budget_cap})`);
 }
 
+async function testAdaptiveThrottle() {
+  console.log('\n-- adaptive (self-healing) throttle --');
+  const confidenceOf = (uid) => sqlQuery(
+    `SELECT confidence FROM kwest_progress WHERE hunt_id = (SELECT id FROM kwest_hunts WHERE tenant_id='${TENANT}' AND slug='gauntlet-core') AND player_key = 'u:${uid}'`
+  )[0]?.confidence;
+
+  // Heals fully on a hit: one miss decays confidence, then a hit resets it to 1.0.
+  const healUid = 4001;
+  const healBearer = token(healUid, 'throttleheal@test.com');
+  await startAckReveal('gauntlet-core', healBearer);
+  await reveal('gauntlet-core', healBearer, undefined, { lat: 0, lng: 0 }); // guaranteed miss, far from any seeded step
+  assert(Number(confidenceOf(healUid)) < 1.0, 'a miss decays confidence below the starting 1.0');
+  const healHit = await reveal('gauntlet-core', healBearer, undefined, { lat: 41.9000, lng: -85.0000 });
+  assert(healHit.json.data.result === 'hit', 'the real target still hits after a miss');
+  assert(Number(confidenceOf(healUid)) === 1.0, 'a hit heals confidence fully back to 1.0');
+
+  // Rapid repeated misses tighten the cap well below the old flat 12-per-hour
+  // wall - the whole point of wiring up the self-healing soft-throttle.
+  const spamUid = 4002;
+  const spamBearer = token(spamUid, 'throttlespam@test.com');
+  await startAckReveal('gauntlet-core', spamBearer);
+  let blockedAt = null;
+  for (let i = 1; i <= 10; i++) {
+    const r = await reveal('gauntlet-core', spamBearer, undefined, { lat: 0, lng: 0 });
+    if (r.json.data.blocked === 'cooldown') { blockedAt = i; break; }
+  }
+  assert(blockedAt !== null && blockedAt < 12, `a rapid string of misses trips the cooldown before the old flat 12-count wall (blocked at attempt ${blockedAt})`);
+  // Matches CONFIDENCE_MIN in src/handlers/kwest.ts. A small tolerance
+  // absorbs both floating-point drift and the tiny real-time passive regen
+  // that accrues across the HTTP round-trips between reveals.
+  const spamConfidence = Number(confidenceOf(spamUid));
+  assert(spamConfidence >= 0.25 && spamConfidence < 0.27, `confidence bottoms out at the floor after enough misses (got ${spamConfidence})`);
+}
+
 async function testSimCoordRejection() {
   console.log('\n-- sim-coord rejection for non-test callers --');
   // ADMIN_EMAILS in .dev.vars gates is_admin by email allowlist (mirrors
@@ -777,6 +811,7 @@ async function main() {
   await testIdempotentDoubleReveal();
   await testConcurrentFinishRace();
   await testBudgetCapExhaustion();
+  await testAdaptiveThrottle();
   await testSimCoordRejection();
   await testPersonaDisplayChoiceAndRetro();
   await testMinigames();

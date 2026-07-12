@@ -63,6 +63,7 @@ interface KwestProgressRow {
   finished_at: number | null;
   is_test: number;
   confidence: number;
+  updated_at: number;
 }
 
 interface KwestStepInternal {
@@ -80,6 +81,14 @@ interface KwestStepInternal {
 }
 
 const MINIGAMES = ['chest_pick', 'compass_stop', 'scratch_off'] as const;
+
+// Self-healing soft-throttle on reveals (kwest_progress.confidence). See the
+// throttle-cap computation in revealKwest for how these combine.
+const THROTTLE_BASE_CAP = 12;      // reveals/hour on one step at full confidence
+const THROTTLE_MIN_CAP = 3;        // never fully lock out an honest player
+const CONFIDENCE_REGEN_PER_HOUR = 0.25; // passive recovery while away
+const CONFIDENCE_MISS_PENALTY = 0.15;   // decay per miss/near
+const CONFIDENCE_MIN = 0.25;            // floor - pairs with THROTTLE_MIN_CAP
 
 async function getHuntRow(env: Env, tenantId: string, slug: string | undefined): Promise<KwestHuntRow | null> {
   if (!slug) return null;
@@ -437,12 +446,22 @@ export async function revealKwest(c: AppContext) {
     accuracy = typeof body.accuracy === 'number' ? body.accuracy : null;
   }
 
-  // Throttle: >12 reveals on this step in the last hour -> friendly cooldown.
+  // Throttle: self-healing soft cap (kwest_progress.confidence) on reveals
+  // for this step in the last hour. Confidence regenerates passively over
+  // real time and heals fully on a genuine hit; it decays a little on each
+  // miss/near, so a rapid string of wrong guesses (the coordinate-oracle
+  // risk this endpoint carries) tightens the cap, while an honest player
+  // having a rough time is never locked out - the cap has a floor.
+  const effectiveConfidence = Math.min(
+    1.0,
+    progress.confidence + CONFIDENCE_REGEN_PER_HOUR * ((Date.now() / 1000 - progress.updated_at) / 3600),
+  );
+  const throttleCap = Math.max(THROTTLE_MIN_CAP, Math.round(THROTTLE_BASE_CAP * effectiveConfidence));
   const throttle = await c.env.DB.prepare(
     `SELECT COUNT(*) as n FROM kwest_reveals
      WHERE hunt_id = ? AND step_id = ? AND player_key = ? AND created_at > unixepoch() - 3600`
   ).bind(hunt.id, step.id, playerKey).first<{ n: number }>();
-  if ((throttle?.n ?? 0) > 12) {
+  if ((throttle?.n ?? 0) > throttleCap) {
     return c.json({ data: { blocked: 'cooldown', message: 'Take a breath and check the clue again.' } });
   }
 
@@ -461,6 +480,14 @@ export async function revealKwest(c: AppContext) {
     hunt.id, step.id, tenant.id, playerKey, result, lat, lng, accuracy, distance,
     isNaN(cfLat) ? null : cfLat, isNaN(cfLng) ? null : cfLng, isTestPlayer ? 1 : 0, useSim ? 1 : 0,
   ).run();
+
+  // A hit heals confidence fully (strong evidence of a genuine, capable
+  // player); a miss/near decays it a little, from the regenerated baseline
+  // computed above so a passive-regen tick isn't immediately erased.
+  const newConfidence = result === 'hit' ? 1.0 : Math.max(CONFIDENCE_MIN, effectiveConfidence - CONFIDENCE_MISS_PENALTY);
+  await c.env.DB.prepare(
+    'UPDATE kwest_progress SET confidence = ?, updated_at = unixepoch() WHERE hunt_id = ? AND player_key = ?'
+  ).bind(newConfidence, hunt.id, playerKey).run();
 
   if (result !== 'hit') {
     return c.json({
