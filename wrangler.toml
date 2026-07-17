@@ -32,6 +32,10 @@ bucket_name = "site-image-assets"
 ENVIRONMENT = "production"
 COOKIE_DOMAIN = ".lakeandlocals.com"
 HUB_URL = "https://business.lakeandlocals.com"
+# Deals escrow account in KKCredits (must match ESCROW_ACCOUNTS["passport"]
+# in KKCredits wrangler.toml). Claims hold funds here until settled to the
+# merchant on redemption or returned to the member on expiry.
+DEALS_ESCROW_UID = "900000101"
 
 # Secrets — set via: wrangler pages secret put <NAME>
 # INTERNAL_SECRET  — Shared secret for KKAuth internal calls

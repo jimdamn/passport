@@ -16,7 +16,7 @@ import type { Context } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import type { Env } from '../types';
 import { nanoid } from 'nanoid';
-import { spendCredits, refundCredits } from '../lib/credits';
+import { transferCredits, escrowUid } from '../lib/credits';
 import { matchesInternalSecret } from '../lib/hmac';
 import { logger } from '../lib/logger';
 
@@ -60,8 +60,9 @@ function cleanText(value: unknown, maxLen: number): string | null {
 
 /**
  * Process a batch of expired pending claims. Refund-first ordering: the
- * KKCredits refund is idempotent per claim id, so if the status flip fails
- * after a successful refund, the next sweep retries safely (issued_amount 0).
+ * KKCredits transfer is idempotent per claim id, so if the status flip fails
+ * after a successful refund, the next sweep retries safely.
+ * Refunds move the held credits back out of escrow — nothing is minted.
  */
 export async function sweepExpiredDealClaims(env: Env): Promise<number> {
   const { results } = await env.DB.prepare(`
@@ -74,8 +75,8 @@ export async function sweepExpiredDealClaims(env: Env): Promise<number> {
   let processed = 0;
   for (const claim of results ?? []) {
     try {
-      await refundCredits(
-        env, claim.user_id, claim.kredits_paid,
+      await transferCredits(
+        env, escrowUid(env), claim.user_id, claim.kredits_paid,
         'Deal claim expired — kredits returned', 'deal_refund', claim.id
       );
       const flip = await env.DB.prepare(`
@@ -194,10 +195,13 @@ export async function purchaseDeal(c: AppContext) {
     }
   };
 
-  // 2. Debit kredits — only a paid claim ever exists in the table.
+  // 2. Move kredits into escrow — only a paid claim ever exists in the table.
+  // Credits are never burned: they sit in the deals escrow account until the
+  // merchant redeems the claim (escrow -> merchant) or the claim expires
+  // (escrow -> member). The member's own token authorizes this transfer.
   try {
-    await spendCredits(
-      c.env, tenant.id, user.sub, deal.kredit_price,
+    await transferCredits(
+      c.env, parseInt(user.sub, 10), escrowUid(c.env), deal.kredit_price,
       `Deal: ${deal.title}`, 'deal_purchase', claimId, bearerToken
     );
   } catch (err) {
@@ -219,8 +223,9 @@ export async function purchaseDeal(c: AppContext) {
       VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, unixepoch())
     `).bind(claimId, tokenHash, tenant.id, dealId, userId, deal.kredit_price, expiresAt).run();
   } catch (err) {
-    await refundCredits(
-      c.env, userId, deal.kredit_price,
+    // Return the held credits from escrow — a move, not a mint.
+    await transferCredits(
+      c.env, escrowUid(c.env), userId, deal.kredit_price,
       'Deal purchase failed — kredits returned', 'deal_refund', claimId
     ).catch(e => logger.error(`Deal purchase refund failed for ${claimId}: ${(e as Error).message}`));
     await releaseSlot();

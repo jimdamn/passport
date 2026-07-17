@@ -60,72 +60,35 @@ export async function awardCredits(
 }
 
 /**
- * Refund credits to a user via KKCredits.
- * apply_halving is false so the user gets back the exact amount they spent,
- * and the (ref_type, ref_id) idempotency key guarantees a refund can never
- * double-fire even if the sweep retries.
+ * Transfer credits between accounts via KKCredits. Supply-neutral: credits
+ * move, they are never created or destroyed. The (ref_type, ref_id)
+ * idempotency key makes retries safe.
+ *
+ * bearerToken is the SENDER's token. Omit it only when the sender is the
+ * deals escrow account (env.DEALS_ESCROW_UID) — KKCredits authorizes
+ * escrow-out transfers by app key alone.
  */
-export async function refundCredits(
+export async function transferCredits(
   env: Env,
-  userId: number,
-  amount: number,
-  reason: string,
-  refType: string,
-  refId: string
-): Promise<{ balance: number }> {
-  const res = await env.KKCREDITS.fetch(
-    new Request('https://kkcredits/award', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-App-Key': env.KKCREDITS_APP_KEY,
-      },
-      body: JSON.stringify({
-        user_id: userId,
-        amount,
-        reason,
-        source_app: SOURCE_APP,
-        network_id: NETWORK_ID,
-        ref_type: refType,
-        ref_id: refId,
-        apply_halving: false,
-      }),
-    })
-  );
-
-  if (!res.ok) {
-    const body = await res.json<{ error?: string }>().catch(() => ({} as { error?: string }));
-    throw new Error(body.error ?? `KKCredits refund failed: ${res.status}`);
-  }
-
-  const json = await res.json<{ data: { balance: number } }>();
-  return { balance: json.data.balance };
-}
-
-/**
- * Spend (debit) credits from a user via KKCredits.
- * Requires the user's Bearer token — KKCredits enforces that JWT sub matches user_id.
- */
-export async function spendCredits(
-  env: Env,
-  tenantId: string,
-  userId: string,
+  fromUserId: number,
+  toUserId: number,
   amount: number,
   reason: string,
   refType: string,
   refId: string,
-  bearerToken: string
-): Promise<{ balance: number }> {
+  bearerToken?: string
+): Promise<{ balance_after_from: number; balance_after_to: number }> {
   const res = await env.KKCREDITS.fetch(
-    new Request('https://kkcredits/spend', {
+    new Request('https://kkcredits/transfer', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-App-Key': env.KKCREDITS_APP_KEY,
-        'Authorization': `Bearer ${bearerToken}`,
+        ...(bearerToken ? { Authorization: `Bearer ${bearerToken}` } : {}),
       },
       body: JSON.stringify({
-        user_id: parseInt(userId, 10),
+        from_user_id: fromUserId,
+        to_user_id: toUserId,
         amount,
         reason,
         source_app: SOURCE_APP,
@@ -137,17 +100,30 @@ export async function spendCredits(
   );
 
   if (!res.ok) {
-    const body = await res.json<{ error?: string }>().catch(() => ({} as { error?: string }));
-    const msg = body.error ?? `KKCredits spend failed: ${res.status}`;
-    if (res.status === 402) throw new Error(`Insufficient credits`);
-    throw new Error(msg);
+    const body = await res.json<{ error?: string; message?: string }>()
+      .catch(() => ({} as { error?: string; message?: string }));
+    throw new Error(body.error ?? body.message ?? `KKCredits transfer failed: ${res.status}`);
   }
 
-  const json = await res.json<{ data: { balance: number } }>();
-  const { balance } = json.data;
-
-  return { balance };
+  const json = await res.json<{ data: { debit: { balance_after: number }; credit: { balance_after: number } } }>();
+  return {
+    balance_after_from: json.data.debit.balance_after,
+    balance_after_to: json.data.credit.balance_after,
+  };
 }
+
+/** The deals escrow account uid (see DEALS_ESCROW_UID in wrangler.toml). */
+export function escrowUid(env: Env): number {
+  return parseInt(env.DEALS_ESCROW_UID, 10);
+}
+
+/*
+ * Policy note (2026-07-17): credits MOVE, they are never destroyed or minted
+ * as refunds. The former spendCredits (burn) and refundCredits (mint-refund)
+ * helpers were removed — every deal flow now uses transferCredits through the
+ * deals escrow account. If a true burn is ever needed, that is a deliberate
+ * economic decision, not a convenience call.
+ */
 
 /**
  * Fetch current balance directly from KKCredits (bypasses local cache).

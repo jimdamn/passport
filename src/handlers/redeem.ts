@@ -1,8 +1,22 @@
 import type { Context } from 'hono';
 import { HTTPException } from 'hono/http-exception';
+import { transferCredits, escrowUid } from '../lib/credits';
+import { logger } from '../lib/logger';
 import type { Env } from '../types';
 
 type AppContext = Context<{ Bindings: Env }>;
+
+/** Resolve a business to its owner's KKAuth uid (for escrow settlement). */
+async function businessOwnerUid(env: Env, businessId: string): Promise<number> {
+  const res = await env.KKAUTH.fetch(
+    new Request(`https://kkauth/internal/business-owner/${businessId}`, {
+      headers: { 'X-Internal-Secret': env.INTERNAL_SECRET },
+    })
+  );
+  if (!res.ok) throw new Error(`business-owner lookup failed: ${res.status}`);
+  const json = await res.json<{ data: { owner_id: number } }>();
+  return json.data.owner_id;
+}
 
 async function sha256(message: string): Promise<string> {
   const msgBuffer = new TextEncoder().encode(message);
@@ -43,7 +57,8 @@ async function findClaim(c: AppContext, claimCode: unknown): Promise<{ kind: 'pr
   if (prizeClaim) return { kind: 'prize', claim: prizeClaim };
 
   const dealClaim = await c.env.DB.prepare(`
-    SELECT cl.token_hash, cl.status, cl.expires_at, cl.created_at, cl.kredits_paid,
+    SELECT cl.id AS claim_id, cl.user_id AS buyer_uid,
+           cl.token_hash, cl.status, cl.expires_at, cl.created_at, cl.kredits_paid,
            d.title AS prize_name, d.details, d.merchant_id, d.merchant_name,
            u.display_name AS buyer_name, u.email AS buyer_email
     FROM passport_deal_claims cl
@@ -134,6 +149,29 @@ export async function confirmClaim(c: AppContext) {
         ? 'This claim was already redeemed.'
         : 'This claim has expired and can no longer be redeemed.',
     });
+  }
+
+  // Deal redemption is now official: settle the held credits from escrow to
+  // the DEAL's merchant (not the scanning user — admins can redeem on a
+  // merchant's behalf). The transfer is idempotent on (deal_settle, claim id),
+  // and a failure leaves the funds safe in escrow with a loud log; the money
+  // is never lost, settlement can be retried with the same ref.
+  if (kind === 'deal') {
+    try {
+      const ownerUid = await businessOwnerUid(c.env, String(claim.merchant_id));
+      await transferCredits(
+        c.env, escrowUid(c.env), ownerUid, claim.kredits_paid,
+        `Deal payment: ${claim.prize_name}`, 'deal_settle', String(claim.claim_id)
+      );
+    } catch (err) {
+      logger.error(JSON.stringify({
+        event: 'deal_settle_failed',
+        claim_id: claim.claim_id,
+        merchant_id: claim.merchant_id,
+        kredits: claim.kredits_paid,
+        error: (err as Error).message,
+      }));
+    }
   }
 
   return c.json({ data: { ...claimPayload(kind, claim), status: 'claimed', redeemable: false } });
