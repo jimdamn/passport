@@ -2,6 +2,7 @@ import type { Context } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import type { Env } from '../types';
 import { fetchMemberActiveOffers } from '../lib/exchange';
+import { matchesInternalSecret } from '../lib/hmac';
 
 type AppContext = Context<{ Bindings: Env }>;
 
@@ -64,8 +65,7 @@ export async function getMember(c: AppContext) {
 // network from day one (no waiting for their first Passport sign-in).
 // Never overwrites an existing member's identity.
 export async function provisionMember(c: AppContext) {
-  const secret = c.req.header('X-Internal-Secret');
-  if (!secret || secret !== c.env.INTERNAL_SECRET) {
+  if (!matchesInternalSecret(c.req.header('X-Internal-Secret'), c.env)) {
     throw new HTTPException(401, { message: 'Unauthorized' });
   }
 

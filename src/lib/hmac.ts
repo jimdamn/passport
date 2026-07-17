@@ -49,3 +49,17 @@ export function timingSafeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
+// Dual-key check for X-Internal-Secret (ARCHITECTURE.md §J): the secondary
+// slot lets the fleet rotate the shared secret without a coordinated outage.
+export function matchesInternalSecret(
+  provided: string | undefined,
+  env: { INTERNAL_SECRET?: string; INTERNAL_SECRET_SECONDARY?: string }
+): boolean {
+  if (!provided) return false;
+  if (env.INTERNAL_SECRET && timingSafeEqual(provided, env.INTERNAL_SECRET)) return true;
+  if (env.INTERNAL_SECRET_SECONDARY && timingSafeEqual(provided, env.INTERNAL_SECRET_SECONDARY)) {
+    return true;
+  }
+  return false;
+}
+

@@ -8,6 +8,7 @@
 import type { Context } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import type { Env } from '../types';
+import { matchesInternalSecret } from '../lib/hmac';
 import { logger } from '../lib/logger';
 
 type AppContext = Context<{ Bindings: Env }>;
@@ -16,8 +17,7 @@ const RETENTION_SECONDS = 30 * 86400;
 const SWEEP_BATCH = 20;
 
 function requireInternalSecret(c: AppContext) {
-  const secret = c.req.header('X-Internal-Secret');
-  if (!secret || secret !== c.env.INTERNAL_SECRET) {
+  if (!matchesInternalSecret(c.req.header('X-Internal-Secret'), c.env)) {
     throw new HTTPException(401, { message: 'Unauthorized' });
   }
 }
