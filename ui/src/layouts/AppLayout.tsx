@@ -32,12 +32,7 @@ export default function AppLayout() {
       .catch(() => { /* best-effort; a failed roll costs the user nothing */ });
   }, [location.pathname, user, isLoading, tenant]);
   const [profileOpen, setProfileOpen] = useState(false);
-  const [isEmbedded, setIsEmbedded] = useState(false);
   const onSavedRef = useRef<(() => void) | undefined>(undefined);
-
-  useEffect(() => {
-    setIsEmbedded(window.self !== window.top);
-  }, []);
 
   function openProfile(onSaved?: () => void) {
     onSavedRef.current = onSaved;
@@ -59,7 +54,12 @@ export default function AppLayout() {
   return (
     <ProfilePanelProvider value={{ openProfile }}>
       <div className="page-shell">
-        {!isEmbedded && <Topbar />}
+        {/* Topbar (with the hamburger drawer) always renders. The dedicated
+            SDK embed uses the separate /embed/drawer route (EmbedDrawer, no
+            chrome), so full-app routes must never hide their own nav — hiding
+            it on a generic iframe (e.g. a device emulator) stranded the
+            hamburger and made navigation inconsistent across contexts. */}
+        <Topbar />
         <main className="main-content">
           <Outlet />
         </main>
