@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { ClipboardList } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useTenant } from '../../context/TenantContext';
 import { getBalance } from '../../api/credits';
@@ -35,7 +36,7 @@ function ExampleDisclaimer() {
       borderRadius: 'var(--r-sm)', padding: '10px 14px', marginBottom: 18,
       display: 'flex', gap: 10, alignItems: 'flex-start',
     }}>
-      <span style={{ fontSize: '1rem', flexShrink: 0 }}>📋</span>
+      <ClipboardList size={16} strokeWidth={2} aria-hidden="true" style={{ flexShrink: 0, color: 'var(--amber)' }} />
       <p style={{
         fontFamily: 'var(--font-sans)', fontSize: '0.78rem',
         color: 'var(--amber)', margin: 0, lineHeight: 1.5,

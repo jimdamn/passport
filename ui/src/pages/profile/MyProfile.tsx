@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { LogOut, Award, ChevronRight } from 'lucide-react';
+import { LogOut, Award, ChevronRight, QrCode, Shield, ShieldCheck, Gift } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTenant } from '../../context/TenantContext';
 import { useProfilePanel } from '../../context/ProfilePanelContext';
@@ -177,7 +177,7 @@ export default function MyProfile() {
             onClick={() => setQrOpen(true)}
             style={{ display: 'flex', alignItems: 'center', gap: 6 }}
           >
-            My QR Code 📱
+            <QrCode size={15} strokeWidth={2} aria-hidden="true" /> My QR Code
           </button>
         </div>
       </div>
@@ -268,8 +268,8 @@ export default function MyProfile() {
       {/* ── Admin Portal Banners ── */}
       {user.is_admin && (
         <div className="card" style={{ marginBottom: 16, borderColor: 'var(--green)', background: 'rgba(30, 51, 32, 0.02)' }}>
-          <p style={{ margin: '0 0 4px', fontWeight: 'bold', fontFamily: 'var(--font-serif)', color: 'var(--green)' }}>
-            🛡️ Network Administrator Portal
+          <p style={{ margin: '0 0 4px', fontWeight: 'bold', fontFamily: 'var(--font-serif)', color: 'var(--green)', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Shield size={18} strokeWidth={2} aria-hidden="true" /> Network Administrator Portal
           </p>
           <p style={{ margin: '0 0 12px', fontSize: '0.82rem', color: 'var(--muted)', fontFamily: 'var(--font-sans)' }}>
             You have administrator privileges. Manage local network configurations and review pending merchant applications.
@@ -324,7 +324,7 @@ export default function MyProfile() {
       {user.business_id && user.business_status === 'pending' && (
         <div className="card" style={{ marginBottom: 16, borderColor: 'var(--amber)', background: 'rgba(200, 134, 10, 0.04)' }}>
           <p style={{ margin: '0 0 4px', fontWeight: 'bold', color: 'var(--amber)', fontFamily: 'var(--font-sans)', fontSize: '0.9rem' }}>
-            ⚙️ Merchant Profile Pending Approval
+            Merchant Profile Pending Approval
           </p>
           <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--muted)', fontFamily: 'var(--font-sans)', lineHeight: 1.45 }}>
             Your application for <strong>{user.business_name || 'your business'}</strong> is currently under review by our community admin and will be active shortly.
@@ -335,21 +335,21 @@ export default function MyProfile() {
       {user.business_id && user.business_status === 'verified' && (
         <div className="card" style={{ marginBottom: 16, borderColor: 'var(--green)', background: 'rgba(30, 51, 32, 0.04)' }}>
           <p style={{ margin: '0 0 4px', fontWeight: 'bold', color: 'var(--green)', display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'var(--font-sans)', fontSize: '0.9rem' }}>
-            <span>🛡️</span> Verified Merchant Profile
+            <ShieldCheck size={16} strokeWidth={2} aria-hidden="true" /> Verified Merchant Profile
           </p>
           <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--muted)', fontFamily: 'var(--font-sans)', lineHeight: 1.45 }}>
             Your business <strong>{user.business_name}</strong> is live! It is fully integrated with the Explore network directory.
           </p>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
             <Link to="/merchant" className="btn btn-amber btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, textDecoration: 'none' }}>
-              <span>🎁</span> Merchant Dashboard
+              <Gift size={15} strokeWidth={2} aria-hidden="true" /> Merchant Dashboard
             </Link>
             <button
               onClick={() => setMerchantQrOpen(true)}
               className="btn btn-green btn-sm"
               style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
             >
-              <span>📱</span> Display Check-in QR Code
+              <QrCode size={15} strokeWidth={2} aria-hidden="true" /> Display Check-in QR Code
             </button>
           </div>
         </div>
@@ -358,7 +358,7 @@ export default function MyProfile() {
       {user.business_id && user.business_status === 'rejected' && (
         <div className="card" style={{ marginBottom: 16, borderColor: 'var(--error)', background: 'rgba(176, 0, 0, 0.04)' }}>
           <p style={{ margin: '0 0 4px', fontWeight: 'bold', color: 'var(--error)', fontFamily: 'var(--font-sans)', fontSize: '0.9rem' }}>
-            ❌ Merchant Application Declined
+            Merchant Application Declined
           </p>
           <p style={{ margin: '0 0 8px', fontSize: '0.82rem', color: 'var(--muted)', fontFamily: 'var(--font-sans)', lineHeight: 1.45 }}>
             The application for <strong>{user.business_name}</strong> could not be verified. Please check your details and re-apply.

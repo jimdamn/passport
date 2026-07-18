@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { getAdminMerchants, reviewMerchant } from '../../api/profile';
-import { ArrowLeft, CheckCircle, XCircle, Clock, ExternalLink, RefreshCw, Search, Filter } from 'lucide-react';
+import { ArrowLeft, CheckCircle, XCircle, Clock, ExternalLink, RefreshCw, Search, Filter, MapPin, Phone, Globe } from 'lucide-react';
 import { Alert } from '../../components/ui/Alert';
 import { Spinner } from '../../components/ui/Spinner';
 
@@ -195,12 +195,12 @@ export default function AdminMerchants() {
                     )}
 
                     <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: '0.8rem', color: 'var(--muted)' }}>
-                      {m.address && <span>📍 {m.address}{m.zip ? `, ${m.zip}` : ''}</span>}
-                      {!m.address && m.zip && <span>📍 ZIP: {m.zip}</span>}
-                      {m.phone && <span>📞 {m.phone}</span>}
+                      {m.address && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><MapPin size={12} aria-hidden="true" /> {m.address}{m.zip ? `, ${m.zip}` : ''}</span>}
+                      {!m.address && m.zip && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><MapPin size={12} aria-hidden="true" /> ZIP: {m.zip}</span>}
+                      {m.phone && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Phone size={12} aria-hidden="true" /> {m.phone}</span>}
                       {m.website && (
-                        <a href={m.website} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--green)', display: 'inline-flex', alignItems: 'center', gap: 3, textDecoration: 'none' }}>
-                          🌐 Website <ExternalLink size={10} />
+                        <a href={m.website} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--green)', display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}>
+                          <Globe size={12} aria-hidden="true" /> Website <ExternalLink size={10} />
                         </a>
                       )}
                     </div>

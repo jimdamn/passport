@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { Store } from 'lucide-react';
 import { updatePersona } from '../../api/profile';
 import { Alert } from '../ui/Alert';
 
@@ -107,8 +108,8 @@ export function BusinessPersonaDrawer({
               <polyline points="12 19 5 12 12 5"/>
             </svg>
           </button>
-          <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: '1.15rem', fontWeight: 'bold', color: 'var(--green)', margin: 0 }}>
-            🏪 Business Persona
+          <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: '1.15rem', fontWeight: 'bold', color: 'var(--green)', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Store size={20} strokeWidth={2} aria-hidden="true" /> Business Persona
           </h2>
         </div>
 
@@ -159,7 +160,7 @@ export function BusinessPersonaDrawer({
         {businessStatus === 'pending' && (
           <div style={{ textAlign: 'center', padding: '20px 0' }}>
             <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.9rem', color: 'var(--muted)', lineHeight: 1.5, margin: 0 }}>
-              ⚙️ Your merchant application is under review. The Business persona will be available once approved.
+              Your merchant application is under review. The Business persona will be available once approved.
             </p>
           </div>
         )}
@@ -167,7 +168,7 @@ export function BusinessPersonaDrawer({
         {businessStatus === 'rejected' && (
           <div style={{ textAlign: 'center', padding: '20px 0' }}>
             <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.9rem', color: 'var(--muted)', lineHeight: 1.5, marginBottom: 16 }}>
-              ❌ Your merchant application was not approved. Please re-apply to use the Business persona.
+              Your merchant application was not approved. Please re-apply to use the Business persona.
             </p>
             <Link to="/profile/apply-merchant" className="btn btn-amber btn-block" onClick={onClose} style={{ textDecoration: 'none' }}>
               Re-apply Now

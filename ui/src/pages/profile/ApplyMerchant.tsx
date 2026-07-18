@@ -288,7 +288,7 @@ export default function ApplyMerchant() {
                   disabled={pending}
                   style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 38, fontSize: '0.82rem' }}
                 >
-                  <Navigation size={14} /> 📍 Pin Current Storefront GPS Location (Mobile)
+                  <Navigation size={14} /> Pin Current Storefront GPS Location (Mobile)
                 </button>
               )}
 
@@ -299,7 +299,7 @@ export default function ApplyMerchant() {
                 disabled={pending}
                 style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 38, fontSize: '0.82rem' }}
               >
-                <Store size={14} /> 🔍 Search Store Street Address (Explicit)
+                <Store size={14} /> Search Store Street Address (Explicit)
               </button>
 
               <button
@@ -309,7 +309,7 @@ export default function ApplyMerchant() {
                 disabled={pending}
                 style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 38, fontSize: '0.82rem' }}
               >
-                <MapPin size={14} /> 🌐 Fallback to ZIP Code Center (Approximate)
+                <MapPin size={14} /> Fallback to ZIP Code Center (Approximate)
               </button>
             </div>
 
@@ -370,7 +370,7 @@ export default function ApplyMerchant() {
             {/* Coordinate Status Layer */}
             {(form.lat || form.lon) && (
               <div style={{ marginTop: 12, padding: '10px 14px', background: 'rgba(42,106,42,0.05)', border: '1px solid rgba(42,106,42,0.18)', borderRadius: 'var(--r-sm)', fontSize: '0.82rem', color: 'var(--success)', display: 'flex', flexDirection: 'column', gap: 3 }}>
-                <div style={{ fontWeight: 'bold' }}>📍 Storefront Coordinates Locked:</div>
+                <div style={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 6 }}><MapPin size={14} strokeWidth={2} aria-hidden="true" /> Storefront Coordinates Locked:</div>
                 <div style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>Latitude: {Number(form.lat).toFixed(6)} | Longitude: {Number(form.lon).toFixed(6)}</div>
                 {geocodedDisplayName && <div style={{ fontSize: '0.74rem', marginTop: 2, color: 'var(--muted)' }}>Resolved Match: {geocodedDisplayName}</div>}
               </div>

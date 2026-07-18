@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useTenant } from '../context/TenantContext';
 import { Spinner } from '../components/ui/Spinner';
-import { X, Award, Compass, QrCode, Camera } from 'lucide-react';
+import { X, Award, Compass, QrCode, Camera, MapPin } from 'lucide-react';
 import QrDrawer from '../components/ui/QrDrawer';
 
 declare global {
@@ -511,7 +511,7 @@ export default function EmbedDrawer() {
                   boxShadow: '0 2px 6px rgba(0,0,0,0.02)'
                 }}
               >
-                <div style={{ fontSize: '2rem', marginBottom: 6 }}>📍</div>
+                <div style={{ marginBottom: 6, color: 'var(--amber)', display: 'flex', justifyContent: 'center' }}><MapPin size={26} strokeWidth={2} aria-hidden="true" /></div>
                 <div style={{
                   fontWeight: 'bold',
                   fontSize: '0.8rem',

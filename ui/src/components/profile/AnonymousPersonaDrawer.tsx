@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { VenetianMask } from 'lucide-react';
 import { getAnonymousPersona, updateAnonymousPersona, updatePersona } from '../../api/profile';
 import { Alert } from '../ui/Alert';
 
@@ -137,8 +138,8 @@ export function AnonymousPersonaDrawer({
               <polyline points="12 19 5 12 12 5"/>
             </svg>
           </button>
-          <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: '1.15rem', fontWeight: 'bold', color: 'var(--green)', margin: 0 }}>
-            👤 Anonymous Persona
+          <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: '1.15rem', fontWeight: 'bold', color: 'var(--green)', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <VenetianMask size={20} strokeWidth={2} aria-hidden="true" /> Anonymous Persona
           </h2>
         </div>
 

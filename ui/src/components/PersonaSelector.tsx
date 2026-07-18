@@ -1,3 +1,5 @@
+import { VenetianMask, UserRound, Store } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
 export interface PersonaSelectorProps {
   currentPersona: 'anonymous' | 'personal' | 'business';
@@ -10,24 +12,31 @@ export function PersonaSelector({
   businessVerified,
   onManage,
 }: PersonaSelectorProps) {
-  const options = [
+  const options: {
+    type: 'anonymous' | 'personal' | 'business';
+    Icon: LucideIcon;
+    label: string;
+    sub: string;
+    disabled: boolean;
+    disabledText?: string;
+  }[] = [
     {
-      type: 'anonymous' as const,
-      icon: '👤',
+      type: 'anonymous',
+      Icon: VenetianMask,
       label: 'Anonymous',
       sub: 'Posts without revealing your name',
       disabled: false,
     },
     {
-      type: 'personal' as const,
-      icon: '🙋',
+      type: 'personal',
+      Icon: UserRound,
       label: 'Personal',
       sub: 'Posts as your display name',
       disabled: false,
     },
     {
-      type: 'business' as const,
-      icon: '🏪',
+      type: 'business',
+      Icon: Store,
       label: 'Business',
       sub: 'Posts as your business name',
       disabled: !businessVerified,
@@ -156,7 +165,7 @@ export function PersonaSelector({
                   padding: '2px 6px', borderRadius: 'var(--r-pill)',
                 }}>Active</span>
               )}
-              <div className="persona-icon">{opt.icon}</div>
+              <div className="persona-icon"><opt.Icon size={26} strokeWidth={1.75} aria-hidden="true" /></div>
               <div className="persona-details">
                 <div className="persona-label">
                   {opt.label}
