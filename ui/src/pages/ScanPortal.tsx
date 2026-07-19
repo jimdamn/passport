@@ -216,6 +216,11 @@ export default function ScanPortal() {
 
   return (
     <div className="main-content" style={{ maxWidth: 480, margin: '0 auto', paddingTop: 20 }}>
+      <div style={{ marginBottom: 8 }}>
+        <Link to="/" style={{ fontFamily: 'var(--font-sans)', fontSize: '0.85rem', color: 'var(--muted)' }}>
+          &larr; Back to Home
+        </Link>
+      </div>
       {/* 1. Loading Geolocation Prompt */}
       {geoPrompting && (
         <div style={{ textAlign: 'center', padding: '40px 16px' }}>
@@ -396,9 +401,6 @@ export default function ScanPortal() {
           <div style={{ display: 'flex', gap: 12 }}>
             <Link to="/my-stamps" className="btn btn-primary" style={{ flex: 1 }}>
               🗺️ My Passport Stamps
-            </Link>
-            <Link to="/" className="btn btn-secondary" style={{ flex: 1 }}>
-              🏠 Back to Hub
             </Link>
           </div>
         </div>

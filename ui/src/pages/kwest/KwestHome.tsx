@@ -24,6 +24,11 @@ export default function KwestHome() {
 
   return (
     <div className="main-content" style={{ maxWidth: 680, paddingTop: 20, paddingBottom: 80 }}>
+      <div style={{ marginBottom: 8 }}>
+        <Link to="/" style={{ fontFamily: 'var(--font-sans)', fontSize: '0.85rem', color: 'var(--muted)' }}>
+          &larr; Back to Home
+        </Link>
+      </div>
       <h1 style={{ margin: '0 0 4px', fontSize: '1.5rem', fontFamily: 'var(--font-serif)', color: 'var(--green)', display: 'flex', alignItems: 'center', gap: 8 }}>
         <Compass size={22} style={{ color: 'var(--amber)' }} /> KrowdKwest
       </h1>

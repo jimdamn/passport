@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useTenant } from '../context/TenantContext';
 import {
   getHappenings, categoryLabel, HAPPENING_CATEGORIES,
@@ -210,6 +210,11 @@ export default function Happenings() {
   // stays chronological - distance is a filter, never a ranking, so it's calm.
   return (
     <div className="main-content" style={{ maxWidth: 800, margin: '0 auto', paddingTop: 20, paddingBottom: 80 }}>
+      <div style={{ marginBottom: 8 }}>
+        <Link to="/" style={{ fontFamily: 'var(--font-sans)', fontSize: '0.85rem', color: 'var(--muted)' }}>
+          &larr; Back to Home
+        </Link>
+      </div>
       <h1 style={{ margin: '0 0 4px', fontSize: '1.5rem', fontFamily: 'var(--font-serif)', color: 'var(--green)', display: 'flex', alignItems: 'center', gap: 8 }}>
         <CalendarDays size={22} /> Happenings
       </h1>
