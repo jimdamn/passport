@@ -137,7 +137,8 @@ export default function AdminSupport() {
               </div>
               <p style={{ margin: '0 0 8px', fontSize: '0.9rem', color: 'var(--text)', lineHeight: 1.5 }}>{m.body}</p>
               <p style={{ margin: '0 0 10px', fontSize: '0.74rem', color: 'var(--muted)' }}>
-                {m.email ?? (m.kkauth_uid ? `Member #${m.kkauth_uid}` : 'Anonymous')} · {m.route ?? 'no route'}
+                {m.email || (m.kkauth_uid ? `Member #${m.kkauth_uid}` : 'Anonymous')}
+                {m.email && m.kkauth_uid ? ` (Member #${m.kkauth_uid})` : ''} · {m.route ?? 'no route'}
               </p>
               <textarea
                 className="form-textarea"

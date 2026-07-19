@@ -81,8 +81,10 @@ function Tip({ icon: Icon, title, body }: { icon: LucideIcon; title: string; bod
 }
 
 // ─── Talk to us ───────────────────────────────────────────────────────────────────────────────────
-// One-way member-to-admin channel. Logged-out visitors may submit but must
-// supply an email; logged-in members see their own history below the form.
+// One-way member-to-admin channel. The email field is always shown and
+// always optional, logged in or not - it's the admin's only reliable reply
+// channel, so it's offered every time rather than inferred from account
+// state. Logged-in members also see their own history below the form.
 function ContactSection() {
   const { user } = useAuth();
   const { tenant } = useTenant();
@@ -113,7 +115,7 @@ function ContactSection() {
       await submitSupport(tenant.id, {
         category,
         body: body.trim(),
-        email: user ? undefined : email.trim() || undefined,
+        email: email.trim() || undefined,
         route: window.location.pathname,
       });
       setBody('');
@@ -123,8 +125,8 @@ function ContactSection() {
       setError(
         err.message === 'rate_limited'
           ? 'Too many messages today. Try again tomorrow.'
-          : err.message === 'email_required'
-            ? 'Add an email so we can reach you.'
+          : err.message === 'invalid_email'
+            ? "That doesn't look like a valid email."
             : 'Could not send that. Try again.'
       );
     } finally {
@@ -161,20 +163,17 @@ function ContactSection() {
               ))}
             </select>
           </div>
-          {!user && (
-            <div className="form-group" style={{ margin: 0 }}>
-              <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600 }}>Your email</label>
-              <input
-                type="email"
-                className="form-input"
-                required
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                style={{ minHeight: 38 }}
-              />
-            </div>
-          )}
+          <div className="form-group" style={{ margin: 0 }}>
+            <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600 }}>Your email (optional)</label>
+            <input
+              type="email"
+              className="form-input"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              style={{ minHeight: 38 }}
+            />
+          </div>
           <div className="form-group" style={{ margin: 0 }}>
             <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600 }}>Message</label>
             <textarea

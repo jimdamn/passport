@@ -99,8 +99,12 @@ export async function submitSupport(c: AppContext) {
   const input = await c.req.json<SupportInput>();
   const { category, body, email } = validateSupportInput(input);
 
-  if (!uid && !EMAIL_RE.test(email)) {
-    throw new HTTPException(400, { message: 'email_required' });
+  // Email is always optional, for logged-in and anonymous submitters alike -
+  // it's the admin's only reliable reply channel, so we take it whenever
+  // it's given rather than relying on account records. If someone doesn't
+  // leave one, that's their choice; only a malformed (non-empty) value 400s.
+  if (email && !EMAIL_RE.test(email)) {
+    throw new HTTPException(400, { message: 'invalid_email' });
   }
 
   const rateKey = `support_rate:${uid ?? c.req.header('CF-Connecting-IP') ?? 'unknown'}`;
@@ -114,7 +118,7 @@ export async function submitSupport(c: AppContext) {
     .bind(
       tenant.id,
       uid ?? null,
-      uid ? null : email,
+      email || null,
       category,
       body,
       input.route ?? null,
@@ -222,8 +226,8 @@ export async function internalSubmitSupport(c: AppContext) {
   }
 
   const uid = input.kkauth_uid;
-  if (!uid && !EMAIL_RE.test(email)) {
-    throw new HTTPException(400, { message: 'email_required' });
+  if (email && !EMAIL_RE.test(email)) {
+    throw new HTTPException(400, { message: 'invalid_email' });
   }
 
   const rateKey = `support_rate:${uid ?? email ?? 'unknown'}`;
@@ -237,7 +241,7 @@ export async function internalSubmitSupport(c: AppContext) {
     .bind(
       tenantId,
       uid ?? null,
-      uid ? null : email,
+      email || null,
       sourceApp,
       category,
       body,
