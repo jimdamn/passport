@@ -204,7 +204,7 @@ interface InternalSupportInput extends SupportInput {
   user_agent?: string;
 }
 
-const INTERNAL_ALLOWED_SOURCE_APPS = ['kk-business'];
+const INTERNAL_ALLOWED_SOURCE_APPS = ['kk-business', 'kk-apps-hub', 'field-notes', 'exchange'];
 
 /** POST /api/internal/support - X-Internal-Secret gated (e.g. kk-business forwarding). */
 export async function internalSubmitSupport(c: AppContext) {
