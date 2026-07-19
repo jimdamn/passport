@@ -107,7 +107,12 @@ export default function MyProfile() {
 
   if (!user) {
     return (
-      <div className="main-content" style={{ paddingTop: 32 }}>
+      <div className="main-content" style={{ paddingTop: 24 }}>
+        <div style={{ marginBottom: 8 }}>
+          <Link to="/" style={{ fontFamily: 'var(--font-sans)', fontSize: '0.85rem', color: 'var(--muted)' }}>
+            &larr; Back to Passport
+          </Link>
+        </div>
         <div className="card" style={{ textAlign: 'center', padding: 32 }}>
           <p style={{ marginBottom: 16 }}>You are not signed in.</p>
           <a className="btn btn-primary" href="/auth/login">Sign In</a>
@@ -134,6 +139,12 @@ export default function MyProfile() {
 
   return (
     <div className="main-content" style={{ paddingTop: 24, paddingBottom: 96 }}>
+
+      <div style={{ marginBottom: 8 }}>
+        <Link to="/" style={{ fontFamily: 'var(--font-sans)', fontSize: '0.85rem', color: 'var(--muted)' }}>
+          &larr; Back to Passport
+        </Link>
+      </div>
 
       {isWelcome && (
         <div className="card" style={{ marginBottom: 16, borderColor: 'var(--amber)', background: '#fffbf2' }}>
