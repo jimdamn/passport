@@ -246,17 +246,24 @@ export default function MyStamps() {
       : '/auth/login';
 
     return (
-      <div style={{ maxWidth: 480, margin: '40px auto', textAlign: 'center', padding: '0 16px' }}>
-        <div style={{ fontSize: '3rem', marginBottom: 16 }}>🗺️</div>
-        <h2 style={{ fontFamily: 'var(--font-serif)', color: 'var(--green)', marginBottom: 10 }}>My Passport Stamps</h2>
-        <p style={{ fontFamily: 'var(--font-sans)', color: 'var(--muted)', marginBottom: 20, fontSize: '0.9rem', lineHeight: 1.5 }}>
-          {claimFromUrl
-            ? `You have a winning claim code ready to deposit! Sign in (or create your free passport) and we'll add it to your account automatically.`
-            : 'Sign in to view your collected stamps, track your exploration milestones, and view earned badges.'}
-        </p>
-        <Link to={loginTo} className="btn btn-primary btn-block">
-          {claimFromUrl ? 'Sign In & Deposit My Win' : 'Sign In'}
-        </Link>
+      <div style={{ maxWidth: 480, margin: '40px auto', padding: '0 16px' }}>
+        <div style={{ marginBottom: 8 }}>
+          <Link to="/" style={{ fontFamily: 'var(--font-sans)', fontSize: '0.85rem', color: 'var(--muted)' }}>
+            &larr; Back to Passport
+          </Link>
+        </div>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: '3rem', marginBottom: 16 }}>🗺️</div>
+          <h2 style={{ fontFamily: 'var(--font-serif)', color: 'var(--green)', marginBottom: 10 }}>My Passport Stamps</h2>
+          <p style={{ fontFamily: 'var(--font-sans)', color: 'var(--muted)', marginBottom: 20, fontSize: '0.9rem', lineHeight: 1.5 }}>
+            {claimFromUrl
+              ? `You have a winning claim code ready to deposit! Sign in (or create your free passport) and we'll add it to your account automatically.`
+              : 'Sign in to view your collected stamps, track your exploration milestones, and view earned badges.'}
+          </p>
+          <Link to={loginTo} className="btn btn-primary btn-block">
+            {claimFromUrl ? 'Sign In & Deposit My Win' : 'Sign In'}
+          </Link>
+        </div>
       </div>
     );
   }
@@ -288,6 +295,11 @@ export default function MyStamps() {
 
   return (
     <div className="main-content" style={{ paddingTop: 24, paddingBottom: 80 }}>
+      <div style={{ marginBottom: 8 }}>
+        <Link to="/" style={{ fontFamily: 'var(--font-sans)', fontSize: '0.85rem', color: 'var(--muted)' }}>
+          &larr; Back to Passport
+        </Link>
+      </div>
       {/* Title */}
       <div style={{ marginBottom: 24 }}>
         <h1 className="page-title" style={{ margin: '0 0 4px 0' }}>My Passport</h1>

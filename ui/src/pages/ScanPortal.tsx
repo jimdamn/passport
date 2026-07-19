@@ -218,7 +218,7 @@ export default function ScanPortal() {
     <div className="main-content" style={{ maxWidth: 480, margin: '0 auto', paddingTop: 20 }}>
       <div style={{ marginBottom: 8 }}>
         <Link to="/" style={{ fontFamily: 'var(--font-sans)', fontSize: '0.85rem', color: 'var(--muted)' }}>
-          &larr; Back to Home
+          &larr; Back to Passport
         </Link>
       </div>
       {/* 1. Loading Geolocation Prompt */}

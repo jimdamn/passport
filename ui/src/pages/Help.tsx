@@ -222,7 +222,7 @@ export default function Help() {
 
       <div style={{ marginBottom: 8 }}>
         <Link to="/" style={{ fontFamily: 'var(--font-sans)', fontSize: '0.85rem', color: 'var(--muted)' }}>
-          &larr; Back to Home
+          &larr; Back to Passport
         </Link>
       </div>
 
