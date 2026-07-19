@@ -165,6 +165,21 @@ export interface Interest {
   created_at: number;
 }
 
+export interface SupportMessageRow {
+  id: number;
+  tenant_id: string;
+  kkauth_uid: number | null;
+  email: string | null;
+  source_app: string;
+  category: 'problem' | 'question' | 'idea' | 'business';
+  body: string;
+  route: string | null;
+  user_agent: string | null;
+  status: 'new' | 'seen' | 'resolved';
+  admin_note: string | null;
+  created_at: number;
+}
+
 export interface Trade {
   id: string;
   tenant_id: string;

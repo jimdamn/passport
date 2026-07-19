@@ -1,6 +1,13 @@
+import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useTenant } from '../context/TenantContext';
+import { useAuth } from '../context/AuthContext';
 import { MapPin, Trees, Trophy, Gem, Sparkles, type LucideIcon } from 'lucide-react';
+import { Alert } from '../components/ui/Alert';
+import {
+  SUPPORT_CATEGORIES, SUPPORT_STATUS_LABEL, submitSupport, getMySupport,
+  type SupportMessage,
+} from '../api/support';
 
 // ─── Section component ────────────────────────────────────────────────────────────────────────────────
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -69,6 +76,137 @@ function Tip({ icon: Icon, title, body }: { icon: LucideIcon; title: string; bod
       <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.88rem', color: 'var(--muted)', lineHeight: 1.55 }}>
         {body}
       </p>
+    </div>
+  );
+}
+
+// ─── Talk to us ───────────────────────────────────────────────────────────────────────────────────
+// One-way member-to-admin channel. Logged-out visitors may submit but must
+// supply an email; logged-in members see their own history below the form.
+function ContactSection() {
+  const { user } = useAuth();
+  const { tenant } = useTenant();
+  const [category, setCategory] = useState<string>(SUPPORT_CATEGORIES[0].value);
+  const [body, setBody] = useState('');
+  const [email, setEmail] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [sent, setSent] = useState(false);
+  const [messages, setMessages] = useState<SupportMessage[]>([]);
+
+  function loadMessages() {
+    if (!user || !tenant) return;
+    getMySupport(tenant.id)
+      .then(res => setMessages(res.data || []))
+      .catch(() => setMessages([]));
+  }
+
+  useEffect(loadMessages, [user, tenant]);
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (busy || !tenant || !body.trim()) return;
+    setBusy(true);
+    setError('');
+    setSent(false);
+    try {
+      await submitSupport(tenant.id, {
+        category,
+        body: body.trim(),
+        email: user ? undefined : email.trim() || undefined,
+        route: window.location.pathname,
+      });
+      setBody('');
+      setSent(true);
+      loadMessages();
+    } catch (err: any) {
+      setError(
+        err.message === 'rate_limited'
+          ? 'Too many messages today. Try again tomorrow.'
+          : err.message === 'email_required'
+            ? 'Add an email so we can reach you.'
+            : 'Could not send that. Try again.'
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div id="contact" />
+      <h2 style={{
+        fontFamily: 'var(--font-serif)',
+        fontSize: '1.25rem',
+        fontWeight: 'bold',
+        color: 'var(--green)',
+        marginBottom: 12,
+        paddingBottom: 8,
+        borderBottom: '2px solid var(--border)',
+      }}>
+        Talk to Us
+      </h2>
+      <div className="card" style={{ background: 'var(--white)', padding: 16 }}>
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div className="form-group" style={{ margin: 0 }}>
+            <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600 }}>What's this about</label>
+            <select
+              className="form-select"
+              value={category}
+              onChange={e => setCategory(e.target.value)}
+              style={{ minHeight: 38, width: '100%' }}
+            >
+              {SUPPORT_CATEGORIES.map(c => (
+                <option key={c.value} value={c.value}>{c.label}</option>
+              ))}
+            </select>
+          </div>
+          {!user && (
+            <div className="form-group" style={{ margin: 0 }}>
+              <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600 }}>Your email</label>
+              <input
+                type="email"
+                className="form-input"
+                required
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                style={{ minHeight: 38 }}
+              />
+            </div>
+          )}
+          <div className="form-group" style={{ margin: 0 }}>
+            <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600 }}>Message</label>
+            <textarea
+              className="form-textarea"
+              required
+              value={body}
+              onChange={e => setBody(e.target.value)}
+              placeholder="What happened?"
+              rows={4}
+            />
+          </div>
+          {error && <Alert type="error">{error}</Alert>}
+          {sent && <Alert type="success">Received. We read every message.</Alert>}
+          <button type="submit" className="btn btn-amber" disabled={busy} style={{ minHeight: 40 }}>
+            {busy ? 'Sending...' : 'Send'}
+          </button>
+        </form>
+      </div>
+      {messages.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {messages.map(m => (
+            <div key={m.id} className="card" style={{ background: 'var(--white)', padding: '12px 16px' }}>
+              <p style={{ margin: '0 0 4px', fontSize: '0.88rem', color: 'var(--text)' }}>
+                {m.body.length > 80 ? `${m.body.slice(0, 80)}...` : m.body}
+              </p>
+              <p style={{ margin: 0, fontSize: '0.74rem', color: 'var(--muted)' }}>
+                {new Date(m.created_at * 1000).toLocaleDateString()} · {SUPPORT_STATUS_LABEL[m.status]}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -315,6 +453,10 @@ export default function Help() {
         <Link to="/my-stamps" className="btn btn-amber">
           My Passport Stamps
         </Link>
+      </div>
+
+      <div style={{ marginTop: 32 }}>
+        <ContactSection />
       </div>
 
     </div>

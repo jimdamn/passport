@@ -40,6 +40,10 @@ import {
   adminListClaims, adminUpdateClaim, adminSetRetroPublished, adminSetWeatherPause,
 } from '../../src/handlers/kwest-admin';
 import { internalKwestLifecycle, internalKwestRetention } from '../../src/handlers/kwest-internal';
+import {
+  submitSupport, getMySupport, adminListSupport, adminSupportCount, adminUpdateSupport,
+  internalSubmitSupport, internalSupportRetention,
+} from '../../src/handlers/support';
 
 import { logger } from '../../src/lib/logger';
 
@@ -137,6 +141,12 @@ tenantApp.get('/admin/happenings', adminListHappenings);
 tenantApp.put('/admin/happenings/:id', adminUpdateHappening);
 tenantApp.delete('/admin/happenings/:id', adminDeleteHappening);
 
+// Support messages ("Talk to us") - unified platform inbox (kk-business forwards in).
+tenantApp.get('/support/mine', getMySupport);
+tenantApp.get('/admin/support', adminListSupport);
+tenantApp.get('/admin/support/count', adminSupportCount);
+tenantApp.patch('/admin/support/:id', adminUpdateSupport);
+
 // KrowdKwest - guest progress migrates onto the account on sign-in.
 tenantApp.post('/kwest/attach', attachKwestGuest);
 tenantApp.post('/kwest/:slug/display-choice', setKwestDisplayChoice);
@@ -192,12 +202,16 @@ app.post('/api/internal/members/provision', provisionMember);
 // Cron backstop for KrowdKwest lifecycle + retention (X-Internal-Secret protected)
 app.post('/api/internal/kwest/lifecycle', internalKwestLifecycle);
 app.post('/api/internal/kwest/retention', internalKwestRetention);
+// Support inbox forwarding (kk-business) + retention sweep (X-Internal-Secret protected)
+app.post('/api/internal/support', internalSubmitSupport);
+app.post('/api/internal/support/retention', internalSupportRetention);
 
 // Public Passport Scan & Claims APIs (Tenant-scoped, Guest-friendly)
 app.post('/api/t/:tenant/passport/scan', resolveTenant, scanPlaque);
 app.get('/api/t/:tenant/deals', resolveTenant, listDeals);
 app.get('/api/t/:tenant/exchange/offers', resolveTenant, listExchangeOffers);
 app.get('/api/t/:tenant/happenings', resolveTenant, listHappenings);
+app.post('/api/t/:tenant/support', resolveTenant, submitSupport);
 app.post('/api/t/:tenant/passport/claims/register', resolveTenant, registerClaim);
 app.get('/api/t/:tenant/network-members', resolveTenant, getNetworkMembers);
 app.get('/api/t/:tenant/members/:id', resolveTenant, getMember);

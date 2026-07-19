@@ -1,3 +1,5 @@
+import type { Env, SupportMessageRow } from '../types';
+
 export interface SendClaimEmailOptions {
   to: string;
   claimCode: string;
@@ -67,5 +69,41 @@ export async function sendClaimEmail({
     const error = await response.text();
     console.error(`Resend error (${response.status}):`, error);
     throw new Error(`Email delivery failed (${response.status}): ${error}`);
+  }
+}
+
+/**
+ * Alerts Jim by email the moment a new support message lands - the gap the
+ * LVE original never closed (it only had a dashboard badge). Skips silently
+ * if RESEND_API_KEY is unset; callers must never let this fail the request
+ * (invoke via c.executionCtx.waitUntil and swallow errors).
+ */
+export async function sendSupportAlertEmail(env: Env, row: SupportMessageRow): Promise<void> {
+  if (!env.RESEND_API_KEY) return;
+
+  try {
+    const recipient = (env.ADMIN_EMAILS ?? 'gottabuylocal@gmail.com').split(',')[0].trim();
+    const submitter = row.email ?? `member #${row.kkauth_uid}`;
+
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${env.RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: `Lake & Locals <noreply@lakeandlocals.com>`,
+        to: [recipient],
+        subject: `New support message (${row.category}) - ${row.source_app}`,
+        text: `Category: ${row.category}\nSource app: ${row.source_app}\nSubmitter: ${submitter}\n\n${row.body}\n\nhttps://apps.lakeandlocals.com/profile/admin/support`,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      console.error(`Resend error (${response.status}):`, error);
+    }
+  } catch (err) {
+    console.error('[sendSupportAlertEmail] failed:', err);
   }
 }

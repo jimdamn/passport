@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { LogOut, Award, ChevronRight, QrCode, Shield, ShieldCheck, Gift } from 'lucide-react';
+import { LogOut, Award, ChevronRight, QrCode, Shield, ShieldCheck, Gift, Inbox } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTenant } from '../../context/TenantContext';
 import { useProfilePanel } from '../../context/ProfilePanelContext';
 import { getMe } from '../../api/auth';
 import { getBalance } from '../../api/credits';
+import { getAdminSupportCount } from '../../api/support';
 import { Spinner } from '../../components/ui/Spinner';
 import StatsPanel, { type StatsPanelType } from '../../components/profile/StatsPanel';
 import BadgeStrip, { type Badge } from '../../components/ui/BadgeStrip';
@@ -90,6 +91,13 @@ export default function MyProfile() {
     staleTime: 5 * 60_000,
   });
 
+  const { data: supportCountData } = useQuery({
+    queryKey: ['support-count', tenant?.id],
+    queryFn: () => getAdminSupportCount(tenant!.id),
+    enabled: !!tenant && !!user?.is_admin,
+    staleTime: 60_000,
+  });
+
   const [statsPanel,    setStatsPanel]    = useState<StatsPanelType | null>(null);
 
   function handleLogout() {
@@ -122,6 +130,7 @@ export default function MyProfile() {
   const creditsName      = tenant?.config.credits_name ?? 'KrowdKredits';
   const currentAvatarUrl = (meData as any)?.avatar_url ?? user.avatar_url ?? null;
   const myBadges         = computeMyBadges(profile);
+  const newSupportCount  = supportCountData?.data?.new_count ?? 0;
 
   return (
     <div className="main-content" style={{ paddingTop: 24, paddingBottom: 96 }}>
@@ -286,6 +295,18 @@ export default function MyProfile() {
             </Link>
             <Link to="/profile/admin/deals" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
               Deal Review
+            </Link>
+            <Link to="/profile/admin/support" className="btn btn-secondary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, textDecoration: 'none', position: 'relative' }}>
+              <Inbox size={13} /> Support Inbox
+              {newSupportCount > 0 && (
+                <span style={{
+                  background: 'var(--amber)', color: 'var(--white)',
+                  fontFamily: 'var(--font-sans)', fontSize: '0.66rem', fontWeight: 700,
+                  padding: '1px 6px', borderRadius: 'var(--r-pill)', lineHeight: 1.4,
+                }}>
+                  {newSupportCount}
+                </span>
+              )}
             </Link>
             <Link to="/profile/admin/volunteer" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
               Volunteer Shift Review
