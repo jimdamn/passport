@@ -1,4 +1,4 @@
-import { useParams } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useTenant } from '../../context/TenantContext';
 import { getMember } from '../../api/profile';
@@ -63,7 +63,12 @@ export default function PublicProfile() {
 
   if (isError || !data) {
     return (
-      <div className="main-content" style={{ paddingTop: 32 }}>
+      <div className="main-content" style={{ paddingTop: 24 }}>
+        <div style={{ marginBottom: 8 }}>
+          <Link to="/explore" style={{ fontFamily: 'var(--font-sans)', fontSize: '0.85rem', color: 'var(--muted)' }}>
+            &larr; Back to Explore
+          </Link>
+        </div>
         <Alert type="error">Member not found.</Alert>
       </div>
     );
@@ -76,6 +81,12 @@ export default function PublicProfile() {
 
   return (
     <div className="main-content" style={{ paddingTop: 24, paddingBottom: 80 }}>
+
+      <div style={{ marginBottom: 8 }}>
+        <Link to="/explore" style={{ fontFamily: 'var(--font-sans)', fontSize: '0.85rem', color: 'var(--muted)' }}>
+          &larr; Back to Explore
+        </Link>
+      </div>
 
       {/* Identity */}
       <div className="card" style={{ marginBottom: 16 }}>

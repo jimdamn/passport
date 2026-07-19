@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { useTenant } from '../../context/TenantContext';
 import { getKwestRetro, type KwestRetroResult, type KwestRetroWinner } from '../../api/kwest';
 import { Trophy, Award, Medal, Heart } from 'lucide-react';
@@ -27,6 +27,11 @@ export default function KwestRetro() {
   if (error || !retro) {
     return (
       <div className="main-content" style={{ paddingTop: 24 }}>
+        <div style={{ marginBottom: 8 }}>
+          <Link to="/kwest" style={{ fontFamily: 'var(--font-sans)', fontSize: '0.85rem', color: 'var(--muted)' }}>
+            &larr; Back to KrowdKwest
+          </Link>
+        </div>
         <p style={{ color: 'var(--muted)', fontSize: '0.9rem' }}>{error || 'This hunt could not be found.'}</p>
       </div>
     );
@@ -34,7 +39,12 @@ export default function KwestRetro() {
 
   if (!retro.published) {
     return (
-      <div className="main-content" style={{ paddingTop: 48, textAlign: 'center' }}>
+      <div className="main-content" style={{ paddingTop: 24, textAlign: 'center' }}>
+        <div style={{ marginBottom: 8, textAlign: 'left' }}>
+          <Link to="/kwest" style={{ fontFamily: 'var(--font-sans)', fontSize: '0.85rem', color: 'var(--muted)' }}>
+            &larr; Back to KrowdKwest
+          </Link>
+        </div>
         <Trophy size={28} style={{ color: 'var(--amber)', marginBottom: 8 }} />
         <p style={{ color: 'var(--muted)', fontSize: '0.9rem' }}>This hunt hasn't wrapped up yet - the winners page appears once it officially closes.</p>
       </div>
@@ -48,6 +58,11 @@ export default function KwestRetro() {
 
   return (
     <div className="main-content" style={{ maxWidth: 640, paddingTop: 20, paddingBottom: 80 }}>
+      <div style={{ marginBottom: 8 }}>
+        <Link to="/kwest" style={{ fontFamily: 'var(--font-sans)', fontSize: '0.85rem', color: 'var(--muted)' }}>
+          &larr; Back to KrowdKwest
+        </Link>
+      </div>
       <h1 style={{ margin: '0 0 4px', fontSize: '1.5rem', fontFamily: 'var(--font-serif)', color: 'var(--green)' }}>
         {retro.hunt_name}
       </h1>

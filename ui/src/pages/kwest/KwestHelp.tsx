@@ -81,6 +81,11 @@ export default function KwestHelp() {
 
   return (
     <div className="main-content" style={{ maxWidth: 680, paddingTop: 24, paddingBottom: 80 }}>
+      <div style={{ marginBottom: 8 }}>
+        <Link to="/kwest" style={{ fontFamily: 'var(--font-sans)', fontSize: '0.85rem', color: 'var(--muted)' }}>
+          &larr; Back to KrowdKwest
+        </Link>
+      </div>
       <div style={{ marginBottom: 32 }}>
         <h1 className="page-title" style={{ fontFamily: 'var(--font-serif)', color: 'var(--green)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
           <Compass size={22} style={{ color: 'var(--amber)' }} /> How KrowdKwest Works
