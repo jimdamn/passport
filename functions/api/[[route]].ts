@@ -29,6 +29,10 @@ import {
 
 import { listExchangeOffers } from '../../src/handlers/exchange';
 import { getContentSummary } from '../../src/handlers/content';
+import {
+  adminListExchangeOffers, adminListFieldNotesStories,
+  adminSetExchangeVisibility, adminSetFieldNotesVisibility,
+} from '../../src/handlers/adminContent';
 import { rollHunt } from '../../src/lib/game';
 import {
   listKwestHunts, getKwestHunt, getKwestRules, startKwest, ackKwest, getKwestState, revealKwest,
@@ -105,6 +109,10 @@ tenantApp.post('/passport/claims/attach', attachClaim);
 tenantApp.get('/credits/balance', getBalance);
 tenantApp.get('/credits/balance-only', getBalanceOnly);
 tenantApp.get('/me/content-summary', getContentSummary);
+tenantApp.get('/admin/content/exchange', adminListExchangeOffers);
+tenantApp.get('/admin/content/field-notes', adminListFieldNotesStories);
+tenantApp.post('/admin/content/exchange/:id/visibility', adminSetExchangeVisibility);
+tenantApp.post('/admin/content/field-notes/:id/visibility', adminSetFieldNotesVisibility);
 tenantApp.post('/admin/test-plaque', createTestPlaque);
 tenantApp.delete('/admin/test-plaque', removeTestPlaque);
 tenantApp.get('/admin/plaques', listPlaques);

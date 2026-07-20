@@ -984,6 +984,74 @@ authRouter.post('/profile/admin/merchants/:id/review', async (c) => {
   return c.json(kkBody);
 });
 
+// ─────────────────────────────────────────────────────────────
+// Admin user oversight — proxies to KKAuth's new /admin router (Service
+// Binding, same shape as the merchants proxy above). KKAuth is not
+// tenant-scoped, so these need no tenant param.
+// ─────────────────────────────────────────────────────────────
+
+async function requireAdminBearer(c: { req: { header: (name: string) => string | undefined } }, env: Env): Promise<string> {
+  const authHeader = c.req.header('Authorization');
+  if (!authHeader) throw new HTTPException(401, { message: 'Authorization required' });
+  const token = authHeader.replace('Bearer ', '').trim();
+  let payload: KKAuthPayload;
+  try {
+    payload = await verifyToken(token, env);
+  } catch {
+    throw new HTTPException(401, { message: 'Invalid or expired token' });
+  }
+  const adminEmails = env.ADMIN_EMAILS ?? 'gottabuylocal@gmail.com';
+  const isAdmin = adminEmails.split(',').map(e => e.trim().toLowerCase()).includes(payload.email?.toLowerCase());
+  if (!isAdmin) throw new HTTPException(403, { message: 'Forbidden: Admin access required' });
+  return authHeader;
+}
+
+// GET /api/auth/profile/admin/users
+authRouter.get('/profile/admin/users', async (c) => {
+  const authHeader = await requireAdminBearer(c, c.env);
+
+  const qs = new URL(c.req.url).search;
+  const res = await c.env.KKAUTH.fetch(
+    new Request(`https://kkauth/admin/users${qs}`, {
+      headers: { 'Authorization': authHeader },
+    })
+  );
+  const kkBody = await res.json<any>();
+  return c.json(kkBody, res.status as any);
+});
+
+// POST /api/auth/profile/admin/users/:id/suspend
+authRouter.post('/profile/admin/users/:id/suspend', async (c) => {
+  const authHeader = await requireAdminBearer(c, c.env);
+  const id = c.req.param('id');
+  const body = await c.req.json().catch(() => ({}));
+
+  const res = await c.env.KKAUTH.fetch(
+    new Request(`https://kkauth/admin/users/${id}/suspend`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': authHeader },
+      body: JSON.stringify(body),
+    })
+  );
+  const kkBody = await res.json<any>();
+  return c.json(kkBody, res.status as any);
+});
+
+// POST /api/auth/profile/admin/users/:id/unsuspend
+authRouter.post('/profile/admin/users/:id/unsuspend', async (c) => {
+  const authHeader = await requireAdminBearer(c, c.env);
+  const id = c.req.param('id');
+
+  const res = await c.env.KKAUTH.fetch(
+    new Request(`https://kkauth/admin/users/${id}/unsuspend`, {
+      method: 'POST',
+      headers: { 'Authorization': authHeader },
+    })
+  );
+  const kkBody = await res.json<any>();
+  return c.json(kkBody, res.status as any);
+});
+
 // GET /api/auth/persona
 authRouter.get('/persona', async (c) => {
   const authHeader = c.req.header('Authorization');

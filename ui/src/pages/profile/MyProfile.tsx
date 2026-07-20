@@ -303,6 +303,12 @@ export default function MyProfile() {
             <Link to="/profile/admin/merchants" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
               Review Merchant Applications
             </Link>
+            <Link to="/profile/admin/users" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
+              Users
+            </Link>
+            <Link to="/profile/admin/content" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
+              Content
+            </Link>
             <Link to="/profile/admin/plaques" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
               Plaques & Events
             </Link>
