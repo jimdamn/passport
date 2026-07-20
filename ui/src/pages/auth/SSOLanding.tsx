@@ -24,7 +24,7 @@ export default function SSOLanding() {
     ssoLogin(params)
       .then(result => {
         login(result);
-        navigate('/skills', { replace: true });
+        navigate('/', { replace: true });
       })
       .catch(err => {
         setError(err.message || 'SSO authentication failed. Please try again or log in manually.');
