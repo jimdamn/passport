@@ -18,6 +18,7 @@ import { AnonymousPersonaDrawer } from '../../components/profile/AnonymousPerson
 import { PersonalPersonaDrawer } from '../../components/profile/PersonalPersonaDrawer';
 import { BusinessPersonaDrawer } from '../../components/profile/BusinessPersonaDrawer';
 import MyPostsCards from '../../components/profile/MyPostsCards';
+import BusinessOverviewCard from '../../components/profile/BusinessOverviewCard';
 
 // Badge definitions mirrored client-side (server is authoritative; this is for /profile self-view)
 const BADGE_DEFS: Badge[] = [
@@ -390,6 +391,8 @@ export default function MyProfile() {
           </div>
         </div>
       )}
+
+      {user.business_status === 'verified' && <BusinessOverviewCard />}
 
       {user.business_id && user.business_status === 'rejected' && (
         <div className="card" style={{ marginBottom: 16, borderColor: 'var(--error)', background: 'rgba(176, 0, 0, 0.04)' }}>
