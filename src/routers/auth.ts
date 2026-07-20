@@ -85,6 +85,14 @@ export interface MerchantBusiness {
   hide_address?: number | boolean | null;
 }
 
+// passport_plaques.category has a stricter CHECK constraint than
+// businesses.category ever enforced (that column has no CHECK at all, so
+// legacy/hand-inserted rows can carry values like 'Other' that were never
+// valid choices in the merchant application form).
+const PLAQUE_CATEGORIES = new Set([
+  'dining', 'shopping', 'farmfood', 'recreation', 'attractions', 'lodging', 'services',
+]);
+
 /**
  * Idempotently ensure a verified business has an active passport_plaques row so
  * its check-in QR code can work. No-ops (returns false) if the business has no
@@ -102,6 +110,8 @@ export async function ensureMerchantPlaque(env: Env, biz: MerchantBusiness): Pro
   ).first<{ id: string }>();
   if (!tenant) return false;
 
+  const category = biz.category && PLAQUE_CATEGORIES.has(biz.category) ? biz.category : 'services';
+
   await env.DB.prepare(`
     INSERT OR REPLACE INTO passport_plaques (id, tenant_id, merchant_id, name, location_name, lat, lon, category, is_active, skip_geofence)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
@@ -113,7 +123,7 @@ export async function ensureMerchantPlaque(env: Env, biz: MerchantBusiness): Pro
     biz.address || biz.name,
     biz.lat,
     biz.lon,
-    biz.category || 'services',
+    category,
     biz.hide_address ? 1 : 0
   ).run();
 
