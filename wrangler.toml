@@ -32,6 +32,7 @@ bucket_name = "site-image-assets"
 ENVIRONMENT = "production"
 COOKIE_DOMAIN = ".lakeandlocals.com"
 HUB_URL = "https://business.lakeandlocals.com"
+FIELD_NOTES_BASE_URL = "https://fieldnotes.lakeandlocals.com"
 # Deals escrow account in KKCredits (must match ESCROW_ACCOUNTS["passport"]
 # in KKCredits wrangler.toml). Claims hold funds here until settled to the
 # merchant on redemption or returned to the member on expiry.

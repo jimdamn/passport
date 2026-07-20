@@ -1,0 +1,168 @@
+import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { Newspaper, ArrowLeftRight } from 'lucide-react';
+import { getContentSummary } from '../../api/content';
+import type { ContentSummaryItem, ContentSummarySource } from '../../api/content';
+import { Badge } from '../ui/Badge';
+
+const EXCHANGE_MY_POSTS_URL = 'https://exchange.lakeandlocals.com/me/posts';
+const FIELD_NOTES_MY_STORIES_URL = 'https://fieldnotes.lakeandlocals.com/my-stories';
+
+function formatDate(ts: number): string {
+  return new Date(ts * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+const EXCHANGE_STATUS_LABEL: Record<string, string> = {
+  active: 'Active', pending: 'Awaiting trade', completed: 'Completed', cancelled: 'Cancelled', expired: 'Expired',
+};
+
+const STORY_STATUS_LABEL: Record<string, string> = {
+  pending: 'Pending review', needs_revision: 'Needs revision', published: 'Published', rejected: 'Rejected',
+};
+
+function RecentRow({ item, statusLabels }: { item: ContentSummaryItem; statusLabels: Record<string, string> }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+      padding: '8px 0', borderBottom: '1px solid var(--border)',
+    }}>
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{
+          fontFamily: 'var(--font-sans)', fontSize: '0.88rem', color: 'var(--green)',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>
+          {item.title}
+        </div>
+        <div style={{ fontFamily: 'var(--font-sans)', fontSize: '0.75rem', color: 'var(--muted)' }}>
+          {formatDate(item.created_at)}
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 6, flexShrink: 0, alignItems: 'center' }}>
+        <Badge variant={item.attention ? 'amber' : 'gray'}>
+          {statusLabels[item.status] ?? item.status}
+        </Badge>
+        {item.hidden && <Badge variant="gray">Hidden</Badge>}
+      </div>
+    </div>
+  );
+}
+
+function SummaryCard({
+  icon: Icon,
+  title,
+  source,
+  countLine,
+  manageLabel,
+  manageUrl,
+  emptyLine,
+  emptyCtaLabel,
+  emptyCtaUrl,
+  statusLabels,
+}: {
+  icon: typeof Newspaper;
+  title: string;
+  source: ContentSummarySource | undefined;
+  countLine: (source: ContentSummarySource) => string;
+  manageLabel: string;
+  manageUrl: string;
+  emptyLine: string;
+  emptyCtaLabel: string;
+  emptyCtaUrl: string;
+  statusLabels: Record<string, string>;
+}) {
+  const total = source ? Object.values(source.counts).reduce((a, b) => a + b, 0) : 0;
+
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <h3 style={{ margin: '0 0 12px', fontSize: '1.05rem', fontFamily: 'var(--font-serif)', color: 'var(--green)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <Icon size={17} strokeWidth={2} color="var(--amber)" aria-hidden="true" /> {title}
+      </h3>
+
+      {source && total === 0 ? (
+        <div style={{ textAlign: 'center', padding: '16px 8px' }}>
+          <Icon size={26} strokeWidth={1.5} color="var(--amber)" style={{ marginBottom: 8 }} aria-hidden="true" />
+          <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.85rem', color: 'var(--muted)', marginBottom: 4 }}>
+            {emptyLine}
+          </p>
+          <Link to={emptyCtaUrl} style={{ fontFamily: 'var(--font-sans)', fontSize: '0.85rem', fontWeight: 600 }}>
+            {emptyCtaLabel}
+          </Link>
+        </div>
+      ) : (
+        <>
+          {source && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+              <span style={{ fontFamily: 'var(--font-sans)', fontSize: '0.85rem', color: 'var(--muted)' }}>
+                {countLine(source)}
+              </span>
+              {source.attention_total > 0 && (
+                <Badge variant="amber">{source.attention_total} need{source.attention_total === 1 ? 's' : ''} attention</Badge>
+              )}
+            </div>
+          )}
+
+          {source?.recent.map(item => (
+            <RecentRow key={item.id} item={item} statusLabels={statusLabels} />
+          ))}
+
+          <Link
+            to={manageUrl}
+            style={{
+              display: 'block', marginTop: 12, fontFamily: 'var(--font-sans)',
+              fontSize: '0.85rem', fontWeight: 600, color: 'var(--green)',
+            }}
+          >
+            {manageLabel} &rarr;
+          </Link>
+        </>
+      )}
+    </div>
+  );
+}
+
+export default function MyPostsCards({ tenantId }: { tenantId: string }) {
+  const { data } = useQuery({
+    queryKey: ['content-summary', tenantId],
+    queryFn: () => getContentSummary(tenantId),
+    staleTime: 60_000,
+  });
+
+  const summary = data?.data;
+
+  return (
+    <>
+      <SummaryCard
+        icon={Newspaper}
+        title="My Field Notes"
+        source={summary?.field_notes}
+        countLine={s => {
+          const total = Object.values(s.counts).reduce((a, b) => a + b, 0);
+          const published = s.counts.published ?? 0;
+          return `${total} ${total === 1 ? 'story' : 'stories'} - ${published} published`;
+        }}
+        manageLabel="Manage my stories"
+        manageUrl={FIELD_NOTES_MY_STORIES_URL}
+        emptyLine="You haven't shared a story yet."
+        emptyCtaLabel="Share a story"
+        emptyCtaUrl="https://fieldnotes.lakeandlocals.com/submit"
+        statusLabels={STORY_STATUS_LABEL}
+      />
+
+      <SummaryCard
+        icon={ArrowLeftRight}
+        title="My Exchange Posts"
+        source={summary?.exchange}
+        countLine={s => {
+          const total = Object.values(s.counts).reduce((a, b) => a + b, 0);
+          return `${total} ${total === 1 ? 'post' : 'posts'} - ${s.counts.active ?? 0} active`;
+        }}
+        manageLabel="Manage my posts"
+        manageUrl={EXCHANGE_MY_POSTS_URL}
+        emptyLine="You haven't posted on the Exchange yet."
+        emptyCtaLabel="Post on the Exchange"
+        emptyCtaUrl="https://exchange.lakeandlocals.com/offers/new"
+        statusLabels={EXCHANGE_STATUS_LABEL}
+      />
+    </>
+  );
+}

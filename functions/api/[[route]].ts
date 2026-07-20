@@ -28,6 +28,7 @@ import {
 } from '../../src/handlers/happenings';
 
 import { listExchangeOffers } from '../../src/handlers/exchange';
+import { getContentSummary } from '../../src/handlers/content';
 import { rollHunt } from '../../src/lib/game';
 import {
   listKwestHunts, getKwestHunt, getKwestRules, startKwest, ackKwest, getKwestState, revealKwest,
@@ -103,6 +104,7 @@ tenantApp.get('/passport/stamps', getStamps);
 tenantApp.post('/passport/claims/attach', attachClaim);
 tenantApp.get('/credits/balance', getBalance);
 tenantApp.get('/credits/balance-only', getBalanceOnly);
+tenantApp.get('/me/content-summary', getContentSummary);
 tenantApp.post('/admin/test-plaque', createTestPlaque);
 tenantApp.delete('/admin/test-plaque', removeTestPlaque);
 tenantApp.get('/admin/plaques', listPlaques);

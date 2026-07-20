@@ -19,6 +19,7 @@ export interface Env {
   QR_SIGNING_SECRET: string;
   RESEND_API_KEY?: string;   // Resend API key for guest claim emails (optional — emails skip silently if unset)
   EXCHANGE_BASE_URL?: string; // Override for Exchange HTTPS origin (Pages project, not a service binding); defaults to prod
+  FIELD_NOTES_BASE_URL?: string; // Override for Field Notes HTTPS origin (Pages project, not a service binding); defaults to prod
   KWEST_GUEST_SECRET: string; // HS256 signing secret for KrowdKwest's durable guest key (kwest_guest_keys)
 }
 

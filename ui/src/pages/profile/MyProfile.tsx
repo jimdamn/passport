@@ -17,6 +17,7 @@ import { PersonaSelector } from '../../components/PersonaSelector';
 import { AnonymousPersonaDrawer } from '../../components/profile/AnonymousPersonaDrawer';
 import { PersonalPersonaDrawer } from '../../components/profile/PersonalPersonaDrawer';
 import { BusinessPersonaDrawer } from '../../components/profile/BusinessPersonaDrawer';
+import MyPostsCards from '../../components/profile/MyPostsCards';
 
 // Badge definitions mirrored client-side (server is authoritative; this is for /profile self-view)
 const BADGE_DEFS: Badge[] = [
@@ -284,6 +285,9 @@ export default function MyProfile() {
           ))}
         </div>
       )}
+
+      {/* ── My Posts summary cards (Exchange + Field Notes) ── */}
+      {tenant && <MyPostsCards tenantId={tenant.id} />}
 
       {/* ── Admin Portal Banners ── */}
       {user.is_admin && (
