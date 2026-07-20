@@ -75,6 +75,51 @@ async function verifyToken(token: string, env: Env): Promise<KKAuthPayload> {
   return json.data.payload;
 }
 
+export interface MerchantBusiness {
+  id: number;
+  name: string;
+  address?: string | null;
+  lat?: number | null;
+  lon?: number | null;
+  category?: string;
+  hide_address?: number | boolean | null;
+}
+
+/**
+ * Idempotently ensure a verified business has an active passport_plaques row so
+ * its check-in QR code can work. No-ops (returns false) if the business has no
+ * location on file yet - a merchant can be verified without one, since location
+ * is a separate self-service field. Safe to call on every plaque-approval AND
+ * lazily on every QR-code request, so a business that gets its location added
+ * after verification self-heals the next time either happens, instead of
+ * requiring re-approval.
+ */
+export async function ensureMerchantPlaque(env: Env, biz: MerchantBusiness): Promise<boolean> {
+  if (biz.lat == null || biz.lon == null) return false;
+
+  const tenant = await env.DB.prepare(
+    'SELECT id FROM tenants WHERE is_active = 1 LIMIT 1'
+  ).first<{ id: string }>();
+  if (!tenant) return false;
+
+  await env.DB.prepare(`
+    INSERT OR REPLACE INTO passport_plaques (id, tenant_id, merchant_id, name, location_name, lat, lon, category, is_active, skip_geofence)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+  `).bind(
+    String(biz.id),
+    tenant.id,
+    String(biz.id),
+    biz.name,
+    biz.address || biz.name,
+    biz.lat,
+    biz.lon,
+    biz.category || 'services',
+    biz.hide_address ? 1 : 0
+  ).run();
+
+  return true;
+}
+
 /**
  * Same as verifyToken but also returns the KKAuth profile (avatar_url, home_zip_*).
  * Used in GET /me so location fields are included in the response without an extra round-trip.
@@ -847,12 +892,16 @@ authRouter.get('/merchant/qr-code', async (c) => {
     return new Response(text, { status: res.status, headers: { 'Content-Type': 'application/json' } });
   }
 
-  const { data: business } = await res.json<{ data: { id: number; name: string } }>();
+  const { data: business } = await res.json<{ data: MerchantBusiness }>();
 
   // KKAuth confirms the business is verified, but the scannable check-in
-  // location (plaque) lives in Passport's D1 and is created at approval. Without
-  // an active plaque row, /scan would 404 - so never hand out a signed QR that
-  // cannot be scanned. The plaque id is the stringified business id.
+  // location (plaque) lives in Passport's D1. It's normally created eagerly at
+  // approval time, but that's a fragile one-time side effect - self-heal here
+  // too so a business that gets its location added after verification (instead
+  // of at application time) doesn't need to be re-approved to get a working QR.
+  // Without an active plaque row, /scan would 404 - so never hand out a signed
+  // QR that cannot be scanned. The plaque id is the stringified business id.
+  await ensureMerchantPlaque(c.env, business);
   const plaque = await c.env.DB.prepare(
     'SELECT 1 FROM passport_plaques WHERE id = ? AND is_active = 1'
   ).bind(String(business.id)).first();
@@ -954,31 +1003,11 @@ authRouter.post('/profile/admin/merchants/:id/review', async (c) => {
     return c.json(kkBody, res.status as any);
   }
 
-  // On approval, create/update the merchant's passport plaque so their QR code works
+  // On approval, create/update the merchant's passport plaque so their QR code
+  // works. No-ops if the business has no location on file yet - see
+  // ensureMerchantPlaque's doc comment for how that gap gets closed later.
   if (body.status === 'verified' && kkBody.data) {
-    const biz = kkBody.data;
-    if (biz.lat != null && biz.lon != null) {
-      const tenant = await c.env.DB.prepare(
-        'SELECT id FROM tenants WHERE is_active = 1 LIMIT 1'
-      ).first<{ id: string }>();
-
-      if (tenant) {
-        await c.env.DB.prepare(`
-          INSERT OR REPLACE INTO passport_plaques (id, tenant_id, merchant_id, name, location_name, lat, lon, category, is_active, skip_geofence)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
-        `).bind(
-          String(biz.id),
-          tenant.id,
-          String(biz.id),
-          biz.name,
-          biz.address || biz.name,
-          biz.lat,
-          biz.lon,
-          biz.category,
-          biz.hide_address ? 1 : 0
-        ).run();
-      }
-    }
+    await ensureMerchantPlaque(c.env, kkBody.data);
   }
 
   return c.json(kkBody);

@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { LogOut, Award, ChevronRight, QrCode, Shield, ShieldCheck, Gift, Inbox } from 'lucide-react';
+import { LogOut, Award, ChevronRight, QrCode, Shield, ShieldCheck, Gift, Inbox, MapPin } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTenant } from '../../context/TenantContext';
 import { useProfilePanel } from '../../context/ProfilePanelContext';
 import { getMe } from '../../api/auth';
 import { getBalance } from '../../api/credits';
 import { getAdminSupportCount } from '../../api/support';
+import { getMyBusiness } from '../../api/merchant';
 import { Spinner } from '../../components/ui/Spinner';
 import StatsPanel, { type StatsPanelType } from '../../components/profile/StatsPanel';
 import BadgeStrip, { type Badge } from '../../components/ui/BadgeStrip';
@@ -99,6 +100,19 @@ export default function MyProfile() {
     enabled: !!tenant && !!user?.is_admin,
     staleTime: 60_000,
   });
+
+  // Cheap check so a verified merchant with no location on file is told about
+  // it right here, instead of only discovering it after clicking a QR button
+  // that silently fails.
+  const { data: businessData } = useQuery({
+    queryKey: ['my-business', tenant?.id],
+    queryFn: () => getMyBusiness(tenant!.id),
+    enabled: !!tenant && !!user && user.business_status === 'verified',
+    staleTime: 60_000,
+  });
+  const businessMissingLocation = user?.business_status === 'verified'
+    && businessData?.data
+    && (businessData.data.lat == null || businessData.data.lon == null);
 
   const [statsPanel,    setStatsPanel]    = useState<StatsPanelType | null>(null);
 
@@ -395,6 +409,20 @@ export default function MyProfile() {
               <QrCode size={15} strokeWidth={2} aria-hidden="true" /> Display Check-in QR Code
             </button>
           </div>
+        </div>
+      )}
+
+      {businessMissingLocation && (
+        <div className="card" style={{ marginBottom: 16, borderColor: 'var(--amber)', background: 'rgba(200, 134, 10, 0.04)' }}>
+          <p style={{ margin: '0 0 4px', fontWeight: 'bold', color: 'var(--amber)', display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'var(--font-sans)', fontSize: '0.9rem' }}>
+            <MapPin size={16} strokeWidth={2} aria-hidden="true" /> Almost There
+          </p>
+          <p style={{ margin: '0 0 12px', fontSize: '0.82rem', color: 'var(--muted)', fontFamily: 'var(--font-sans)', lineHeight: 1.45 }}>
+            Add your business location to activate customer check-ins and your Display Check-in QR Code.
+          </p>
+          <Link to="/merchant" className="btn btn-amber btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
+            Set Business Location
+          </Link>
         </div>
       )}
 

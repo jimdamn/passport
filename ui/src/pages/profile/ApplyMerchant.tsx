@@ -157,6 +157,12 @@ export default function ApplyMerchant() {
       return;
     }
 
+    if (!form.lat || !form.lon) {
+      setError('Please set your business location using one of the methods above before submitting.');
+      setPending(false);
+      return;
+    }
+
     try {
       const res = await applyMerchant({
         name: form.name.trim(),

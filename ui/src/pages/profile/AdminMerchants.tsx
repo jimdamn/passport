@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { getAdminMerchants, reviewMerchant } from '../../api/profile';
-import { ArrowLeft, CheckCircle, XCircle, Clock, ExternalLink, RefreshCw, Search, Filter, MapPin, Phone, Globe } from 'lucide-react';
+import { ArrowLeft, CheckCircle, XCircle, Clock, ExternalLink, RefreshCw, Search, Filter, MapPin, Phone, Globe, AlertTriangle } from 'lucide-react';
 import { Alert } from '../../components/ui/Alert';
 import { Spinner } from '../../components/ui/Spinner';
 
@@ -15,6 +15,7 @@ export default function AdminMerchants() {
   const [error, setError] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [missingLocationOnly, setMissingLocationOnly] = useState(false);
   const [processingId, setProcessingId] = useState<number | null>(null);
 
   useEffect(() => {
@@ -63,8 +64,11 @@ export default function AdminMerchants() {
     const matchesStatus = filterStatus === 'all' || m.verification_status === filterStatus;
     const searchStr = `${m.name} ${m.email || ''} ${m.category} ${m.zip || ''}`.toLowerCase();
     const matchesSearch = searchStr.includes(searchTerm.toLowerCase());
-    return matchesStatus && matchesSearch;
+    const matchesLocation = !missingLocationOnly || m.lat == null || m.lon == null;
+    return matchesStatus && matchesSearch && matchesLocation;
   });
+
+  const missingLocationCount = merchants.filter(m => m.lat == null || m.lon == null).length;
 
   if (loading) {
     return (
@@ -131,6 +135,18 @@ export default function AdminMerchants() {
             <option value="rejected">Declined Applications</option>
           </select>
         </div>
+
+        {missingLocationCount > 0 && (
+          <button
+            type="button"
+            onClick={() => setMissingLocationOnly(v => !v)}
+            className={`btn btn-sm ${missingLocationOnly ? 'btn-amber' : 'btn-secondary'}`}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 36, fontSize: '0.78rem' }}
+            title="Businesses with no lat/lon on file - their check-in QR code won't work until they add one."
+          >
+            <AlertTriangle size={13} /> {missingLocationCount} missing location
+          </button>
+        )}
       </div>
 
       {/* Applications list */}
@@ -144,6 +160,7 @@ export default function AdminMerchants() {
             const isPending = m.verification_status === 'pending';
             const isVerified = m.verification_status === 'verified';
             const isRejected = m.verification_status === 'rejected';
+            const missingLocation = m.lat == null || m.lon == null;
 
             return (
               <div 
@@ -182,6 +199,19 @@ export default function AdminMerchants() {
                         {isPending && <Clock size={10} />}
                         {m.verification_status}
                       </span>
+                      {missingLocation && (
+                        <span
+                          title="Approving without a location silently skips creating a check-in QR code for this business."
+                          style={{
+                            fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase',
+                            padding: '2px 6px', borderRadius: 'var(--r-sm)',
+                            background: 'rgba(176, 0, 0, 0.08)', color: 'var(--error)',
+                            display: 'inline-flex', alignItems: 'center', gap: 4,
+                          }}
+                        >
+                          <AlertTriangle size={10} /> No location on file
+                        </span>
+                      )}
                     </div>
 
                     <p style={{ margin: '0 0 8px', fontSize: '0.8rem', color: 'var(--muted)' }}>

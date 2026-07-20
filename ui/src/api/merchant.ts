@@ -61,6 +61,8 @@ export interface BusinessProfile {
   description: string | null;
   address: string | null;
   zip: string | null;
+  lat: number | null;
+  lon: number | null;
   phone: string | null;
   website: string | null;
   hide_address: number;
@@ -73,6 +75,16 @@ export function getMyBusiness(tenant: string) {
   return api.get<ApiResponse<BusinessProfile>>(`/t/${tenant}/merchant/business`);
 }
 
-export function updateMyBusiness(tenant: string, updates: { category?: string; phone?: string }) {
+export interface BusinessUpdateInput {
+  category?: string;
+  phone?: string;
+  address?: string;
+  zip?: string;
+  lat?: number;
+  lon?: number;
+  hide_address?: boolean;
+}
+
+export function updateMyBusiness(tenant: string, updates: BusinessUpdateInput) {
   return api.patch<ApiResponse<BusinessProfile>>(`/t/${tenant}/merchant/business`, updates);
 }

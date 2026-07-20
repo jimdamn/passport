@@ -7,7 +7,7 @@ import {
   getMyBusiness, updateMyBusiness,
   type MerchantPrize, type MerchantClaim, type MerchantPrizeInput, type BusinessProfile,
 } from '../api/merchant';
-import { ArrowLeft, Plus, Pencil, Trash2, Gift, BadgeCheck, Clock, CheckCircle, XCircle, RefreshCw, Building2 } from 'lucide-react';
+import { ArrowLeft, Plus, Pencil, Trash2, Gift, BadgeCheck, Clock, CheckCircle, XCircle, RefreshCw, Building2, MapPin, Navigation, Store } from 'lucide-react';
 import { Alert } from '../components/ui/Alert';
 import { Spinner } from '../components/ui/Spinner';
 import DealsManager from '../components/merchant/DealsManager';
@@ -51,8 +51,16 @@ export default function MerchantDashboard() {
 
   const [business, setBusiness] = useState<BusinessProfile | null>(null);
   const [bizEdit, setBizEdit] = useState(false);
-  const [bizForm, setBizForm] = useState({ category: '', phone: '' });
+  const [bizForm, setBizForm] = useState({ category: '', phone: '', address: '', zip: '', lat: '', lon: '' });
   const [bizWorking, setBizWorking] = useState(false);
+
+  // Location editing sub-state, mirrors ApplyMerchant.tsx's geocoding flow so a
+  // merchant who was verified without a location can set one right here.
+  const [locationMethod, setLocationMethod] = useState<'zip' | 'gps' | 'search'>('zip');
+  const [searchAddress, setSearchAddress] = useState('');
+  const [geocodingPending, setGeocodingPending] = useState(false);
+  const [geocodedDisplayName, setGeocodedDisplayName] = useState('');
+  const [isMobile] = useState(() => /Mobi|Android|iPhone/i.test(navigator.userAgent));
 
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -80,7 +88,14 @@ export default function MerchantDashboard() {
       setClaims(claimsRes.data || []);
       if (bizRes.data) {
         setBusiness(bizRes.data);
-        setBizForm({ category: bizRes.data.category, phone: bizRes.data.phone || '' });
+        setBizForm({
+          category: bizRes.data.category,
+          phone: bizRes.data.phone || '',
+          address: bizRes.data.address || '',
+          zip: bizRes.data.zip || '',
+          lat: bizRes.data.lat != null ? String(bizRes.data.lat) : '',
+          lon: bizRes.data.lon != null ? String(bizRes.data.lon) : '',
+        });
       }
     } catch (err: any) {
       setError(err.message || 'Failed to load your dashboard.');
@@ -91,6 +106,10 @@ export default function MerchantDashboard() {
 
   const handleBizSave = async () => {
     if (!tenant || bizWorking) return;
+    if (bizForm.zip && !/^\d{5}$/.test(bizForm.zip)) {
+      setError('Please enter a valid 5-digit zip code.');
+      return;
+    }
     setBizWorking(true);
     setError('');
     setNotice('');
@@ -98,17 +117,115 @@ export default function MerchantDashboard() {
       const res = await updateMyBusiness(tenant.id, {
         category: bizForm.category,
         phone: bizForm.phone.trim() || undefined,
+        address: bizForm.address.trim() || undefined,
+        zip: bizForm.zip.trim() || undefined,
+        lat: bizForm.lat ? parseFloat(bizForm.lat) : undefined,
+        lon: bizForm.lon ? parseFloat(bizForm.lon) : undefined,
       });
       if (res.data) {
         setBusiness(res.data);
-        setBizForm({ category: res.data.category, phone: res.data.phone || '' });
+        setBizForm({
+          category: res.data.category,
+          phone: res.data.phone || '',
+          address: res.data.address || '',
+          zip: res.data.zip || '',
+          lat: res.data.lat != null ? String(res.data.lat) : '',
+          lon: res.data.lon != null ? String(res.data.lon) : '',
+        });
       }
       setBizEdit(false);
+      setGeocodedDisplayName('');
       setNotice('Business profile updated.');
     } catch (err: any) {
       setError(err.message || 'Failed to update business profile.');
     } finally {
       setBizWorking(false);
+    }
+  };
+
+  const handleSelectLocationMethod = (method: 'zip' | 'gps' | 'search') => {
+    setLocationMethod(method);
+    setError('');
+    setBizForm(f => ({ ...f, lat: '', lon: '' }));
+    setGeocodedDisplayName('');
+  };
+
+  const handleCaptureGps = () => {
+    if (!navigator.geolocation) {
+      setError('Geolocation is not supported by your browser.');
+      return;
+    }
+    setGeocodingPending(true);
+    setError('');
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setBizForm(f => ({
+          ...f,
+          lat: position.coords.latitude.toString(),
+          lon: position.coords.longitude.toString(),
+        }));
+        setGeocodedDisplayName('Mobile Hardware GPS Capture');
+        setGeocodingPending(false);
+      },
+      (err) => {
+        setError(err.code === 1 ? 'Location access was denied. Please allow location access and try again.' : 'Failed to capture GPS telemetry. Please try again.');
+        setGeocodingPending(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  };
+
+  const handleSearchAddress = async () => {
+    const addr = searchAddress.trim();
+    if (!addr) {
+      setError('Please enter a street address to search.');
+      return;
+    }
+    setGeocodingPending(true);
+    setError('');
+    try {
+      // US Census Geocoder - handles rural county road formats well
+      const censusRes = await fetch(
+        `https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?address=${encodeURIComponent(addr)}&benchmark=2020&format=json`
+      );
+      if (censusRes.ok) {
+        const censusData = await censusRes.json() as any;
+        const matches = censusData?.result?.addressMatches;
+        if (matches && matches.length > 0) {
+          const match = matches[0];
+          setBizForm(f => ({
+            ...f,
+            lat: match.coordinates.y.toString(),
+            lon: match.coordinates.x.toString(),
+          }));
+          setGeocodedDisplayName(match.matchedAddress);
+          return;
+        }
+      }
+
+      // Fallback: Nominatim
+      const nomRes = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(addr)}&format=json&limit=1&countrycodes=us`,
+        { headers: { 'Accept-Language': 'en' } }
+      );
+      if (nomRes.ok) {
+        const nomData = await nomRes.json() as any[];
+        if (nomData && nomData.length > 0) {
+          setBizForm(f => ({
+            ...f,
+            lat: nomData[0].lat,
+            lon: nomData[0].lon,
+          }));
+          setGeocodedDisplayName(nomData[0].display_name);
+          return;
+        }
+      }
+
+      throw new Error('Address not found. Make sure to include city and state (e.g. 1255 N 170 W, Angola, IN).');
+    } catch (err: any) {
+      setError(err.message || 'Geocoding search failed. Please try again.');
+    } finally {
+      setGeocodingPending(false);
     }
   };
 
@@ -313,9 +430,114 @@ export default function MerchantDashboard() {
             </div>
           </div>
 
+          {/* Check-in Location - editable; this is what drives the merchant QR code */}
+          <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
+            <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', marginBottom: 6 }}>
+              Check-in Location
+            </div>
+
+            {!bizEdit && (
+              business.lat != null && business.lon != null ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.82rem', color: 'var(--green)' }}>
+                  <CheckCircle size={14} /> Location set - your check-in QR code is active.
+                </div>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.82rem', color: 'var(--amber)' }}>
+                  <MapPin size={14} /> No location on file - your check-in QR code won't work until you add one.
+                </div>
+              )
+            )}
+
+            {bizEdit && (
+              <div>
+                {bizForm.lat && bizForm.lon ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', color: 'var(--green)', marginBottom: 10 }}>
+                    <CheckCircle size={14} />
+                    Location set{geocodedDisplayName ? `: ${geocodedDisplayName}` : ''} ({parseFloat(bizForm.lat).toFixed(5)}, {parseFloat(bizForm.lon).toFixed(5)})
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', color: 'var(--amber)', marginBottom: 10 }}>
+                    <MapPin size={14} /> No location set yet.
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 10 }}>
+                  {isMobile && (
+                    <button type="button" className={`btn btn-sm ${locationMethod === 'gps' ? 'btn-amber' : 'btn-secondary'}`}
+                      onClick={() => handleSelectLocationMethod('gps')} disabled={bizWorking}
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 34, fontSize: '0.8rem' }}>
+                      <Navigation size={13} /> Use Current GPS Location
+                    </button>
+                  )}
+                  <button type="button" className={`btn btn-sm ${locationMethod === 'search' ? 'btn-amber' : 'btn-secondary'}`}
+                    onClick={() => handleSelectLocationMethod('search')} disabled={bizWorking}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 34, fontSize: '0.8rem' }}>
+                    <Store size={13} /> Search Street Address
+                  </button>
+                  <button type="button" className={`btn btn-sm ${locationMethod === 'zip' ? 'btn-amber' : 'btn-secondary'}`}
+                    onClick={() => handleSelectLocationMethod('zip')} disabled={bizWorking}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 34, fontSize: '0.8rem' }}>
+                    <MapPin size={13} /> Use ZIP Code Center (Approximate)
+                  </button>
+                </div>
+
+                {locationMethod === 'gps' && (
+                  <div style={{ background: 'var(--cream)', padding: 12, borderRadius: 'var(--r-md)', border: '1px solid var(--border)', textAlign: 'center', marginBottom: 10 }}>
+                    <button type="button" className="btn btn-green btn-sm" onClick={handleCaptureGps}
+                      disabled={geocodingPending || bizWorking} style={{ minHeight: 32 }}>
+                      {geocodingPending ? 'Accessing GPS...' : 'Capture GPS Coordinates'}
+                    </button>
+                  </div>
+                )}
+
+                {locationMethod === 'search' && (
+                  <div style={{ background: 'var(--cream)', padding: 12, borderRadius: 'var(--r-md)', border: '1px solid var(--border)', marginBottom: 10 }}>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <input type="text" className="form-input" value={searchAddress}
+                        onChange={e => setSearchAddress(e.target.value)}
+                        placeholder="1255 N 170 W, Angola, IN" disabled={geocodingPending || bizWorking}
+                        style={{ minHeight: 34, margin: 0, fontSize: '0.82rem', flex: 1 }} />
+                      <button type="button" className="btn btn-secondary btn-sm" onClick={handleSearchAddress}
+                        disabled={geocodingPending || bizWorking} style={{ minHeight: 34 }}>
+                        {geocodingPending ? 'Locating...' : 'Locate'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {locationMethod === 'zip' && (
+                  <div style={{ marginBottom: 10 }}>
+                    <input type="text" className="form-input" value={bizForm.zip}
+                      onChange={e => setBizForm(f => ({ ...f, zip: e.target.value }))}
+                      placeholder="46703" maxLength={5} disabled={bizWorking}
+                      style={{ minHeight: 34, margin: 0, fontSize: '0.82rem', width: 140 }} />
+                  </div>
+                )}
+
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label" style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase' }}>Street Address (optional, shown to customers)</label>
+                  <input type="text" className="form-input" value={bizForm.address}
+                    onChange={e => setBizForm(f => ({ ...f, address: e.target.value }))}
+                    disabled={bizWorking} style={{ minHeight: 32, margin: 0, fontSize: '0.82rem' }} />
+                </div>
+              </div>
+            )}
+          </div>
+
           {bizEdit && (
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 14 }}>
-              <button className="btn btn-secondary btn-sm" onClick={() => { setBizEdit(false); setBizForm({ category: business.category, phone: business.phone || '' }); }} disabled={bizWorking} style={{ minHeight: 32 }}>
+              <button className="btn btn-secondary btn-sm" onClick={() => {
+                setBizEdit(false);
+                setGeocodedDisplayName('');
+                setBizForm({
+                  category: business.category,
+                  phone: business.phone || '',
+                  address: business.address || '',
+                  zip: business.zip || '',
+                  lat: business.lat != null ? String(business.lat) : '',
+                  lon: business.lon != null ? String(business.lon) : '',
+                });
+              }} disabled={bizWorking} style={{ minHeight: 32 }}>
                 Cancel
               </button>
               <button className="btn btn-amber btn-sm" onClick={handleBizSave} disabled={bizWorking} style={{ minHeight: 32 }}>

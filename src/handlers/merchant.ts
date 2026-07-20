@@ -2,6 +2,7 @@ import type { Context } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import type { Env } from '../types';
 import { nanoid } from 'nanoid';
+import { ensureMerchantPlaque } from '../routers/auth';
 
 type AppContext = Context<{ Bindings: Env }>;
 
@@ -223,13 +224,20 @@ export async function getMyBusiness(c: AppContext) {
 
 /**
  * PATCH /api/t/:tenant/merchant/business
- * Allows a verified merchant to update their category and/or phone.
- * Syncs the plaque category in Passport D1 if category changes.
+ * Allows a verified merchant to update their category, phone, and location
+ * (address/zip/lat/lon/hide_address). Keeps the passport_plaques row in sync:
+ * category changes propagate directly, and any location update runs the same
+ * idempotent ensureMerchantPlaque() used at approval time - so a merchant who
+ * was verified without a location gets a working QR code the moment they add
+ * one here, without needing an admin to re-approve them.
  */
 export async function updateMyBusiness(c: AppContext) {
   const merchantId = requireVerifiedMerchant(c);
   const auth = c.req.header('Authorization')!;
-  const body = await c.req.json<{ category?: string; phone?: string }>();
+  const body = await c.req.json<{
+    category?: string; phone?: string;
+    address?: string; zip?: string; lat?: number; lon?: number; hide_address?: boolean;
+  }>();
 
   const res = await c.env.KKAUTH.fetch(
     new Request('https://kkauth/businesses/me', {
@@ -247,6 +255,11 @@ export async function updateMyBusiness(c: AppContext) {
     await c.env.DB.prepare(
       'UPDATE passport_plaques SET category = ? WHERE merchant_id = ?'
     ).bind(body.category, merchantId).run();
+  }
+
+  // Location changed (or was set for the first time) - (re)create the plaque now
+  if ((body.lat !== undefined || body.zip !== undefined) && kkBody.data) {
+    await ensureMerchantPlaque(c.env, kkBody.data);
   }
 
   return c.json(kkBody);

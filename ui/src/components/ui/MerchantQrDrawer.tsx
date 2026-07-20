@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { X, Compass, AlertCircle, Printer, Download } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { X, Compass, AlertCircle, Printer, Download, MapPin } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTenant } from '../../context/TenantContext';
 import { getToken } from '../../api/client';
@@ -9,10 +10,13 @@ interface Props {
   onClose: () => void;
 }
 
+type QrStatus = 'loading' | 'ok' | 'no-location' | 'error';
+
 export default function MerchantQrDrawer({ open, onClose }: Props) {
   const { user } = useAuth();
   const { tenant } = useTenant();
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
+  const [qrStatus, setQrStatus] = useState<QrStatus>('loading');
 
   const creditsName = tenant?.config.credits_name ?? 'KrowdKredits';
 
@@ -25,24 +29,35 @@ export default function MerchantQrDrawer({ open, onClose }: Props) {
   // Fetch the QR SVG with the Authorization header (never put the token in a
   // URL - query strings end up in logs and browser history). The blob object
   // URL also serves the print flyer and the download link.
+  //
+  // A 404 here specifically means "verified business with no check-in location
+  // on file yet" (see auth.ts's /merchant/qr-code handler) - surface that as an
+  // actionable message instead of silently leaving the QR box empty.
   useEffect(() => {
     if (!open) return;
     let objectUrl: string | null = null;
+    setQrStatus('loading');
     const token = getToken();
     fetch('/api/auth/merchant/qr-code', {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     })
-      .then(res => (res.ok ? res.blob() : null))
+      .then(res => {
+        if (res.ok) return res.blob();
+        setQrStatus(res.status === 404 ? 'no-location' : 'error');
+        return null;
+      })
       .then(blob => {
         if (blob) {
           objectUrl = URL.createObjectURL(blob);
           setQrCodeUrl(objectUrl);
+          setQrStatus('ok');
         }
       })
-      .catch(() => setQrCodeUrl(null));
+      .catch(() => setQrStatus('error'));
     return () => {
       if (objectUrl) URL.revokeObjectURL(objectUrl);
       setQrCodeUrl(null);
+      setQrStatus('loading');
     };
   }, [open]);
 
@@ -242,7 +257,7 @@ export default function MerchantQrDrawer({ open, onClose }: Props) {
             marginBottom: 20,
             overflow: 'hidden',
           }}>
-            {open && qrCodeUrl && (
+            {open && qrStatus === 'ok' && qrCodeUrl && (
               <img
                 src={qrCodeUrl}
                 alt="Business Check-in QR Code"
@@ -253,7 +268,37 @@ export default function MerchantQrDrawer({ open, onClose }: Props) {
                 }}
               />
             )}
+            {open && qrStatus === 'no-location' && (
+              <div style={{ padding: 16, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                <MapPin size={28} color="var(--amber)" />
+                <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--muted)', lineHeight: 1.4 }}>
+                  Add your business location to activate your check-in QR code.
+                </p>
+              </div>
+            )}
+            {open && qrStatus === 'error' && (
+              <div style={{ padding: 16, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                <AlertCircle size={28} color="var(--error)" />
+                <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--muted)', lineHeight: 1.4 }}>
+                  Couldn't load your QR code. Please try again.
+                </p>
+              </div>
+            )}
           </div>
+
+          {qrStatus === 'no-location' && (
+            <Link
+              to="/merchant"
+              onClick={onClose}
+              className="btn btn-amber btn-sm"
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                textDecoration: 'none', marginBottom: 20, fontSize: '0.85rem', fontWeight: 600, minHeight: 38,
+              }}
+            >
+              <MapPin size={15} /> Set Business Location
+            </Link>
+          )}
 
           {/* Business Name */}
           <h3 style={{
@@ -291,6 +336,7 @@ export default function MerchantQrDrawer({ open, onClose }: Props) {
           </p>
 
           {/* Print/Download CTA button row */}
+          {qrStatus === 'ok' && (
           <div style={{ display: 'flex', gap: 12, marginBottom: 24, width: '100%', maxWidth: 340 }}>
             <button
               onClick={handlePrint}
@@ -329,6 +375,7 @@ export default function MerchantQrDrawer({ open, onClose }: Props) {
               <Download size={16} /> Download SVG
             </a>
           </div>
+          )}
 
           {/* Secure Badge Info */}
           <div style={{
