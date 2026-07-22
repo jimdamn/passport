@@ -29,6 +29,7 @@ import Deals from './pages/Deals';
 import Happenings from './pages/Happenings';
 import FreshToday from './pages/FreshToday';
 import FreshStand from './pages/FreshStand';
+import FreshMine from './pages/FreshMine';
 import LendAHand from './pages/LendAHand';
 import AdminDeals from './pages/profile/AdminDeals';
 import AdminSupport from './pages/profile/AdminSupport';
@@ -66,6 +67,7 @@ export default function App() {
         <Route path="/happenings" element={<Happenings />} />
         <Route path="/fresh" element={<FreshToday />} />
         <Route path="/fresh/stand/:id" element={<FreshStand />} />
+        <Route path="/fresh/mine" element={<FreshMine />} />
         <Route path="/lend-a-hand" element={<LendAHand />} />
         <Route path="/kwest" element={<KwestHome />} />
         <Route path="/kwest/help" element={<KwestHelp />} />

@@ -37,6 +37,16 @@ export function categoryLabel(key: string): string {
 // here since the UI build doesn't import from the Worker's src tree.
 export const REGION_CENTER = { lat: 41.55, lon: -85.45 };
 
+// Region bounds for the pin picker's maxBounds prop, converted from the
+// backend's REGION_BOUNDS ({ minLat: 40.75, maxLat: 42.30, minLon: -86.65,
+// maxLon: -84.25 } in src/handlers/fresh.ts) into the [[west, south], [east,
+// north]] lng/lat tuple RegionMap's maxBounds prop actually expects (confirmed
+// by reading kk-shared-ui/src/components/map/RegionMap.tsx directly).
+export const REGION_BOUNDS: [[number, number], [number, number]] = [
+  [-86.65, 40.75],
+  [-84.25, 42.30],
+];
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Public — GET /api/t/:tenant/fresh, /fresh/stands, /fresh/stands/:id, /fresh/seasons
 // ─────────────────────────────────────────────────────────────────────────────
@@ -138,6 +148,131 @@ export function listFreshSeasons(tenant: string) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Authenticated owner endpoints (My Stand) and admin endpoints are added here
-// by a later sub-task. Nothing below this line yet.
+// Authenticated — GET /fresh/mine and owner stand/post CRUD ("My Stand").
+// Shapes below are read directly off src/handlers/fresh.ts, not guessed:
+//  - listMyFresh nests each stand's own posts array (already the owner-state
+//    augmented shape: state/state_note/can_relist), NOT the raw DB row.
+//  - create/update/visibility on a stand return serializeStand(row) - the
+//    full raw fresh_stands DB row (including admin_hidden as 0|1, is_hidden
+//    as 0|1, deleted_at) with categories parsed to a string array. The owner
+//    UI always re-fetches listMyFresh after a mutation for the canonical,
+//    state-annotated view, so these are typed loosely (FreshStandRecord) -
+//    only used for the brief moment before the list refetch resolves.
+//  - create/update/sold-out/relist on a post return the raw fresh_posts DB
+//    row (sold_out as 0|1, no state/state_note - those are computed only by
+//    listMyFresh), same reasoning.
 // ─────────────────────────────────────────────────────────────────────────────
+
+export type FreshStandState = 'visible' | 'paused' | 'hidden_by_admin' | 'removed';
+export type FreshPostState = 'live' | 'sold_out' | 'expired' | 'removed' | 'hidden_by_admin';
+
+export interface MyFreshPost {
+  id: string;
+  body: string;
+  photo_url: string | null;
+  sold_out: boolean;
+  created_at: number;
+  expires_at: number;
+  state: FreshPostState;
+  state_note: string;
+  can_relist: boolean;
+}
+
+export interface MyFreshStand {
+  id: string;
+  name: string;
+  description: string | null;
+  lat: number;
+  lon: number;
+  address_hint: string | null;
+  phone: string | null;
+  categories: string[];
+  photo_url: string | null;
+  is_hidden: boolean;
+  admin_hidden_reason: string | null;
+  created_at: number;
+  state: FreshStandState;
+  state_note: string;
+  posts: MyFreshPost[];
+}
+
+export interface FreshStandInput {
+  name: string;
+  description?: string | null;
+  lat: number;
+  lon: number;
+  categories: string[];
+  address_hint?: string | null;
+  phone?: string | null;
+  photo_url?: string | null;
+}
+
+// Raw fresh_stands row (serializeStand output) - see the comment block above.
+export interface FreshStandRecord {
+  id: string;
+  name: string;
+  description: string | null;
+  lat: number;
+  lon: number;
+  address_hint: string | null;
+  phone: string | null;
+  categories: string[];
+  photo_url: string | null;
+  is_hidden: 0 | 1;
+  admin_hidden: 0 | 1;
+  admin_hidden_reason: string | null;
+  deleted_at: number | null;
+  created_at: number;
+}
+
+// Raw fresh_posts row - see the comment block above.
+export interface FreshPostRecord {
+  id: string;
+  stand_id: string;
+  body: string;
+  photo_url: string | null;
+  sold_out: 0 | 1;
+  sold_out_at: number | null;
+  created_at: number;
+  expires_at: number;
+}
+
+export function listMyFresh(tenant: string) {
+  return api.get<ApiResponse<{ stands: MyFreshStand[] }>>(`/t/${tenant}/fresh/mine`);
+}
+
+export function createFreshStand(tenant: string, body: FreshStandInput) {
+  return api.post<ApiResponse<FreshStandRecord>>(`/t/${tenant}/fresh/stands`, body);
+}
+
+export function updateFreshStand(tenant: string, id: string, body: Partial<FreshStandInput>) {
+  return api.put<ApiResponse<FreshStandRecord>>(`/t/${tenant}/fresh/stands/${id}`, body);
+}
+
+export function setFreshStandVisibility(tenant: string, id: string, hidden: boolean) {
+  return api.post<ApiResponse<FreshStandRecord>>(`/t/${tenant}/fresh/stands/${id}/visibility`, { hidden });
+}
+
+export function deleteFreshStand(tenant: string, id: string) {
+  return api.delete<ApiResponse<{ removed: boolean }>>(`/t/${tenant}/fresh/stands/${id}`);
+}
+
+export function createFreshPost(tenant: string, standId: string, body: { body: string; photo_url?: string | null }) {
+  return api.post<ApiResponse<FreshPostRecord>>(`/t/${tenant}/fresh/stands/${standId}/posts`, body);
+}
+
+export function updateFreshPost(tenant: string, id: string, body: { body?: string; photo_url?: string | null }) {
+  return api.put<ApiResponse<FreshPostRecord>>(`/t/${tenant}/fresh/posts/${id}`, body);
+}
+
+export function setFreshPostSoldOut(tenant: string, id: string) {
+  return api.post<ApiResponse<FreshPostRecord>>(`/t/${tenant}/fresh/posts/${id}/sold-out`);
+}
+
+export function relistFreshPost(tenant: string, id: string) {
+  return api.post<ApiResponse<FreshPostRecord>>(`/t/${tenant}/fresh/posts/${id}/relist`);
+}
+
+export function deleteFreshPost(tenant: string, id: string) {
+  return api.delete<ApiResponse<{ removed: boolean }>>(`/t/${tenant}/fresh/posts/${id}`);
+}
