@@ -27,6 +27,8 @@ import EmbedDrawer from './pages/EmbedDrawer';
 import Explore from './pages/Explore';
 import Deals from './pages/Deals';
 import Happenings from './pages/Happenings';
+import FreshToday from './pages/FreshToday';
+import FreshStand from './pages/FreshStand';
 import LendAHand from './pages/LendAHand';
 import AdminDeals from './pages/profile/AdminDeals';
 import AdminSupport from './pages/profile/AdminSupport';
@@ -62,6 +64,8 @@ export default function App() {
         <Route path="/explore" element={<Explore />} />
         <Route path="/deals" element={<Deals />} />
         <Route path="/happenings" element={<Happenings />} />
+        <Route path="/fresh" element={<FreshToday />} />
+        <Route path="/fresh/stand/:id" element={<FreshStand />} />
         <Route path="/lend-a-hand" element={<LendAHand />} />
         <Route path="/kwest" element={<KwestHome />} />
         <Route path="/kwest/help" element={<KwestHelp />} />
