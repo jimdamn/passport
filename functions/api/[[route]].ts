@@ -26,6 +26,12 @@ import {
   listHappenings, listMerchantHappenings, createHappening, updateHappening, deleteHappening,
   adminListHappenings, adminUpdateHappening, adminDeleteHappening,
 } from '../../src/handlers/happenings';
+import {
+  listFresh, listFreshStands, getFreshStand, listFreshSeasons,
+  listMyFresh, createFreshStand, updateFreshStand, setFreshStandVisibility, deleteFreshStand,
+  createFreshPost, updateFreshPost, setFreshPostSoldOut, relistFreshPost, deleteFreshPost,
+  adminListFreshStands, adminListFreshPosts, adminHideFreshStand, adminHideFreshPost,
+} from '../../src/handlers/fresh';
 
 import { listExchangeOffers } from '../../src/handlers/exchange';
 import { getContentSummary } from '../../src/handlers/content';
@@ -151,6 +157,24 @@ tenantApp.get('/admin/happenings', adminListHappenings);
 tenantApp.put('/admin/happenings/:id', adminUpdateHappening);
 tenantApp.delete('/admin/happenings/:id', adminDeleteHappening);
 
+// Fresh Today - resident-owned farm-stand board (any signed-in user, no
+// merchant verification). Public reads are registered on the root app below,
+// alongside listHappenings.
+tenantApp.get('/fresh/mine', listMyFresh);
+tenantApp.post('/fresh/stands', createFreshStand);
+tenantApp.put('/fresh/stands/:id', updateFreshStand);
+tenantApp.post('/fresh/stands/:id/visibility', setFreshStandVisibility);
+tenantApp.delete('/fresh/stands/:id', deleteFreshStand);
+tenantApp.post('/fresh/stands/:id/posts', createFreshPost);
+tenantApp.put('/fresh/posts/:id', updateFreshPost);
+tenantApp.post('/fresh/posts/:id/sold-out', setFreshPostSoldOut);
+tenantApp.post('/fresh/posts/:id/relist', relistFreshPost);
+tenantApp.delete('/fresh/posts/:id', deleteFreshPost);
+tenantApp.get('/admin/fresh/stands', adminListFreshStands);
+tenantApp.get('/admin/fresh/posts', adminListFreshPosts);
+tenantApp.post('/admin/fresh/stands/:id/hide', adminHideFreshStand);
+tenantApp.post('/admin/fresh/posts/:id/hide', adminHideFreshPost);
+
 // Support messages ("Talk to us") - unified platform inbox (kk-business forwards in).
 tenantApp.get('/support/mine', getMySupport);
 tenantApp.get('/admin/support', adminListSupport);
@@ -221,6 +245,10 @@ app.post('/api/t/:tenant/passport/scan', resolveTenant, scanPlaque);
 app.get('/api/t/:tenant/deals', resolveTenant, listDeals);
 app.get('/api/t/:tenant/exchange/offers', resolveTenant, listExchangeOffers);
 app.get('/api/t/:tenant/happenings', resolveTenant, listHappenings);
+app.get('/api/t/:tenant/fresh', resolveTenant, listFresh);
+app.get('/api/t/:tenant/fresh/stands', resolveTenant, listFreshStands);
+app.get('/api/t/:tenant/fresh/stands/:id', resolveTenant, getFreshStand);
+app.get('/api/t/:tenant/fresh/seasons', resolveTenant, listFreshSeasons);
 app.post('/api/t/:tenant/support', resolveTenant, submitSupport);
 app.post('/api/t/:tenant/passport/claims/register', resolveTenant, registerClaim);
 app.get('/api/t/:tenant/network-members', resolveTenant, getNetworkMembers);
