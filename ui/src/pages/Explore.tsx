@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTenant } from '../context/TenantContext';
 
-import { MapPin, Compass, CalendarDays, ChevronRight, Navigation, X, HeartHandshake } from 'lucide-react';
+import { MapPin, Compass, CalendarDays, ChevronRight, Navigation, X, HeartHandshake, Sprout } from 'lucide-react';
 import { Spinner } from '../components/ui/Spinner';
 
 // Around Town follows the Happenings design language exactly: serif header
@@ -235,6 +235,25 @@ export default function Explore() {
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontWeight: 600, color: 'var(--green)', fontSize: '0.95rem' }}>Events &amp; Happenings</div>
           <div style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>See what's going on around town today</div>
+        </div>
+        <ChevronRight size={18} color="var(--amber)" style={{ flexShrink: 0 }} />
+      </Link>
+
+      {/* Fresh Today entry - same calm card language */}
+      <Link
+        to="/fresh"
+        className="card"
+        style={{
+          display: 'flex', alignItems: 'center', gap: 12,
+          padding: '14px 16px', marginBottom: 16,
+          textDecoration: 'none', color: 'inherit',
+          background: 'var(--white)', borderLeft: '4px solid var(--green)',
+        }}
+      >
+        <Sprout size={20} color="var(--amber)" style={{ flexShrink: 0 }} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 600, color: 'var(--green)', fontSize: '0.95rem' }}>Fresh Today</div>
+          <div style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>Farm stands and fresh food, live right now.</div>
         </div>
         <ChevronRight size={18} color="var(--amber)" style={{ flexShrink: 0 }} />
       </Link>

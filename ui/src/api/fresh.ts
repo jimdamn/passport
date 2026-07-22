@@ -276,3 +276,56 @@ export function relistFreshPost(tenant: string, id: string) {
 export function deleteFreshPost(tenant: string, id: string) {
   return api.delete<ApiResponse<{ removed: boolean }>>(`/t/${tenant}/fresh/posts/${id}`);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Admin — GET /admin/fresh/stands, /admin/fresh/posts, POST .../hide (sub-task
+// 4c). Shapes read directly off src/handlers/fresh.ts's adminListFreshStands/
+// adminListFreshPosts/adminHideFreshStand/adminHideFreshPost:
+//  - adminListFreshStands returns serializeStand(row) for every stand (any
+//    state, including deleted), with an extra owner_email joined in from the
+//    users table (left join - null if the owning account can't be resolved).
+//  - adminListFreshPosts returns the raw fresh_posts row (sold_out as 0|1,
+//    same as FreshPostRecord) plus stand_name - it does NOT join owner_email,
+//    unlike the stands endpoint, so posts have no owner field to display.
+//  - Both hide endpoints return the same raw row shape as the owner CRUD
+//    endpoints above (FreshStandRecord / FreshPostRecord).
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface AdminFreshStandRow extends FreshStandRecord {
+  owner_email: string | null;
+}
+
+// NOTE: does not extend FreshPostRecord above - that type is deliberately
+// typed loosely (see the comment on FreshPostRecord) and omits several
+// columns (is_active, admin_hidden, admin_hidden_reason) that are present on
+// the raw row and that this admin view needs to render state correctly.
+export interface AdminFreshPostRow {
+  id: string;
+  stand_id: string;
+  body: string;
+  photo_url: string | null;
+  sold_out: 0 | 1;
+  sold_out_at: number | null;
+  is_active: 0 | 1;
+  admin_hidden: 0 | 1;
+  admin_hidden_reason: string | null;
+  created_at: number;
+  expires_at: number;
+  stand_name: string;
+}
+
+export function adminListFreshStands(tenant: string) {
+  return api.get<ApiResponse<AdminFreshStandRow[]>>(`/t/${tenant}/admin/fresh/stands`);
+}
+
+export function adminListFreshPosts(tenant: string) {
+  return api.get<ApiResponse<AdminFreshPostRow[]>>(`/t/${tenant}/admin/fresh/posts`);
+}
+
+export function adminHideFreshStand(tenant: string, id: string, hidden: boolean, reason?: string) {
+  return api.post<ApiResponse<FreshStandRecord>>(`/t/${tenant}/admin/fresh/stands/${id}/hide`, { hidden, reason });
+}
+
+export function adminHideFreshPost(tenant: string, id: string, hidden: boolean, reason?: string) {
+  return api.post<ApiResponse<FreshPostRecord>>(`/t/${tenant}/admin/fresh/posts/${id}/hide`, { hidden, reason });
+}

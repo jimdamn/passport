@@ -350,6 +350,9 @@ export default function MyProfile() {
             <Link to="/profile/admin/happenings" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
               Happenings
             </Link>
+            <Link to="/profile/admin/fresh" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
+              Fresh Today
+            </Link>
             <Link to="/redeem" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
               Redeem a Claim
             </Link>

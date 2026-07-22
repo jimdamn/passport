@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Newspaper, ArrowLeftRight } from 'lucide-react';
+import { Newspaper, ArrowLeftRight, Sprout } from 'lucide-react';
 import { getContentSummary } from '../../api/content';
 import type { ContentSummaryItem, ContentSummarySource } from '../../api/content';
 import { Badge } from '../ui/Badge';
@@ -18,6 +18,21 @@ const EXCHANGE_STATUS_LABEL: Record<string, string> = {
 
 const STORY_STATUS_LABEL: Record<string, string> = {
   pending: 'Pending review', needs_revision: 'Needs revision', published: 'Published', rejected: 'Rejected',
+};
+
+// Fresh Today's `recent` list mixes stand rows and post rows (see
+// fetchFreshSummary in src/lib/contentSummary.ts), so `status` here is the
+// union of both state machines: stand states (visible/paused/hidden_by_admin/
+// removed) and post states (live/sold_out/expired/removed/hidden_by_admin) -
+// not the smaller {live, paused, hidden} set a first guess might reach for.
+const FRESH_STATUS_LABEL: Record<string, string> = {
+  visible: 'Visible',
+  paused: 'Paused',
+  hidden_by_admin: 'Hidden by admin',
+  removed: 'Removed',
+  live: 'Live',
+  sold_out: 'Sold out',
+  expired: 'Ended',
 };
 
 function RecentRow({ item, statusLabels }: { item: ContentSummaryItem; statusLabels: Record<string, string> }) {
@@ -162,6 +177,23 @@ export default function MyPostsCards({ tenantId }: { tenantId: string }) {
         emptyCtaLabel="Post on the Exchange"
         emptyCtaUrl="https://exchange.lakeandlocals.com/offers/new"
         statusLabels={EXCHANGE_STATUS_LABEL}
+      />
+
+      <SummaryCard
+        icon={Sprout}
+        title="My Stand"
+        source={summary?.fresh}
+        countLine={s => {
+          const stands = s.counts.stands ?? 0;
+          const posts = s.counts.live_posts ?? 0;
+          return `${stands} ${stands === 1 ? 'stand' : 'stands'} - ${posts} ${posts === 1 ? 'post' : 'posts'} live today`;
+        }}
+        manageLabel="Manage my stand"
+        manageUrl="/fresh/mine"
+        emptyLine="No stand yet - takes a minute to set up."
+        emptyCtaLabel="Set up my stand"
+        emptyCtaUrl="/fresh/mine"
+        statusLabels={FRESH_STATUS_LABEL}
       />
     </>
   );

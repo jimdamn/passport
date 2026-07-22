@@ -35,6 +35,7 @@ import AdminDeals from './pages/profile/AdminDeals';
 import AdminSupport from './pages/profile/AdminSupport';
 import AdminVolunteer from './pages/profile/AdminVolunteer';
 import AdminHappenings from './pages/profile/AdminHappenings';
+import AdminFresh from './pages/profile/AdminFresh';
 import KwestHome from './pages/kwest/KwestHome';
 import KwestHelp from './pages/kwest/KwestHelp';
 import KwestHunt from './pages/kwest/KwestHunt';
@@ -87,6 +88,7 @@ export default function App() {
         <Route path="/profile/admin/support" element={<AdminSupport />} />
         <Route path="/profile/admin/volunteer" element={<AdminVolunteer />} />
         <Route path="/profile/admin/happenings" element={<AdminHappenings />} />
+        <Route path="/profile/admin/fresh" element={<AdminFresh />} />
         <Route path="/profile/admin/kwest" element={<AdminKwest />} />
         <Route path="/profile/admin/kwest/:id" element={<AdminKwestEdit />} />
         <Route path="/profile/admin/kwest/:id/field-test" element={<AdminKwestFieldTest />} />

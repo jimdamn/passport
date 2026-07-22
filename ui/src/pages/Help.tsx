@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useTenant } from '../context/TenantContext';
 import { useAuth } from '../context/AuthContext';
-import { MapPin, Trees, Trophy, Gem, Sparkles, type LucideIcon } from 'lucide-react';
+import { MapPin, Trees, Trophy, Gem, Sparkles, Sprout, Pause, type LucideIcon } from 'lucide-react';
 import { Alert } from '../components/ui/Alert';
 import {
   SUPPORT_CATEGORIES, SUPPORT_STATUS_LABEL, submitSupport, getMySupport,
@@ -366,6 +366,54 @@ export default function Help() {
         <Step n={1} label="Claim a spot" detail="Open shifts show the when, the where, and the thank-you. One tap holds your spot; you can give it back any time before the shift." />
         <Step n={2} label="Show your QR when you arrive" detail="Your spot lives under My shifts with a QR code. The organizer scans it and your KrowdKredits land on the spot." />
         <Step n={3} label="Busy organizer? You're covered" detail="If a hectic event means nobody scanned you, don't worry - unconfirmed volunteers are resolved automatically within a few days of the event. Showing up is never wasted." />
+      </Section>
+
+      {/* ── Finding fresh food near you ── */}
+      <Section title="Finding fresh food near you">
+        <Step
+          n={1}
+          label="Open Fresh Today"
+          detail="From Around Town, tap Fresh Today - everything on it was posted this morning."
+        />
+        <Step
+          n={2}
+          label="Check the map"
+          detail="Amber pins have something out right now. Green pins are stands worth knowing about."
+        />
+        <Step
+          n={3}
+          label="Just show up"
+          detail="Bring cash - most stands run a cash box. Sold out means somebody beat you to it."
+        />
+        <Tip
+          icon={Sprout}
+          title="The season strip"
+          body="The line under the title tells you what's coming out of the fields this week - it changes all season."
+        />
+      </Section>
+
+      {/* ── Running your stand on Fresh Today ── */}
+      <Section title="Running your stand on Fresh Today">
+        <Step
+          n={1}
+          label="Set up your stand once"
+          detail="Name it, drag the pin to your spot, pick what you sell. About a minute."
+        />
+        <Step
+          n={2}
+          label="Post when things are out"
+          detail="One line is plenty. Your post clears at the end of the day on its own."
+        />
+        <Step
+          n={3}
+          label="Tomorrow, one tap"
+          detail="Yesterday's post shows an Out again today button - tap it and you're live."
+        />
+        <Tip
+          icon={Pause}
+          title="Going quiet for the season?"
+          body="Pause your stand from My Stand - it keeps everything and hides you until spring."
+        />
       </Section>
 
       {/* ── Deferred claims ── */}
