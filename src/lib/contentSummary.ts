@@ -97,8 +97,12 @@ export async function fetchFreshSummary(env: Env, tenantId: string, kkauthUid: n
       ).bind(...liveStandIds).first<{ n: number }>();
       livePosts = live?.n ?? 0;
 
+      // Unsliced: attention_total below must count every admin-hidden post,
+      // not just the ones that make the top-5 "recent" cut (mirrors the full-set
+      // accumulation pattern in fetchExchangeSummary above). The final .slice(0, 5)
+      // on `recent` still limits what's displayed.
       const { results } = await env.DB.prepare(
-        `SELECT id, body, admin_hidden, is_active, created_at FROM fresh_posts WHERE stand_id IN (${placeholders}) ORDER BY created_at DESC LIMIT 5`
+        `SELECT id, body, admin_hidden, is_active, created_at FROM fresh_posts WHERE stand_id IN (${placeholders}) ORDER BY created_at DESC`
       ).bind(...liveStandIds).all<any>();
       postRows = results || [];
     }
