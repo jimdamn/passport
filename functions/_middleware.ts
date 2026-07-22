@@ -153,6 +153,68 @@ async function isActiveEventScan(
   return true;
 }
 
+// ─── Fresh Today stand-page crawler bypass + OG meta ─────────────────────────
+// Stand detail pages are the route that gets shared externally (into county
+// Facebook groups). Stand ids are nanoid strings.
+const FRESH_STAND_PATTERN = /^\/fresh\/stand\/([\w-]+)$/;
+
+// Cloudflare computes this from more than just the client-sent User-Agent
+// (confirmed empirically 2026-07-20 by pointing Facebook's real Sharing
+// Debugger crawler at a live test endpoint and inspecting request.cf) - it is
+// NOT the same as request.cf.botManagement.verifiedBot, which stays false on
+// this account's Cloudflare plan even for a genuine Facebook crawler hit.
+// "Page Preview" is the category Facebook, Slack, Twitter, iMessage, etc.
+// share - it is not Facebook-exclusive, which is fine here since the only
+// thing this unlocks is a read-only preview of a stand someone already chose
+// to make shareable, for any of those platforms' preview fetchers. Mirrors
+// field-notes/functions/_middleware.ts isPagePreviewCrawler exactly.
+function isPagePreviewCrawler(request: Request): boolean {
+  const cf = (request as unknown as { cf?: { verifiedBotCategory?: string } }).cf;
+  return cf?.verifiedBotCategory === 'Page Preview';
+}
+
+function truncate(text: string, maxLen: number): string {
+  const trimmed = text.trim();
+  if (trimmed.length <= maxLen) return trimmed;
+  return `${trimmed.slice(0, maxLen - 1).trimEnd()}…`;
+}
+
+interface FreshStandMeta {
+  name: string;
+  latestPostBody: string | null;
+  photoUrl: string | null;
+}
+
+// Never surface a hidden/removed stand's real content to a crawler - falls
+// back to the generic tenant copy exactly like a deleted or never-existed
+// stand. Same public-visibility filter as the public API (getFreshStand in
+// src/handlers/fresh.ts): deleted_at IS NULL AND is_hidden = 0 AND
+// admin_hidden = 0.
+async function resolveFreshStandMeta(
+  id: string,
+  tenantSlug: string,
+  env: Env,
+): Promise<FreshStandMeta | null> {
+  try {
+    const stand = await env.DB.prepare(
+      'SELECT name, photo_url FROM fresh_stands WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL AND is_hidden = 0 AND admin_hidden = 0'
+    ).bind(id, tenantSlug).first<{ name: string; photo_url: string | null }>();
+    if (!stand) return null;
+
+    const post = await env.DB.prepare(
+      'SELECT body FROM fresh_posts WHERE stand_id = ? AND is_active = 1 AND admin_hidden = 0 AND expires_at > unixepoch() ORDER BY created_at DESC LIMIT 1'
+    ).bind(id).first<{ body: string }>();
+
+    return {
+      name: stand.name,
+      latestPostBody: post?.body ?? null,
+      photoUrl: stand.photo_url || null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const APPS_HUB_URL = 'https://apps.lakeandlocals.com';
@@ -313,9 +375,10 @@ export const onRequest: PagesFunction<Env & { GEO_TOKEN_SECRET: string }> = asyn
   // browser can load CSS and JS regardless of cookie state. Without this, a
   // missing or expired kk_geo_trust cookie causes the middleware to return the
   // geo-gate HTML page as the stylesheet, breaking all styles.
-  const isApiRequest   = url.pathname.startsWith('/api/');
-  const isStaticAsset  = url.pathname.startsWith('/assets/');
-  const isSiteAsset    = url.pathname.startsWith('/site-assets/');
+  const isApiRequest    = url.pathname.startsWith('/api/');
+  const isStaticAsset   = url.pathname.startsWith('/assets/');
+  const isSiteAsset     = url.pathname.startsWith('/site-assets/');
+  const freshStandMatch = url.pathname.match(FRESH_STAND_PATTERN);
   let verifiedPayload: GeoTokenPayload | null = null;
   let mintEventBypass = false;
 
@@ -341,6 +404,15 @@ export const onRequest: PagesFunction<Env & { GEO_TOKEN_SECRET: string }> = asyn
       // who has no region-trust cookie; we mint a short-lived bypass below.
       if (await isActiveEventScan(url, context.env)) {
         mintEventBypass = true;
+      } else if (freshStandMatch && isPagePreviewCrawler(context.request)) {
+        // Narrow, read-only exception: a confirmed link-preview crawler
+        // (Facebook, Slack, etc. - see isPagePreviewCrawler) fetching a
+        // specific Fresh Today stand's detail page gets the real page (and
+        // its OG tags below) instead of the gate, so a shared stand link
+        // previews correctly. This does not apply to any other route, does
+        // not grant write access, and does not change the gate for any real
+        // visitor - the geo-fence itself is unchanged. Mirrors field-notes'
+        // crawlerPreviewAllowed exception for /story/:id exactly.
       } else {
         return geoGatePage('Lake & Locals');
       }
@@ -391,12 +463,31 @@ export const onRequest: PagesFunction<Env & { GEO_TOKEN_SECRET: string }> = asyn
   response.headers.set('Cache-Control', 'no-cache');
 
   // Rewrite OG / Twitter meta tags with tenant branding
-  const { brandName, siteUrl } = await resolveTenantMeta(hostname, context.env);
-  const exchangeName  = `${brandName} Passport`;
-  const ogTitle       = `${exchangeName} — Explore Local Experiences & Scan Badges`;
-  const ogDescription = `Explore local shops, dining, and scenic spots in northeast Indiana. Scan badges, check in at destinations, and support regional businesses.`;
+  const { brandName } = await resolveTenantMeta(hostname, context.env);
+  const exchangeName = `${brandName} Passport`;
+  // og:url must be the actual page being previewed, not a fixed site root -
+  // Facebook treats og:url as the canonical identity of the content and
+  // collapses every page sharing the same og:url into one preview entry
+  // (this exact class of bug was already found and fixed once on this
+  // platform in the field-notes/Exchange share-card work - mirrored here).
+  const canonicalUrl = `${url.origin}${url.pathname}`;
+  let ogTitle       = `${exchangeName} — Explore Local Experiences & Scan Badges`;
+  let ogDescription = `Explore local shops, dining, and scenic spots in northeast Indiana. Scan badges, check in at destinations, and support regional businesses.`;
+  let ogImage: string | null = null;
 
-  return new HTMLRewriter()
+  if (freshStandMatch) {
+    const tenantSlug = REGIONAL_DOMAINS[hostname] ?? 'lake-locals';
+    const stand = await resolveFreshStandMeta(freshStandMatch[1], tenantSlug, context.env);
+    if (stand) {
+      ogTitle = `${truncate(stand.name, 70)} - Fresh Today`;
+      ogDescription = stand.latestPostBody
+        ? truncate(stand.latestPostBody, 160)
+        : "Local stand on Fresh Today - see what's out right now.";
+      ogImage = stand.photoUrl;
+    }
+  }
+
+  const rewriter = new HTMLRewriter()
     .on('title', {
       element(el) { el.setInnerContent(exchangeName); },
     })
@@ -410,13 +501,34 @@ export const onRequest: PagesFunction<Env & { GEO_TOKEN_SECRET: string }> = asyn
       element(el) { el.setAttribute('content', ogDescription); },
     })
     .on('meta[property="og:url"]', {
-      element(el) { el.setAttribute('content', siteUrl); },
+      element(el) { el.setAttribute('content', canonicalUrl); },
     })
     .on('meta[name="twitter:title"]', {
-      element(el) { el.setAttribute('content', exchangeName); },
+      element(el) { el.setAttribute('content', ogTitle); },
     })
     .on('meta[name="twitter:description"]', {
       element(el) { el.setAttribute('content', ogDescription); },
-    })
-    .transform(response);
+    });
+
+  if (ogImage) {
+    rewriter
+      .on('meta[property="og:image"]', {
+        element(el) { el.setAttribute('content', ogImage as string); },
+      })
+      .on('meta[name="twitter:image"]', {
+        element(el) { el.setAttribute('content', ogImage as string); },
+      });
+  } else {
+    // No real photo for this page - drop the empty placeholder tags rather
+    // than let Facebook try to fetch an empty image URL (mirrors field-notes).
+    rewriter
+      .on('meta[property="og:image"]', {
+        element(el) { el.remove(); },
+      })
+      .on('meta[name="twitter:image"]', {
+        element(el) { el.remove(); },
+      });
+  }
+
+  return rewriter.transform(response);
 };
