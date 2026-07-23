@@ -38,13 +38,15 @@ export function categoryLabel(key: string): string {
 export const REGION_CENTER = { lat: 41.55, lon: -85.45 };
 
 // Region bounds for the pin picker's maxBounds prop, converted from the
-// backend's REGION_BOUNDS ({ minLat: 40.75, maxLat: 42.30, minLon: -86.65,
-// maxLon: -84.25 } in src/handlers/fresh.ts) into the [[west, south], [east,
-// north]] lng/lat tuple RegionMap's maxBounds prop actually expects (confirmed
-// by reading kk-shared-ui/src/components/map/RegionMap.tsx directly).
+// backend's REGION_BOUNDS ({ minLat: 40.9012, maxLat: 42.1392, minLon:
+// -86.3485, maxLon: -84.4557 } in src/handlers/fresh.ts) into the [[west,
+// south], [east, north]] lng/lat tuple RegionMap's maxBounds prop actually
+// expects (confirmed by reading kk-shared-ui/src/components/map/RegionMap.tsx
+// directly). This now matches the platform's real geo-fence boundary
+// (kk-login/kk-apps-hub geo.ts) exactly instead of a looser approximation.
 export const REGION_BOUNDS: [[number, number], [number, number]] = [
-  [-86.65, 40.75],
-  [-84.25, 42.30],
+  [-86.3485, 40.9012],
+  [-84.4557, 42.1392],
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────

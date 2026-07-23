@@ -39,9 +39,13 @@ export const FRESH_CATEGORIES = [
   'honey_syrup', 'plants_flowers', 'upick', 'csa', 'prepared',
 ] as const;
 
-// Bounding box: the Tri-State Lakes Region with padding.
-// Union City MI (N), North Manchester IN (S), South Bend IN (W), Bryan OH (E).
-export const REGION_BOUNDS = { minLat: 40.75, maxLat: 42.30, minLon: -86.65, maxLon: -84.25 };
+// Bounding box: matches the platform's real geo-fence boundary exactly (the
+// same box isInsideRegion() enforces in kk-login/src/lib/geo.ts and
+// kk-apps-hub/src/lib/geo.ts — those files are the source of truth, kept in
+// sync by hand since this Worker can't import from theirs). Previously this
+// was a looser hand-drafted approximation that let a stand's pin land outside
+// the real served area; do not widen this again without updating geo.ts too.
+export const REGION_BOUNDS = { minLat: 40.9012, maxLat: 42.1392, minLon: -86.3485, maxLon: -84.4557 };
 export const REGION_CENTER = { lat: 41.55, lon: -85.45 }; // default map center, zoom 9
 
 // Anti-spam (calm-board guardrail, same shape as Happenings' cooldown+cap).
