@@ -183,6 +183,10 @@ export default function SaleDetail() {
         )}
       </div>
 
+      <p style={{ margin: '0 0 12px', fontSize: '0.78rem', color: 'var(--muted)' }}>
+        Posted {postedAt(sale.created_at)}
+      </p>
+
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
         <button
           onClick={handleFacebookShare}
@@ -207,10 +211,6 @@ export default function SaleDetail() {
           <Share2 size={15} /> Share on X
         </button>
       </div>
-
-      <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--muted)', textAlign: 'center' }}>
-        Posted {postedAt(sale.created_at)}
-      </p>
     </div>
   );
 }

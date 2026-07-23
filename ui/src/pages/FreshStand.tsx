@@ -144,6 +144,10 @@ export default function FreshStand() {
         )}
       </div>
 
+      <p style={{ margin: '0 0 12px', fontSize: '0.78rem', color: 'var(--muted)' }}>
+        On Fresh Today since {sinceMonthYear(stand.created_at)}
+      </p>
+
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
         <button
           onClick={handleFacebookShare}
@@ -194,10 +198,6 @@ export default function FreshStand() {
           ))}
         </div>
       )}
-
-      <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--muted)', textAlign: 'center' }}>
-        On Fresh Today since {sinceMonthYear(stand.created_at)}
-      </p>
     </div>
   );
 }
