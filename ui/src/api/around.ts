@@ -65,11 +65,14 @@ export function putAroundInterests(tenantId: string, interests: string[]) {
   return api.put<ApiResponse<AroundInterests>>(`/t/${tenantId}/around/interests`, { interests });
 }
 
-/** Toggle one slug in a pick-order-preserving list - add to the end on
- * select, remove on deselect. Shared by the board's picker card and the
- * profile edit drawer, which both need "the order you tapped them in". */
-export function toggleInterest(list: string[], slug: string): string[] {
-  return list.includes(slug) ? list.filter(s => s !== slug) : [...list, slug];
+/** Single-select: tapping a chip selects exactly that one slug (`[slug]`) -
+ * tapping the already-selected chip deselects it (`[]`). Shared by the
+ * board's picker card and the profile edit drawer (both render via the
+ * shared InterestChips component). Jim rejected the earlier multi-pick /
+ * order-preserving version along with the lens-row reordering it fed; the
+ * saved payload is still an array to keep the backend contract unchanged. */
+export function toggleInterest(current: string[], slug: string): string[] {
+  return current[0] === slug ? [] : [slug];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -88,7 +91,9 @@ export function useLens(picks: string[]): UseLensResult {
   // remembered lens existed at mount, or the member's picks arrived and we
   // applied "first pick" once. After that, further pick-array changes (e.g.
   // editing interests from the profile drawer while already on the board)
-  // must never yank the visitor to a different lens mid-visit.
+  // must never yank the visitor to a different lens mid-visit - a save
+  // re-aims explicitly via setLens() instead (see Explore.tsx / the profile
+  // drawer), never by this effect firing again.
   const lockedRef = useRef(false);
 
   const [activeLens, setActiveLens] = useState<string>(() => {
@@ -114,9 +119,12 @@ export function useLens(picks: string[]): UseLensResult {
     localStorage.setItem(LAST_LENS_KEY, slug);
   }
 
-  const order = picks.length > 0
-    ? [...picks, ...LENS_SLUGS.filter(s => !picks.includes(s))]
-    : LENS_SLUGS.slice();
+  // Row order is ALWAYS the fixed LENS_SLUGS order, regardless of picks.
+  // Jim rejected picks-first reordering (2026-07-23): a chip row that moves
+  // per-member breaks consistent navigation. The interest pick decides ONLY
+  // where the board opens (activeLens above) - it never gains authority over
+  // the chip row itself. Every visitor, every state, sees the same order.
+  const order = LENS_SLUGS.slice();
 
   return { activeLens, order, setLens };
 }

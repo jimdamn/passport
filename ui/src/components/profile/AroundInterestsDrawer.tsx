@@ -1,13 +1,19 @@
 import { useState, useEffect } from 'react';
 import { Compass } from 'lucide-react';
-import { getAroundInterests, putAroundInterests, toggleInterest, type AroundInterests } from '../../api/around';
+import { getAroundInterests, putAroundInterests, toggleInterest, LAST_LENS_KEY, type AroundInterests } from '../../api/around';
 import InterestChips from '../explore/InterestChips';
 import { Alert } from '../ui/Alert';
 
 // The profile-side twin of the Around Town board's first-visit picker -
-// same chips, same PUT, opened from the "What you keep an eye on" card.
+// same chips, same PUT, opened from the "Where Around Town opens" card.
 // Follows the PersonalPersonaDrawer pattern (right-side sheet, load-on-open,
 // quiet inline confirmation, no credits/fanfare on save).
+//
+// Re-aim on save: this drawer lives outside the board page, so it does not
+// call the board's useLens().setLens directly (no cross-component state
+// machinery) - it writes LAST_LENS_KEY itself; the board picks the new lens
+// up on its next mount. This never touches chip order, only where the board
+// opens.
 
 interface Props {
   open: boolean;
@@ -29,7 +35,11 @@ export function AroundInterestsDrawer({ open, tenantId, onClose, onSaved }: Prop
     setSavedMsg(false);
     setLoading(true);
     getAroundInterests(tenantId)
-      .then(res => setSelected(res.data.interests))
+      // Existing-data note: rows saved before single-pick shipped may hold a
+      // multi-element array - treat the first element as the pick everywhere,
+      // never render more than one chip active. The next save naturally
+      // normalizes the stored row to a single-element (or empty) array.
+      .then(res => setSelected(res.data.interests.slice(0, 1)))
       .catch(err => setErrorMsg(err?.message || 'Failed to load your interests.'))
       .finally(() => setLoading(false));
   }, [open, tenantId]);
@@ -46,6 +56,10 @@ export function AroundInterestsDrawer({ open, tenantId, onClose, onSaved }: Prop
     try {
       const res = await putAroundInterests(tenantId, selected);
       onSaved(res.data);
+      // Re-aim: the board opens on this pick next time ('everything' when
+      // selected is the empty skip). Device-local only, no cross-component
+      // state machinery - the board reads this on its next mount.
+      localStorage.setItem(LAST_LENS_KEY, selected[0] ?? 'everything');
       setSavedMsg(true);
     } catch (err: any) {
       setErrorMsg(err?.message || 'Could not save your picks. Try again.');
@@ -64,7 +78,7 @@ export function AroundInterestsDrawer({ open, tenantId, onClose, onSaved }: Prop
       />
 
       <aside
-        aria-label="What you keep an eye on"
+        aria-label="Where Around Town opens"
         aria-hidden={!open}
         {...(!open ? { inert: '' } : {})}
         style={{
@@ -94,7 +108,7 @@ export function AroundInterestsDrawer({ open, tenantId, onClose, onSaved }: Prop
             </svg>
           </button>
           <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: '1.15rem', fontWeight: 'bold', color: 'var(--green)', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Compass size={20} strokeWidth={2} aria-hidden="true" /> What you keep an eye on
+            <Compass size={20} strokeWidth={2} aria-hidden="true" /> Where Around Town opens
           </h2>
         </div>
 
@@ -103,7 +117,7 @@ export function AroundInterestsDrawer({ open, tenantId, onClose, onSaved }: Prop
           padding: '14px 16px', marginBottom: 20,
         }}>
           <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.84rem', color: 'var(--muted)', margin: 0, lineHeight: 1.5 }}>
-            What do you keep an eye on? Pick a few - we'll put them first.
+            What do you check most? We'll open the board there.
           </p>
         </div>
 

@@ -239,17 +239,19 @@ export default function MyProfile() {
         />
       </div>
 
-      {/* ── What you keep an eye on (Around Town interests) ── */}
+      {/* ── Where Around Town opens (Around Town interest pick) ── */}
       <div className="card" style={{ marginBottom: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
           <div style={{ minWidth: 0 }}>
             <h3 style={{ margin: '0 0 4px', fontSize: '1.05rem', fontFamily: 'var(--font-serif)', color: 'var(--green)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Compass size={17} strokeWidth={2} aria-hidden="true" /> What you keep an eye on
+              <Compass size={17} strokeWidth={2} aria-hidden="true" /> Where Around Town opens
             </h3>
             <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--muted)' }}>
+              {/* Existing-data note: a legacy multi-pick row's first element
+                  is the pick everywhere - never join the whole array. */}
               {interests && interests.interests.length > 0
-                ? interests.interests.map(slug => PICKER_LABELS[slug] ?? slug).join(', ')
-                : 'Everything - no picks yet'}
+                ? (PICKER_LABELS[interests.interests[0]] ?? interests.interests[0])
+                : 'Everything - no pick yet'}
             </p>
           </div>
           <button className="btn btn-secondary btn-sm" onClick={() => setInterestsDrawerOpen(true)} style={{ flexShrink: 0 }}>

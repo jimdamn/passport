@@ -360,8 +360,8 @@ export default function Help() {
       <Section title="Your Around Town board">
         <Step
           n={1}
-          label="Pick what you keep an eye on"
-          detail="The first time you open Around Town, it asks what you care about - fresh food, events, deals. Your picks go first, every visit."
+          label="Pick what you check most"
+          detail="The first time you open Around Town, it asks what you check most - fresh food, events, deals. The board opens there for you, every visit."
         />
         <Step
           n={2}

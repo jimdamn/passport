@@ -93,7 +93,7 @@ function InterestPickerCard({ tenantId, onSaved }: { tenantId: string; onSaved: 
         This is your community.
       </h2>
       <p style={{ margin: '0 0 12px', fontSize: '0.88rem', color: 'var(--muted)' }}>
-        What do you keep an eye on? Pick a few - we'll put them first.
+        What do you check most? We'll open the board there.
       </p>
       <InterestChips value={selected} onToggle={slug => setSelected(prev => toggleInterest(prev, slug))} />
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 16, flexWrap: 'wrap' }}>
@@ -198,7 +198,16 @@ export default function Explore() {
 
       {/* First-visit interest picker - signed-in members with no picks yet */}
       {user && interests && interests.chosen_at === null && (
-        <InterestPickerCard tenantId={tenant.id} onSaved={setInterests} />
+        <InterestPickerCard
+          tenantId={tenant.id}
+          onSaved={data => {
+            setInterests(data);
+            // Re-aim: a save immediately opens the board on the saved pick
+            // ('everything' when the save is the empty skip). This decides
+            // ONLY where the board opens - setLens never touches chip order.
+            setLens(data.interests[0] ?? 'everything');
+          }}
+        />
       )}
 
       {/* Map postcard - static preview, never a scroll trap. Whole card is one
