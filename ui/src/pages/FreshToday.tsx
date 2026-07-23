@@ -237,7 +237,7 @@ export default function FreshToday() {
         <button onClick={useMyLocation} disabled={locating}
           className={`btn btn-sm ${liveCoords ? 'btn-amber' : 'btn-secondary'}`}
           style={{ minHeight: 32, display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap', flexShrink: 0 }}>
-          <Navigation size={13} /> {locating ? 'Locating…' : 'Near me'}
+          <Navigation size={13} /> {locating ? 'Locating…' : 'Use my location'}
         </button>
         {liveCoords && (
           <button onClick={clearLocation}
@@ -255,7 +255,7 @@ export default function FreshToday() {
       )}
       {!liveCoords && hasHomeCoords && !geoError && (
         <p style={{ margin: '0 0 12px', fontSize: '0.78rem', color: 'var(--muted)' }}>
-          Showing your home area - tap "Near me" to use where you are right now.
+          Showing your home area - tap "Use my location" to use where you are right now.
         </p>
       )}
       {geoError && (
