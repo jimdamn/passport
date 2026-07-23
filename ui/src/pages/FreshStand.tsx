@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useTenant } from '../context/TenantContext';
 import { getFreshStand, categoryLabel, standLocation, type FreshStandDetail } from '../api/fresh';
-import { Sprout, Phone, MapPin } from 'lucide-react';
+import { Sprout, Phone, MapPin, Share2 } from 'lucide-react';
 import { Spinner } from '../components/ui/Spinner';
 import { Badge } from '../components/ui/Badge';
 import { RegionMap } from 'kk-shared-ui';
@@ -68,6 +68,17 @@ export default function FreshStand() {
     );
   }
 
+  function handleFacebookShare() {
+    const url = encodeURIComponent(window.location.href);
+    window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}`, '_blank', 'width=600,height=480,noopener,noreferrer');
+  }
+
+  function handleTwitterShare() {
+    const url = encodeURIComponent(window.location.href);
+    const text = encodeURIComponent(stand!.name);
+    window.open(`https://x.com/intent/post?url=${url}&text=${text}`, '_blank', 'width=600,height=480,noopener,noreferrer');
+  }
+
   return (
     <div className="main-content" style={{ maxWidth: 800, margin: '0 auto', paddingTop: 20, paddingBottom: 80 }}>
       <div style={{ marginBottom: 8 }}>
@@ -131,6 +142,31 @@ export default function FreshStand() {
             <Phone size={14} style={{ color: 'var(--amber)' }} /> {stand.phone}
           </a>
         )}
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
+        <button
+          onClick={handleFacebookShare}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 7, padding: '8px 16px',
+            background: '#1877F2', color: '#fff', border: 'none', borderRadius: 'var(--r-sm)',
+            fontFamily: 'var(--font-sans)', fontSize: '0.85rem', fontWeight: 600,
+            cursor: 'pointer', letterSpacing: '0.01em',
+          }}
+        >
+          <Share2 size={15} /> Share on Facebook
+        </button>
+        <button
+          onClick={handleTwitterShare}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 7, padding: '8px 16px',
+            background: '#000', color: '#fff', border: 'none', borderRadius: 'var(--r-sm)',
+            fontFamily: 'var(--font-sans)', fontSize: '0.85rem', fontWeight: 600,
+            cursor: 'pointer', letterSpacing: '0.01em',
+          }}
+        >
+          <Share2 size={15} /> Share on X
+        </button>
       </div>
 
       {stand.posts.length === 0 ? (
