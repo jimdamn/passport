@@ -18,7 +18,7 @@ import type { Env } from '../types';
 
 type AppContext = Context<{ Bindings: Env }>;
 
-const NOT_FOUND_MSG = "Couldn't find that address - try adding the town and state, or just drag the pin yourself.";
+const NOT_FOUND_MSG = 'Include the full address - street, town, and state - so we can confirm it on the map.';
 
 /** GET /geocode?q=<address> — { data: { lat, lon, matched } }. Authenticated (any signed-in user). */
 export async function geocodeAddress(c: AppContext) {

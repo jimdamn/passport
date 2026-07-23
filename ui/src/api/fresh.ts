@@ -227,7 +227,7 @@ export interface FreshStandInput {
   lat: number;
   lon: number;
   categories: string[];
-  address_hint?: string | null;
+  address_hint: string;
   phone?: string | null;
   photo_url?: string | null;
 }

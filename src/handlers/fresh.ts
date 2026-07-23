@@ -152,6 +152,9 @@ function parseStandInput(body: any, existing?: any) {
   }
 
   const addressHint = body.address_hint === undefined ? (existing?.address_hint ?? null) : cleanText(body.address_hint, ADDRESS_HINT_MAX);
+  if (!addressHint) {
+    throw new HTTPException(400, { message: 'Add an address so the map can find your stand.' });
+  }
   const phone = body.phone === undefined ? (existing?.phone ?? null) : cleanText(body.phone, PHONE_MAX);
   const description = body.description === undefined ? (existing?.description ?? null) : cleanText(body.description, DESCRIPTION_MAX);
   const photoUrl = body.photo_url === undefined ? (existing?.photo_url ?? null) : cleanText(body.photo_url, 500);

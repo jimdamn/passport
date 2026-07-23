@@ -9,7 +9,7 @@ import {
   type MyFreshStand, type MyFreshPost, type FreshStandInput,
 } from '../api/fresh';
 import { geocodeAddress } from '../api/geocode';
-import { Sprout, Pencil, Trash2, Plus, Pause, Play, Camera, X, MapPin } from 'lucide-react';
+import { Sprout, Pencil, Trash2, Plus, Pause, Play, Camera, X, MapPin, Info } from 'lucide-react';
 import { Spinner } from '../components/ui/Spinner';
 import { Alert } from '../components/ui/Alert';
 import { RegionMap } from 'kk-shared-ui';
@@ -179,7 +179,7 @@ function StandForm({ tenantId, editingStand, homeLocation, onCancel, onSaved, cr
       setMapCenter({ lat: res.data.lat, lon: res.data.lon });
       setLocatedMatch(res.data.matched);
     } catch (err: any) {
-      setLocateError(err.message || "Couldn't find that address - try adding the town and state, or just drag the pin yourself.");
+      setLocateError(err.message || 'Include the full address - street, town, and state - so we can confirm it on the map.');
     } finally {
       setLocating(false);
     }
@@ -211,7 +211,7 @@ function StandForm({ tenantId, editingStand, homeLocation, onCancel, onSaved, cr
         lat: picked.lat,
         lon: picked.lon,
         categories,
-        address_hint: addressHint.trim() || null,
+        address_hint: (addressHint ?? '').trim(),
         phone: phone.trim() || null,
         photo_url: photoUrl,
       };
@@ -274,7 +274,7 @@ function StandForm({ tenantId, editingStand, homeLocation, onCancel, onSaved, cr
           placeholders and wrap their labels awkwardly. */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 12 }}>
         <div>
-          <label style={labelStyle}>Address hint (optional)</label>
+          <label style={labelStyle}>Address hint</label>
           <input className="form-input" style={inputStyle} maxLength={ADDRESS_HINT_MAX} value={addressHint ?? ''}
             placeholder="e.g. Corner of Rd 400 N and Rd 700 W"
             onChange={e => setAddressHint(e.target.value)} />
@@ -285,7 +285,15 @@ function StandForm({ tenantId, editingStand, homeLocation, onCancel, onSaved, cr
               {locating ? 'Locating...' : 'Locate on map'}
             </button>
             {locatedMatch && <p style={{ margin: '4px 0 0', fontSize: '0.74rem', color: 'var(--muted)' }}>Found: {locatedMatch}</p>}
-            {locateError && <p style={{ margin: '4px 0 0', fontSize: '0.74rem', color: 'var(--error)' }}>{locateError}</p>}
+            {locateError && (
+              <div style={{
+                marginTop: 6, padding: '8px 10px', display: 'flex', alignItems: 'flex-start', gap: 6,
+                background: 'rgba(200,134,10,0.08)', border: '1px solid rgba(200,134,10,0.25)', borderRadius: 'var(--r-sm)',
+              }}>
+                <Info size={13} style={{ color: 'var(--amber)', flexShrink: 0, marginTop: 1 }} />
+                <p style={{ margin: 0, fontSize: '0.74rem', color: 'var(--text)' }}>{locateError}</p>
+              </div>
+            )}
           </div>
         </div>
         <div>
@@ -317,7 +325,7 @@ function StandForm({ tenantId, editingStand, homeLocation, onCancel, onSaved, cr
           Cancel
         </button>
         <button className="btn btn-amber btn-sm" onClick={handleSubmit}
-          disabled={working || !name.trim() || categories.length === 0}
+          disabled={working || !name.trim() || categories.length === 0 || !(addressHint ?? '').trim()}
           style={{ minHeight: 40 }}>
           {working ? 'Saving...' : editingStand ? 'Save Changes' : 'Set up my stand'}
         </button>

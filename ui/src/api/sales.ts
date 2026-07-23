@@ -115,7 +115,7 @@ export interface SaleInput {
   category: string;
   lat: number;
   lon: number;
-  address_hint?: string | null;
+  address_hint: string;
   phone?: string | null;
   event_name?: string | null;
   days: SaleDayEntry[];
