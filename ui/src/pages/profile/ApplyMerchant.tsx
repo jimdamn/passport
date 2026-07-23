@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTenant } from '../../context/TenantContext';
 import { applyMerchant } from '../../api/profile';
+import { geocodeAddress } from '../../api/geocode';
 import { ArrowLeft, Store, Navigation, MapPin } from 'lucide-react';
 import { Alert } from '../../components/ui/Alert';
 
@@ -97,47 +98,16 @@ export default function ApplyMerchant() {
       setError('Please enter a street address to search.');
       return;
     }
+    if (!tenant) {
+      setError('Please wait for the page to finish loading and try again.');
+      return;
+    }
     setGeocodingPending(true);
     setError('');
     try {
-      // US Census Geocoder - handles rural county road formats well
-      const censusRes = await fetch(
-        `https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?address=${encodeURIComponent(addr)}&benchmark=2020&format=json`
-      );
-      if (censusRes.ok) {
-        const censusData = await censusRes.json() as any;
-        const matches = censusData?.result?.addressMatches;
-        if (matches && matches.length > 0) {
-          const match = matches[0];
-          setForm(f => ({
-            ...f,
-            lat: match.coordinates.y.toString(),
-            lon: match.coordinates.x.toString(),
-          }));
-          setGeocodedDisplayName(match.matchedAddress);
-          return;
-        }
-      }
-
-      // Fallback: Nominatim
-      const nomRes = await fetch(
-        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(addr)}&format=json&limit=1&countrycodes=us`,
-        { headers: { 'Accept-Language': 'en' } }
-      );
-      if (nomRes.ok) {
-        const nomData = await nomRes.json() as any[];
-        if (nomData && nomData.length > 0) {
-          setForm(f => ({
-            ...f,
-            lat: nomData[0].lat,
-            lon: nomData[0].lon,
-          }));
-          setGeocodedDisplayName(nomData[0].display_name);
-          return;
-        }
-      }
-
-      throw new Error('Address not found. Make sure to include city and state (e.g. 1255 N 170 W, Angola, IN).');
+      const res = await geocodeAddress(tenant.id, addr);
+      setForm(f => ({ ...f, lat: res.data.lat.toString(), lon: res.data.lon.toString() }));
+      setGeocodedDisplayName(res.data.matched);
     } catch (err: any) {
       setError(err.message || 'Geocoding search failed. Please try again.');
     } finally {
