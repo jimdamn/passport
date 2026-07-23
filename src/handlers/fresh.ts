@@ -439,6 +439,48 @@ export async function listMyFresh(c: AppContext) {
   return c.json({ data: { stands } });
 }
 
+/**
+ * POST /fresh/upload — owner uploads a stand or post photo. Forwards the
+ * file to KKAuth's generic POST /internal/uploads over the existing KKAUTH
+ * service binding (same call shape as auth.ts's POST /profile/avatar route:
+ * Service Binding fetch + X-Internal-Secret header), with variant: 'mobile'
+ * and user_id = the caller's kkauth uid. Returns { data: { url } } only —
+ * this route never writes to fresh_stands/fresh_posts itself. The client
+ * includes the returned url as photo_url in the normal create/update stand
+ * or post request body. Photos are optional everywhere, so a failed upload
+ * here must never be treated as a form-blocking error by the caller.
+ */
+export async function uploadFreshPhoto(c: AppContext) {
+  const user = c.get('user');
+  const kkauthUid = Number(user.sub);
+
+  const form = await c.req.formData().catch(() => null);
+  const file = form?.get('file');
+  if (!file || typeof file === 'string') {
+    throw new HTTPException(400, { message: 'Choose a photo to upload.' });
+  }
+
+  const uploadForm = new FormData();
+  uploadForm.append('file', file as File);
+  uploadForm.append('user_id', String(kkauthUid));
+  uploadForm.append('variant', 'mobile');
+
+  const res = await c.env.KKAUTH.fetch(
+    new Request('https://kkauth/internal/uploads', {
+      method: 'POST',
+      headers: { 'X-Internal-Secret': c.env.INTERNAL_SECRET || '' },
+      body: uploadForm,
+    })
+  );
+
+  const kkBody = await res.json<any>().catch(() => ({}));
+  if (!res.ok) {
+    return c.json(kkBody, res.status as any);
+  }
+
+  return c.json({ data: { url: kkBody?.data?.url ?? null } });
+}
+
 /** POST /fresh/stands — create a producer stand. Max 3 per kkauth_uid. */
 export async function createFreshStand(c: AppContext) {
   const user = c.get('user');

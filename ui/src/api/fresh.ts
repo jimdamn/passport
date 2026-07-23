@@ -1,4 +1,4 @@
-import { api } from './client';
+import { api, getToken } from './client';
 import type { ApiResponse } from '../types';
 
 // Fresh Today — resident-owned farm-stand board. Mirrors happenings.ts style.
@@ -239,6 +239,41 @@ export interface FreshPostRecord {
 
 export function listMyFresh(tenant: string) {
   return api.get<ApiResponse<{ stands: MyFreshStand[] }>>(`/t/${tenant}/fresh/mine`);
+}
+
+/**
+ * Upload a stand or post photo. Sends multipart FormData with a `file` field
+ * to the Passport backend, which forwards it to KKAuth's generic uploads
+ * route and returns only { data: { url } } — no fresh_stands/fresh_posts row
+ * is touched here; the caller includes the returned url as photo_url in the
+ * normal create/update stand or post call, below.
+ *
+ * Bypasses the JSON `api` client wrapper deliberately (same reason as
+ * uploadAvatar in api/profile.ts) — apiFetch always forces
+ * Content-Type: application/json, which would strip the multipart boundary
+ * the browser needs to set itself for a FormData body.
+ */
+export async function uploadFreshPhoto(tenant: string, file: File): Promise<ApiResponse<{ url: string | null }>> {
+  const token = getToken();
+  const headers: Record<string, string> = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const form = new FormData();
+  form.append('file', file);
+
+  const res = await fetch(`/api/t/${tenant}/fresh/upload`, {
+    method: 'POST',
+    headers,
+    body: form,
+    credentials: 'include',
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((body as any).error || `Upload failed: ${res.status}`);
+  }
+
+  return res.json();
 }
 
 export function createFreshStand(tenant: string, body: FreshStandInput) {

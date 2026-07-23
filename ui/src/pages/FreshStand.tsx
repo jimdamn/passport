@@ -91,6 +91,10 @@ export default function FreshStand() {
         ))}
       </div>
 
+      {stand.photo_url && (
+        <img src={stand.photo_url} alt="" style={{ width: '100%', maxHeight: 260, objectFit: 'cover', borderRadius: 8, marginBottom: 16, display: 'block' }} />
+      )}
+
       {stand.description && (
         <p style={{ margin: '0 0 16px', fontSize: '0.9rem', color: 'var(--text)', lineHeight: 1.45 }}>
           {stand.description}

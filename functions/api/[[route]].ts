@@ -31,6 +31,7 @@ import {
   listMyFresh, createFreshStand, updateFreshStand, setFreshStandVisibility, deleteFreshStand,
   createFreshPost, updateFreshPost, setFreshPostSoldOut, relistFreshPost, deleteFreshPost,
   adminListFreshStands, adminListFreshPosts, adminHideFreshStand, adminHideFreshPost,
+  uploadFreshPhoto,
 } from '../../src/handlers/fresh';
 
 import { listExchangeOffers } from '../../src/handlers/exchange';
@@ -161,6 +162,7 @@ tenantApp.delete('/admin/happenings/:id', adminDeleteHappening);
 // merchant verification). Public reads are registered on the root app below,
 // alongside listHappenings.
 tenantApp.get('/fresh/mine', listMyFresh);
+tenantApp.post('/fresh/upload', uploadFreshPhoto);
 tenantApp.post('/fresh/stands', createFreshStand);
 tenantApp.put('/fresh/stands/:id', updateFreshStand);
 tenantApp.post('/fresh/stands/:id/visibility', setFreshStandVisibility);

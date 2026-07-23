@@ -5,10 +5,10 @@ import { useTenant } from '../context/TenantContext';
 import {
   listMyFresh, createFreshStand, updateFreshStand, setFreshStandVisibility, deleteFreshStand,
   createFreshPost, updateFreshPost, setFreshPostSoldOut, relistFreshPost, deleteFreshPost,
-  categoryLabel, FRESH_CATEGORIES, REGION_CENTER, REGION_BOUNDS,
+  uploadFreshPhoto, categoryLabel, FRESH_CATEGORIES, REGION_CENTER, REGION_BOUNDS,
   type MyFreshStand, type MyFreshPost, type FreshStandInput,
 } from '../api/fresh';
-import { Sprout, Pencil, Trash2, Plus, Pause, Play } from 'lucide-react';
+import { Sprout, Pencil, Trash2, Plus, Pause, Play, Camera, X } from 'lucide-react';
 import { Spinner } from '../components/ui/Spinner';
 import { Alert } from '../components/ui/Alert';
 import { RegionMap } from 'kk-shared-ui';
@@ -33,6 +33,91 @@ const categoryPillStyle = {
   borderRadius: 'var(--r-sm)', background: 'rgba(80,120,80,0.12)', color: 'var(--green)',
 };
 
+// Client-side warning only, over ~8 MB per the brief - never a hard block.
+// image-api enforces the real cap server-side regardless of what the client
+// does here.
+const MAX_PHOTO_BYTES = 8 * 1024 * 1024;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Photo picker - shared by the stand form and the post composer below.
+// Uploads immediately on file choice (rather than deferring to form submit)
+// so the caller always holds a ready-to-send photo_url string, never a raw
+// File - the create/update endpoints only ever take a URL. Photos are
+// optional everywhere: an oversized file or a failed upload shows an inline
+// warning and never blocks Save/Post - it just leaves photo_url as it was.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function PhotoField({ tenantId, value, onChange }: {
+  tenantId: string;
+  value: string | null;
+  onChange: (url: string | null) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [localPreview, setLocalPreview] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [warning, setWarning] = useState('');
+
+  const previewSrc = localPreview ?? value;
+
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow choosing the same file again later
+    if (!file) return;
+    setWarning('');
+
+    if (file.size > MAX_PHOTO_BYTES) {
+      setWarning('That photo is quite large (over 8 MB) - try a smaller one.');
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(file);
+    setLocalPreview(objectUrl);
+    setUploading(true);
+    try {
+      const res = await uploadFreshPhoto(tenantId, file);
+      onChange(res.data.url);
+    } catch (err: any) {
+      setWarning(err.message || "That photo didn't upload - you can still save without one.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  function handleRemove() {
+    setLocalPreview(null);
+    setWarning('');
+    onChange(null);
+  }
+
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <label style={labelStyle}>Photo (optional)</label>
+      {previewSrc && (
+        <div style={{ position: 'relative', display: 'inline-block', marginBottom: 8 }}>
+          <img src={previewSrc} alt="" style={{ width: 96, height: 96, objectFit: 'cover', borderRadius: 8, display: 'block' }} />
+          <button type="button" onClick={handleRemove} disabled={uploading} aria-label="Remove photo"
+            style={{
+              position: 'absolute', top: -8, right: -8, width: 24, height: 24, borderRadius: '50%',
+              background: 'var(--white)', border: '1px solid var(--border)', color: 'var(--error)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: 0,
+            }}>
+            <X size={14} />
+          </button>
+        </div>
+      )}
+      <div>
+        <input ref={inputRef} type="file" accept="image/*" onChange={handleFile} style={{ display: 'none' }} disabled={uploading} />
+        <button type="button" className="btn btn-secondary btn-sm" disabled={uploading}
+          style={{ minHeight: 40, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+          onClick={() => inputRef.current?.click()}>
+          <Camera size={14} /> {uploading ? 'Uploading...' : previewSrc ? 'Change photo' : 'Add a photo'}
+        </button>
+      </div>
+      {warning && <p style={{ margin: '6px 0 0', fontSize: '0.78rem', color: 'var(--error)' }}>{warning}</p>}
+    </div>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Stand form - create + edit, same component (per the brief). Keyed by the
 // caller on the target stand id (or 'new') so its internal state resets
@@ -40,6 +125,7 @@ const categoryPillStyle = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface StandFormProps {
+  tenantId: string;
   editingStand: MyFreshStand | null;
   homeLocation: { lat: number; lon: number } | null;
   onCancel: () => void;
@@ -48,7 +134,7 @@ interface StandFormProps {
   updateStand: (id: string, body: Partial<FreshStandInput>) => ReturnType<typeof updateFreshStand>;
 }
 
-function StandForm({ editingStand, homeLocation, onCancel, onSaved, createStand, updateStand }: StandFormProps) {
+function StandForm({ tenantId, editingStand, homeLocation, onCancel, onSaved, createStand, updateStand }: StandFormProps) {
   const initialCenter = useMemo(() => {
     if (editingStand) return { lat: editingStand.lat, lon: editingStand.lon };
     return homeLocation ?? REGION_CENTER;
@@ -59,6 +145,7 @@ function StandForm({ editingStand, homeLocation, onCancel, onSaved, createStand,
   const [addressHint, setAddressHint] = useState(editingStand?.address_hint ?? '');
   const [phone, setPhone] = useState(editingStand?.phone ?? '');
   const [categories, setCategories] = useState<string[]>(editingStand?.categories ?? []);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(editingStand?.photo_url ?? null);
   const [picked, setPicked] = useState(initialCenter);
   const [categoryError, setCategoryError] = useState('');
   const [formError, setFormError] = useState('');
@@ -92,6 +179,7 @@ function StandForm({ editingStand, homeLocation, onCancel, onSaved, createStand,
         categories,
         address_hint: addressHint.trim() || null,
         phone: phone.trim() || null,
+        photo_url: photoUrl,
       };
       if (editingStand) {
         await updateStand(editingStand.id, body);
@@ -128,6 +216,8 @@ function StandForm({ editingStand, homeLocation, onCancel, onSaved, createStand,
           style={{ margin: 0, resize: 'vertical' }}
           onChange={e => setDescription(e.target.value)} />
       </div>
+
+      <PhotoField tenantId={tenantId} value={photoUrl} onChange={setPhotoUrl} />
 
       <div style={{ marginBottom: 12 }}>
         <label style={labelStyle}>Categories</label>
@@ -249,6 +339,9 @@ function PostRow({ post, tenantId, onChanged, onError }: {
   return (
     <div style={{ padding: '12px 0', borderBottom: '1px solid var(--border)' }}>
       <p style={{ margin: '0 0 6px', fontSize: '0.9rem', color: 'var(--text)', lineHeight: 1.4 }}>{post.body}</p>
+      {post.photo_url && (
+        <img src={post.photo_url} alt="" style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 8, marginBottom: 8, display: 'block' }} />
+      )}
       {post.state === 'hidden_by_admin' ? (
         <Alert type="error" style={{ marginBottom: 8 }}>{post.state_note}</Alert>
       ) : (
@@ -308,6 +401,13 @@ function StandCard({ stand, tenantId, onRefetch, onEdit }: {
   onEdit: (stand: MyFreshStand) => void;
 }) {
   const [composerText, setComposerText] = useState('');
+  const [composerPhotoUrl, setComposerPhotoUrl] = useState<string | null>(null);
+  // Bumped after every successful post so the composer's PhotoField (keyed on
+  // this below) fully remounts - PhotoField tracks its own localPreview blob
+  // internally and has no way to know composerPhotoUrl was reset to null out
+  // from under it otherwise, which would leave the just-posted photo's
+  // preview showing under an empty composer as if it were still attached.
+  const [composerResetKey, setComposerResetKey] = useState(0);
   const [error, setError] = useState('');
   const [working, setWorking] = useState(false);
 
@@ -334,7 +434,10 @@ function StandCard({ stand, tenantId, onRefetch, onEdit }: {
   function handlePost() {
     const body = composerText.trim();
     if (!body) return;
-    run(() => createFreshPost(tenantId, stand.id, { body }), () => setComposerText(''));
+    run(
+      () => createFreshPost(tenantId, stand.id, { body, photo_url: composerPhotoUrl }),
+      () => { setComposerText(''); setComposerPhotoUrl(null); setComposerResetKey(k => k + 1); }
+    );
   }
 
   const canManage = stand.state !== 'hidden_by_admin';
@@ -349,6 +452,10 @@ function StandCard({ stand, tenantId, onRefetch, onEdit }: {
           ))}
         </div>
       </div>
+
+      {stand.photo_url && (
+        <img src={stand.photo_url} alt="" style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 8, marginBottom: 10, display: 'block' }} />
+      )}
 
       {stand.state === 'hidden_by_admin' ? (
         <Alert type="error" style={{ marginBottom: 10 }}>{stand.state_note}</Alert>
@@ -395,8 +502,11 @@ function StandCard({ stand, tenantId, onRefetch, onEdit }: {
             placeholder="What's out today? Example: Sweet corn just picked, 40 dozen, $6/dozen. Cash box."
             style={{ margin: 0, resize: 'vertical' }}
             onChange={e => setComposerText(e.target.value)} />
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6, marginBottom: 10 }}>
             <span style={{ fontSize: '0.7rem', color: 'var(--muted)' }}>{composerText.length}/{BODY_MAX}</span>
+          </div>
+          <PhotoField key={composerResetKey} tenantId={tenantId} value={composerPhotoUrl} onChange={setComposerPhotoUrl} />
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
             <button className="btn btn-amber btn-sm" disabled={working || !composerText.trim()} style={{ minHeight: 34 }}
               onClick={handlePost}>
               Post it
@@ -527,6 +637,7 @@ export default function FreshMine() {
           {showForm && (
             <StandForm
               key={editingStand ? editingStand.id : 'new'}
+              tenantId={tenant!.id}
               editingStand={editingStand}
               homeLocation={homeLocation}
               onCancel={closeForm}

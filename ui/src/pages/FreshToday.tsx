@@ -170,6 +170,10 @@ export default function FreshToday() {
 
               <p style={{ margin: '0 0 8px', fontSize: '1rem', color: 'var(--text)', lineHeight: 1.45 }}>{p.body}</p>
 
+              {p.photo_url && (
+                <img src={p.photo_url} alt="" style={{ maxWidth: '100%', borderRadius: 8, marginBottom: 8, display: 'block' }} />
+              )}
+
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>
                   Posted {postedAt(p.created_at)}
