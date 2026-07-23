@@ -6,7 +6,7 @@ import {
   listFresh, listFreshStands, listFreshSeasons, categoryLabel, standLocation, FRESH_CATEGORIES, REGION_CENTER,
   type FreshFeedPost, type FreshStandPin,
 } from '../api/fresh';
-import { Sprout, List, Map as MapIcon, Phone, MapPin } from 'lucide-react';
+import { Sprout, List, Map as MapIcon, Phone, MapPin, Navigation } from 'lucide-react';
 import { Spinner } from '../components/ui/Spinner';
 import { Badge } from '../components/ui/Badge';
 import { RegionMap, type RegionPin } from 'kk-shared-ui';
@@ -71,8 +71,6 @@ export default function FreshToday() {
   // Distance filter. Radius defaults from the user's saved profile preference
   // (10/25/50/100) the first time it loads, else "Any" (0) - exactly like
   // today for guests and profiles with no home zip, no special-casing needed.
-  // No live-location override here (unlike Explore/Happenings' "Near me"
-  // button) - this page only ever reads the saved home area, keeping it simple.
   const [radius, setRadius] = useState(0);
   const [radiusTouched, setRadiusTouched] = useState(false);
 
@@ -83,17 +81,56 @@ export default function FreshToday() {
     }
   }, [user, radiusTouched]);
 
-  // Origin for both the distance filter and the map center: the user's saved
-  // home zip when set, else the region center - unchanged from today for
-  // guests and anyone without a home zip. originLat/originLon are primitives
-  // so the memoized `origin` object below only gets a new identity when the
-  // real coordinates change, not on every unrelated re-render (RegionMap
-  // recenters whenever the `center` prop's reference changes, so a
-  // fresh-object-every-render here would snap the map back on every radius/
-  // category click).
+  // "Near me" - real GPS coordinates from the device, same mechanics as
+  // Explore.tsx's useMyLocation. This is the actual point of "near me" on a
+  // phone: where the visitor physically is right now, not their saved home
+  // zip. Live location, when present, always wins over the home zip default.
+  const [liveCoords, setLiveCoords] = useState<{ lat: number; lon: number } | null>(null);
+  const [locating, setLocating] = useState(false);
+  const [geoError, setGeoError] = useState('');
+
   const hasHomeCoords = user?.home_zip_lat != null && user?.home_zip_lon != null;
-  const originLat = user?.home_zip_lat ?? REGION_CENTER.lat;
-  const originLon = user?.home_zip_lon ?? REGION_CENTER.lon;
+
+  const useMyLocation = () => {
+    setGeoError('');
+    if (!('geolocation' in navigator)) {
+      setGeoError("Location isn't available on this device.");
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        setLiveCoords({ lat: pos.coords.latitude, lon: pos.coords.longitude });
+        setLocating(false);
+      },
+      () => {
+        setLocating(false);
+        setGeoError(
+          hasHomeCoords
+            ? 'Using your home area - allow location to use where you are now.'
+            : "Couldn't get your location. Check your browser's location permission.",
+        );
+      },
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 },
+    );
+  };
+
+  const clearLocation = () => {
+    setLiveCoords(null);
+    setGeoError('');
+  };
+
+  // Origin for both the distance filter and the map center: live GPS location
+  // when the visitor has used "Near me", else the user's saved home zip, else
+  // the region center - unchanged from today for guests and anyone without a
+  // home zip or live location. originLat/originLon are primitives so the
+  // memoized `origin` object below only gets a new identity when the real
+  // coordinates change, not on every unrelated re-render (RegionMap recenters
+  // whenever the `center` prop's reference changes, so a fresh-object-every-
+  // render here would snap the map back on every radius/category click).
+  const hasOriginCoords = liveCoords != null || hasHomeCoords;
+  const originLat = liveCoords?.lat ?? user?.home_zip_lat ?? REGION_CENTER.lat;
+  const originLon = liveCoords?.lon ?? user?.home_zip_lon ?? REGION_CENTER.lon;
   const origin = useMemo(() => ({ lat: originLat, lon: originLon }), [originLat, originLon]);
 
   // Seasons and stand pins don't depend on the category filter - load once
@@ -129,7 +166,7 @@ export default function FreshToday() {
 
   const pins: RegionPin[] = useMemo(() => stands
     .filter(s => {
-      if (!hasHomeCoords || radius <= 0) return true;
+      if (!hasOriginCoords || radius <= 0) return true;
       return calculateDistance(originLat, originLon, s.lat, s.lon) <= radius;
     })
     .map(s => {
@@ -144,15 +181,15 @@ export default function FreshToday() {
         href: `/fresh/stand/${s.id}`,
         kind: s.has_live_post ? 'amber' : 'green',
       };
-    }), [stands, hasHomeCoords, originLat, originLon, radius]);
+    }), [stands, hasOriginCoords, originLat, originLon, radius]);
 
   // List view's distance filter - the same 0 = Any sentinel, applied against
   // each post's stand coordinates. Filter only: order is left exactly as the
   // API returned it, never re-sorted by distance.
   const visiblePosts = useMemo(() => posts.filter(p => {
-    if (!hasHomeCoords || radius <= 0) return true;
+    if (!hasOriginCoords || radius <= 0) return true;
     return calculateDistance(originLat, originLon, p.stand.lat, p.stand.lon) <= radius;
-  }), [posts, hasHomeCoords, originLat, originLon, radius]);
+  }), [posts, hasOriginCoords, originLat, originLon, radius]);
 
   return (
     <div className="main-content" style={{ maxWidth: 800, margin: '0 auto', paddingTop: 20, paddingBottom: 80 }}>
@@ -189,7 +226,7 @@ export default function FreshToday() {
 
       {/* Distance filter - same calm chip styling as the category row above.
           Filter only, never a sort. Applies to both List and Map views. */}
-      <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 8, marginBottom: 16, WebkitOverflowScrolling: 'touch' }}>
+      <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 8, marginBottom: 4, WebkitOverflowScrolling: 'touch' }}>
         {RADIUS_OPTIONS.map(r => (
           <button key={r.mi} onClick={() => { setRadius(r.mi); setRadiusTouched(true); }}
             className={`btn btn-sm ${radius === r.mi ? 'btn-amber' : 'btn-secondary'}`}
@@ -197,7 +234,33 @@ export default function FreshToday() {
             {r.label}
           </button>
         ))}
+        <button onClick={useMyLocation} disabled={locating}
+          className={`btn btn-sm ${liveCoords ? 'btn-amber' : 'btn-secondary'}`}
+          style={{ minHeight: 32, display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap', flexShrink: 0 }}>
+          <Navigation size={13} /> {locating ? 'Locating…' : 'Near me'}
+        </button>
+        {liveCoords && (
+          <button onClick={clearLocation}
+            className="btn btn-sm btn-secondary"
+            style={{ minHeight: 32, whiteSpace: 'nowrap', flexShrink: 0 }}>
+            Clear
+          </button>
+        )}
       </div>
+      {liveCoords && !geoError && (
+        <p style={{ margin: '0 0 12px', fontSize: '0.78rem', color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 5 }}>
+          <MapPin size={12} style={{ color: 'var(--amber)' }} />
+          Using your current location.
+        </p>
+      )}
+      {!liveCoords && hasHomeCoords && !geoError && (
+        <p style={{ margin: '0 0 12px', fontSize: '0.78rem', color: 'var(--muted)' }}>
+          Showing your home area - tap "Near me" to use where you are right now.
+        </p>
+      )}
+      {geoError && (
+        <p style={{ margin: '0 0 12px', fontSize: '0.78rem', color: 'var(--muted)' }}>{geoError}</p>
+      )}
 
       {/* View toggle */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 16 }}>
