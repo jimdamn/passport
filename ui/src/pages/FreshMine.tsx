@@ -274,9 +274,12 @@ function StandForm({ tenantId, editingStand, homeLocation, onCancel, onSaved, cr
           placeholders and wrap their labels awkwardly. */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 12 }}>
         <div>
-          <label style={labelStyle}>Address hint</label>
+          <label style={labelStyle}>Address</label>
+          <p style={{ margin: '0 0 6px', fontSize: '0.74rem', color: 'var(--muted)' }}>
+            Street, city, and state at minimum - so we can place your pin correctly.
+          </p>
           <input className="form-input" style={inputStyle} maxLength={ADDRESS_HINT_MAX} value={addressHint ?? ''}
-            placeholder="e.g. Corner of Rd 400 N and Rd 700 W"
+            placeholder="e.g. 1255 N 170 W, Angola, IN"
             onChange={e => setAddressHint(e.target.value)} />
           <div style={{ marginTop: 6 }}>
             <button type="button" className="btn btn-secondary btn-sm" disabled={locating || !addressHint?.trim()}
