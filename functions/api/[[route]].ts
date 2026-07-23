@@ -185,8 +185,11 @@ tenantApp.post('/admin/fresh/posts/:id/hide', adminHideFreshPost);
 
 // Sale Day - yard/barn/moving/estate sales and auctions (any signed-in user,
 // no merchant verification). Public reads are registered on the root app
-// below, alongside listFresh/listHappenings.
-tenantApp.get('/sales/mine', listMySales);
+// below, alongside listFresh/listHappenings. /sales/mine is ALSO registered
+// on the root app (not here) - see the note by app.get('/api/t/:tenant/
+// sales/mine', ...) below; mounting it on tenantApp would lose to the
+// public /sales/:id pattern and 404 as "Sale not found." (same class of bug
+// as GET /kwest/mine, documented further down in this file).
 tenantApp.post('/sales/upload', uploadSalePhoto);
 tenantApp.post('/sales', createSale);
 tenantApp.put('/sales/:id', updateSale);
@@ -281,6 +284,13 @@ app.get('/api/t/:tenant/sales', resolveTenant, listSales);
 // otherwise swallow these as a sale id and 404.
 app.get('/api/t/:tenant/sales/pins', resolveTenant, listSalePins);
 app.get('/api/t/:tenant/sales/events', resolveTenant, listSaleEvents);
+// Also registered BEFORE /sales/:id, and on the root app rather than
+// tenantApp, for the same reason GET /kwest/mine is below: Hono resolves
+// overlapping patterns by registration order, not static-over-dynamic
+// priority, so "mine" would otherwise be swallowed as a sale id and 404 as
+// "Sale not found." requireAuth is chained inline since this route isn't on
+// tenantApp.
+app.get('/api/t/:tenant/sales/mine', resolveTenant, requireAuth, listMySales);
 app.get('/api/t/:tenant/sales/:id', resolveTenant, getSale);
 app.post('/api/t/:tenant/support', resolveTenant, submitSupport);
 app.post('/api/t/:tenant/passport/claims/register', resolveTenant, registerClaim);
