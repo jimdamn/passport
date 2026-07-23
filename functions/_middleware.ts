@@ -163,6 +163,12 @@ const FRESH_STAND_PATTERN = /^\/fresh\/stand\/([\w-]+)$/;
 // group (the US-12 corridor weekend is the point). Sale ids are nanoid strings.
 const SALE_PATTERN = /^\/sales\/sale\/([\w-]+)$/;
 
+// ─── Pop-Ups vendor-page crawler bypass + OG meta ────────────────────────────
+// Same growth rail, but fans share the VENDOR (their whole schedule), not one
+// stop - the vendor page is the shareable object (POP-UPS-BUILD-PLAN.md §6.1).
+// Vendor ids are nanoid strings.
+const POPUP_VENDOR_PATTERN = /^\/popups\/vendor\/([\w-]+)$/;
+
 // Cloudflare computes this from more than just the client-sent User-Agent
 // (confirmed empirically 2026-07-20 by pointing Facebook's real Sharing
 // Debugger crawler at a live test endpoint and inspecting request.cf) - it is
@@ -253,6 +259,63 @@ async function resolveSaleMeta(
   } catch {
     return null;
   }
+}
+
+interface PopupVendorMeta {
+  name: string;
+  description: string | null;
+  photoUrl: string | null;
+  nextStop: { date: string; open: string; close: string; locationBit: string | null } | null;
+}
+
+// Never surface a hidden/removed vendor's real content to a crawler - falls
+// back to the generic tenant copy exactly like a deleted or never-existed
+// vendor. Same public-visibility filter as the public API (getVendor in
+// src/handlers/popups.ts): deleted_at IS NULL AND is_hidden = 0 AND
+// admin_hidden = 0. The "next stop" teaser looks only at the soonest
+// non-cancelled upcoming stop - a cancelled stop would misrepresent the plan
+// to someone who's never seen the board before.
+async function resolvePopupVendorMeta(
+  id: string,
+  tenantSlug: string,
+  env: Env,
+): Promise<PopupVendorMeta | null> {
+  try {
+    const vendor = await env.DB.prepare(
+      'SELECT name, description, photo_url FROM popup_vendors WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL AND is_hidden = 0 AND admin_hidden = 0'
+    ).bind(id, tenantSlug).first<{ name: string; description: string | null; photo_url: string | null }>();
+    if (!vendor) return null;
+
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date());
+    const stop = await env.DB.prepare(`
+      SELECT date, open, close, location_hint, nearest_city FROM popup_stops
+      WHERE vendor_id = ? AND deleted_at IS NULL AND admin_hidden = 0 AND cancelled_at IS NULL AND date >= ?
+      ORDER BY date ASC, open ASC LIMIT 1
+    `).bind(id, today).first<{ date: string; open: string; close: string; location_hint: string | null; nearest_city: string | null }>();
+
+    return {
+      name: vendor.name,
+      description: vendor.description,
+      photoUrl: vendor.photo_url || null,
+      nextStop: stop
+        ? { date: stop.date, open: stop.open, close: stop.close, locationBit: stop.location_hint || stop.nearest_city }
+        : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// 'HH:MM' -> '8' or '1:30' - the compact, no-AM/PM hour used only in the
+// Pop-Ups OG description's terse next-stop teaser ("8 to 1"), distinct from
+// the app's usual clockLabel-style "8 AM" formatting used everywhere a
+// visitor actually reads the time on-page.
+function compactHour(hhmm: string): string {
+  const [hStr, mStr] = hhmm.split(':');
+  const h = Number(hStr);
+  let h12 = h % 12;
+  if (h12 === 0) h12 = 12;
+  return mStr === '00' ? `${h12}` : `${h12}:${mStr}`;
 }
 
 // 'YYYY-MM-DD' -> 'Sat Aug 8' for the share-card description's date line.
@@ -428,6 +491,7 @@ export const onRequest: PagesFunction<Env & { GEO_TOKEN_SECRET: string }> = asyn
   const isSiteAsset     = url.pathname.startsWith('/site-assets/');
   const freshStandMatch = url.pathname.match(FRESH_STAND_PATTERN);
   const saleMatch       = url.pathname.match(SALE_PATTERN);
+  const popupVendorMatch = url.pathname.match(POPUP_VENDOR_PATTERN);
   let verifiedPayload: GeoTokenPayload | null = null;
   let mintEventBypass = false;
 
@@ -453,15 +517,16 @@ export const onRequest: PagesFunction<Env & { GEO_TOKEN_SECRET: string }> = asyn
       // who has no region-trust cookie; we mint a short-lived bypass below.
       if (await isActiveEventScan(url, context.env)) {
         mintEventBypass = true;
-      } else if ((freshStandMatch || saleMatch) && isPagePreviewCrawler(context.request)) {
+      } else if ((freshStandMatch || saleMatch || popupVendorMatch) && isPagePreviewCrawler(context.request)) {
         // Narrow, read-only exception: a confirmed link-preview crawler
         // (Facebook, Slack, etc. - see isPagePreviewCrawler) fetching a
-        // specific Fresh Today stand or Sale Day sale detail page gets the
-        // real page (and its OG tags below) instead of the gate, so a shared
-        // link previews correctly. This does not apply to any other route,
-        // does not grant write access, and does not change the gate for any
-        // real visitor - the geo-fence itself is unchanged. Mirrors
-        // field-notes' crawlerPreviewAllowed exception for /story/:id exactly.
+        // specific Fresh Today stand, Sale Day sale, or Pop-Ups vendor detail
+        // page gets the real page (and its OG tags below) instead of the
+        // gate, so a shared link previews correctly. This does not apply to
+        // any other route, does not grant write access, and does not change
+        // the gate for any real visitor - the geo-fence itself is unchanged.
+        // Mirrors field-notes' crawlerPreviewAllowed exception for /story/:id
+        // exactly.
       } else {
         return geoGatePage('Lake & Locals');
       }
@@ -543,6 +608,24 @@ export const onRequest: PagesFunction<Env & { GEO_TOKEN_SECRET: string }> = asyn
       ogTitle = `${truncate(sale.title, 70)} - Sale Day`;
       ogDescription = truncate(`${friendlyDateLabel(sale.firstDate)} - ${sale.body}`, 160);
       ogImage = sale.photoUrl;
+    }
+  }
+
+  if (popupVendorMatch) {
+    const tenantSlug = REGIONAL_DOMAINS[hostname] ?? 'lake-locals';
+    const vendor = await resolvePopupVendorMeta(popupVendorMatch[1], tenantSlug, context.env);
+    if (vendor) {
+      ogTitle = `${truncate(vendor.name, 70)} - Pop-Ups`;
+      const nextStopLine = vendor.nextStop
+        ? `${friendlyDateLabel(vendor.nextStop.date)}: ${vendor.nextStop.locationBit ? vendor.nextStop.locationBit + ', ' : ''}${compactHour(vendor.nextStop.open)} to ${compactHour(vendor.nextStop.close)}`
+        : null;
+      ogDescription = truncate(
+        nextStopLine
+          ? (vendor.description ? `${nextStopLine} - ${vendor.description}` : nextStopLine)
+          : 'On the road in the Lakes Region - schedule on Pop-Ups.',
+        160,
+      );
+      ogImage = vendor.photoUrl;
     }
   }
 
