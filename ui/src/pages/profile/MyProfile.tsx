@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { LogOut, Award, ChevronRight, QrCode, Shield, ShieldCheck, Gift, Inbox, MapPin } from 'lucide-react';
+import { LogOut, Award, ChevronRight, QrCode, Shield, ShieldCheck, Gift, Inbox, MapPin, Compass } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTenant } from '../../context/TenantContext';
 import { useProfilePanel } from '../../context/ProfilePanelContext';
@@ -9,6 +9,7 @@ import { getMe } from '../../api/auth';
 import { getBalance } from '../../api/credits';
 import { getAdminSupportCount } from '../../api/support';
 import { getMyBusiness } from '../../api/merchant';
+import { getAroundInterests, PICKER_LABELS, type AroundInterests } from '../../api/around';
 import { Spinner } from '../../components/ui/Spinner';
 import StatsPanel, { type StatsPanelType } from '../../components/profile/StatsPanel';
 import BadgeStrip, { type Badge } from '../../components/ui/BadgeStrip';
@@ -18,6 +19,7 @@ import { PersonaSelector } from '../../components/PersonaSelector';
 import { AnonymousPersonaDrawer } from '../../components/profile/AnonymousPersonaDrawer';
 import { PersonalPersonaDrawer } from '../../components/profile/PersonalPersonaDrawer';
 import { BusinessPersonaDrawer } from '../../components/profile/BusinessPersonaDrawer';
+import { AroundInterestsDrawer } from '../../components/profile/AroundInterestsDrawer';
 import MyPostsCards from '../../components/profile/MyPostsCards';
 import BusinessOverviewCard from '../../components/profile/BusinessOverviewCard';
 
@@ -67,6 +69,13 @@ export default function MyProfile() {
   const [qrOpen, setQrOpen] = useState(false);
   const [merchantQrOpen, setMerchantQrOpen] = useState(false);
   const [personaDrawer, setPersonaDrawer] = useState<'anonymous' | 'personal' | 'business' | null>(null);
+  const [interestsDrawerOpen, setInterestsDrawerOpen] = useState(false);
+  const [interests, setInterests] = useState<AroundInterests | null>(null);
+
+  useEffect(() => {
+    if (!user || !tenant) return;
+    getAroundInterests(tenant.id).then(res => setInterests(res.data)).catch(() => {});
+  }, [user, tenant]);
 
   const { data: meData, isLoading } = useQuery({
     queryKey: ['me', tenant?.id],
@@ -230,6 +239,25 @@ export default function MyProfile() {
         />
       </div>
 
+      {/* ── What you keep an eye on (Around Town interests) ── */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+          <div style={{ minWidth: 0 }}>
+            <h3 style={{ margin: '0 0 4px', fontSize: '1.05rem', fontFamily: 'var(--font-serif)', color: 'var(--green)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Compass size={17} strokeWidth={2} aria-hidden="true" /> What you keep an eye on
+            </h3>
+            <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--muted)' }}>
+              {interests && interests.interests.length > 0
+                ? interests.interests.map(slug => PICKER_LABELS[slug] ?? slug).join(', ')
+                : 'Everything - no picks yet'}
+            </p>
+          </div>
+          <button className="btn btn-secondary btn-sm" onClick={() => setInterestsDrawerOpen(true)} style={{ flexShrink: 0 }}>
+            Edit
+          </button>
+        </div>
+      </div>
+
       {/* ── Stats grid ── */}
       <div className="stats-grid" style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
         <button className="stat-card stat-card--featured stat-card--btn" onClick={() => setStatsPanel('credits')} style={{ flex: 1, minWidth: 100, maxWidth: 180 }}>
@@ -266,6 +294,13 @@ export default function MyProfile() {
         businessName={user.business_name}
         onClose={() => setPersonaDrawer(null)}
         onSwitch={() => { updateUser({ active_persona: 'business' }); setPersonaDrawer(null); }}
+      />
+
+      <AroundInterestsDrawer
+        open={interestsDrawerOpen}
+        tenantId={tenant!.id}
+        onClose={() => setInterestsDrawerOpen(false)}
+        onSaved={setInterests}
       />
 
       <QrDrawer

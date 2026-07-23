@@ -25,6 +25,7 @@ import MerchantDashboard from './pages/MerchantDashboard';
 import Help from './pages/Help';
 import EmbedDrawer from './pages/EmbedDrawer';
 import Explore from './pages/Explore';
+import MapRoom from './pages/explore/MapRoom';
 import Deals from './pages/Deals';
 import Happenings from './pages/Happenings';
 import FreshToday from './pages/FreshToday';
@@ -64,6 +65,7 @@ export default function App() {
         <Route path="/auth/sso" element={<SSOLanding />} />
         <Route path="/auth/login" element={<LoginPage />} />
         <Route path="/explore" element={<Explore />} />
+        <Route path="/explore/map" element={<MapRoom />} />
         <Route path="/deals" element={<Deals />} />
         <Route path="/happenings" element={<Happenings />} />
         <Route path="/fresh" element={<FreshToday />} />

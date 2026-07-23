@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useTenant } from '../context/TenantContext';
 import { useAuth } from '../context/AuthContext';
-import { MapPin, Trees, Trophy, Gem, Sparkles, Sprout, Pause, type LucideIcon } from 'lucide-react';
+import { MapPin, Trees, Trophy, Gem, Sparkles, Sprout, Pause, Compass, type LucideIcon } from 'lucide-react';
 import { Alert } from '../components/ui/Alert';
 import {
   SUPPORT_CATEGORIES, SUPPORT_STATUS_LABEL, submitSupport, getMySupport,
@@ -353,6 +353,30 @@ export default function Help() {
           icon={Sparkles}
           title="Just Keep Exploring"
           body="Chests appear at random as you move between pages. There is no trick to summon one; browsing deals, happenings, and member pages like you normally would is the whole game."
+        />
+      </Section>
+
+      {/* ── Your Around Town board ── */}
+      <Section title="Your Around Town board">
+        <Step
+          n={1}
+          label="Pick what you keep an eye on"
+          detail="The first time you open Around Town, it asks what you care about - fresh food, events, deals. Your picks go first, every visit."
+        />
+        <Step
+          n={2}
+          label="Read today's board"
+          detail="Everything on it is happening now - a stand that posted this morning, music tonight, a deal this week. Tap anything to see more."
+        />
+        <Step
+          n={3}
+          label="Open the map"
+          detail="Tap the little map for the full one. Amber pins have something going on today. Green pins are member places worth knowing."
+        />
+        <Tip
+          icon={Compass}
+          title="Change your picks"
+          body="Your interests live on your profile - change them any time and the board follows."
         />
       </Section>
 
