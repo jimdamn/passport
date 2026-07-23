@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { useTenant } from '../context/TenantContext';
 import {
   listFresh, listFreshStands, listFreshSeasons, categoryLabel, standLocation, FRESH_CATEGORIES, REGION_CENTER,
@@ -26,7 +27,36 @@ function truncate(text: string, max: number): string {
   return text.slice(0, max - 1).trimEnd() + '…';
 }
 
+// Distance is a filter, never a sort - matches Explore.tsx/Happenings.tsx
+// exactly. Value set is the user's own profile preference options (10/25/
+// 50/100 mi), NOT Explore's 5/15/30 set - the point is honoring the user's
+// actual home_distance_preference, not just visually resembling Explore.
+// "Any" (0) is the same 0 = no-filter sentinel Explore/Happenings use.
+const RADIUS_OPTIONS = [
+  { mi: 10, label: '10 mi' },
+  { mi: 25, label: '25 mi' },
+  { mi: 50, label: '50 mi' },
+  { mi: 100, label: '100 mi' },
+  { mi: 0, label: 'Any' },
+];
+
+// Local copy of Explore.tsx's Haversine helper - this codebase duplicates
+// small helpers per-file rather than sharing them (see fresh.ts's own
+// per-file constant comments for the same convention).
+function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 3958.8; // Earth radius in miles
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
 export default function FreshToday() {
+  const { user } = useAuth();
   const { tenant } = useTenant();
   const navigate = useNavigate();
 
@@ -37,6 +67,34 @@ export default function FreshToday() {
   const [view, setView] = useState<'list' | 'map'>('list');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  // Distance filter. Radius defaults from the user's saved profile preference
+  // (10/25/50/100) the first time it loads, else "Any" (0) - exactly like
+  // today for guests and profiles with no home zip, no special-casing needed.
+  // No live-location override here (unlike Explore/Happenings' "Near me"
+  // button) - this page only ever reads the saved home area, keeping it simple.
+  const [radius, setRadius] = useState(0);
+  const [radiusTouched, setRadiusTouched] = useState(false);
+
+  useEffect(() => {
+    if (radiusTouched) return;
+    if (user?.home_distance_preference != null) {
+      setRadius(user.home_distance_preference);
+    }
+  }, [user, radiusTouched]);
+
+  // Origin for both the distance filter and the map center: the user's saved
+  // home zip when set, else the region center - unchanged from today for
+  // guests and anyone without a home zip. originLat/originLon are primitives
+  // so the memoized `origin` object below only gets a new identity when the
+  // real coordinates change, not on every unrelated re-render (RegionMap
+  // recenters whenever the `center` prop's reference changes, so a
+  // fresh-object-every-render here would snap the map back on every radius/
+  // category click).
+  const hasHomeCoords = user?.home_zip_lat != null && user?.home_zip_lon != null;
+  const originLat = user?.home_zip_lat ?? REGION_CENTER.lat;
+  const originLon = user?.home_zip_lon ?? REGION_CENTER.lon;
+  const origin = useMemo(() => ({ lat: originLat, lon: originLon }), [originLat, originLon]);
 
   // Seasons and stand pins don't depend on the category filter - load once
   // per tenant, independent of the feed refetch below.
@@ -69,19 +127,32 @@ export default function FreshToday() {
     })();
   }, [tenant, filter]);
 
-  const pins: RegionPin[] = useMemo(() => stands.map(s => {
-    const location = standLocation(s.nearest_city, s.nearest_state);
-    const bodyLine = s.latest_body ? truncate(s.latest_body, 60) : 'Nothing posted today';
-    return {
-      id: s.id,
-      lat: s.lat,
-      lon: s.lon,
-      label: s.name,
-      sublabel: location ? `${location} · ${bodyLine}` : bodyLine,
-      href: `/fresh/stand/${s.id}`,
-      kind: s.has_live_post ? 'amber' : 'green',
-    };
-  }), [stands]);
+  const pins: RegionPin[] = useMemo(() => stands
+    .filter(s => {
+      if (!hasHomeCoords || radius <= 0) return true;
+      return calculateDistance(originLat, originLon, s.lat, s.lon) <= radius;
+    })
+    .map(s => {
+      const location = standLocation(s.nearest_city, s.nearest_state);
+      const bodyLine = s.latest_body ? truncate(s.latest_body, 60) : 'Nothing posted today';
+      return {
+        id: s.id,
+        lat: s.lat,
+        lon: s.lon,
+        label: s.name,
+        sublabel: location ? `${location} · ${bodyLine}` : bodyLine,
+        href: `/fresh/stand/${s.id}`,
+        kind: s.has_live_post ? 'amber' : 'green',
+      };
+    }), [stands, hasHomeCoords, originLat, originLon, radius]);
+
+  // List view's distance filter - the same 0 = Any sentinel, applied against
+  // each post's stand coordinates. Filter only: order is left exactly as the
+  // API returned it, never re-sorted by distance.
+  const visiblePosts = useMemo(() => posts.filter(p => {
+    if (!hasHomeCoords || radius <= 0) return true;
+    return calculateDistance(originLat, originLon, p.stand.lat, p.stand.lon) <= radius;
+  }), [posts, hasHomeCoords, originLat, originLon, radius]);
 
   return (
     <div className="main-content" style={{ maxWidth: 800, margin: '0 auto', paddingTop: 20, paddingBottom: 80 }}>
@@ -116,6 +187,18 @@ export default function FreshToday() {
         ))}
       </div>
 
+      {/* Distance filter - same calm chip styling as the category row above.
+          Filter only, never a sort. Applies to both List and Map views. */}
+      <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 8, marginBottom: 16, WebkitOverflowScrolling: 'touch' }}>
+        {RADIUS_OPTIONS.map(r => (
+          <button key={r.mi} onClick={() => { setRadius(r.mi); setRadiusTouched(true); }}
+            className={`btn btn-sm ${radius === r.mi ? 'btn-amber' : 'btn-secondary'}`}
+            style={{ minHeight: 32, whiteSpace: 'nowrap', flexShrink: 0 }}>
+            {r.label}
+          </button>
+        ))}
+      </div>
+
       {/* View toggle */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 16 }}>
         <button onClick={() => setView('list')}
@@ -135,8 +218,21 @@ export default function FreshToday() {
           <Spinner size="lg" />
         </div>
       ) : view === 'map' ? (
-        <RegionMap pins={pins} center={REGION_CENTER} height="60vh" />
-      ) : posts.length === 0 ? (
+        <RegionMap pins={pins} center={origin} height="60vh" />
+      ) : visiblePosts.length === 0 && posts.length > 0 ? (
+        // There's something posted today - it's just outside the selected
+        // radius. A distinct message from the true empty state below, so it
+        // never implies nothing exists region-wide when something does.
+        <div className="card" style={{ padding: 24, textAlign: 'center', background: 'var(--white)' }}>
+          <Sprout size={28} style={{ color: 'var(--amber)', marginBottom: 8 }} />
+          <p style={{ margin: '0 0 4px', color: 'var(--text)', fontSize: '0.9rem' }}>
+            Nothing within {radius} miles right now.
+          </p>
+          <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.85rem' }}>
+            Try a wider range, or choose Any to see the whole board.
+          </p>
+        </div>
+      ) : visiblePosts.length === 0 ? (
         <div className="card" style={{ padding: 24, textAlign: 'center', background: 'var(--white)' }}>
           <Sprout size={28} style={{ color: 'var(--amber)', marginBottom: 8 }} />
           <p style={{ margin: '0 0 4px', color: 'var(--text)', fontSize: '0.9rem' }}>
@@ -152,7 +248,7 @@ export default function FreshToday() {
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {posts.map(p => (
+          {visiblePosts.map(p => (
             <div key={p.id} className="card" role="button" tabIndex={0}
               onClick={() => navigate(`/fresh/stand/${p.stand.id}`)}
               onKeyDown={e => { if (e.key === 'Enter') navigate(`/fresh/stand/${p.stand.id}`); }}
