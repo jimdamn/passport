@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useTenant } from '../context/TenantContext';
 import { useAuth } from '../context/AuthContext';
-import { MapPin, Trees, Trophy, Gem, Sparkles, Sprout, Pause, Compass, Signpost, type LucideIcon } from 'lucide-react';
+import { MapPin, Trees, Trophy, Gem, Sparkles, Sprout, Pause, Compass, Signpost, Truck, type LucideIcon } from 'lucide-react';
 import { Alert } from '../components/ui/Alert';
 import {
   SUPPORT_CATEGORIES, SUPPORT_STATUS_LABEL, submitSupport, getMySupport,
@@ -485,6 +485,54 @@ export default function Help() {
           icon={Signpost}
           title="Running it again"
           body="After your sale ends, one tap starts a new one with everything filled in - just pick the new days."
+        />
+      </Section>
+
+      {/* ── Finding who's popped up ── */}
+      <Section title="Finding who's popped up">
+        <Step
+          n={1}
+          label="Open Pop-Ups"
+          detail="From Around Town, tap Pop-Ups - food trucks, pop-up shops and traveling vendors, posted by the folks running them."
+        />
+        <Step
+          n={2}
+          label="Green means go"
+          detail="Green pins have checked in - they're standing there right now, at that exact spot. Amber is their schedule - a plan, and plans change."
+        />
+        <Step
+          n={3}
+          label="Follow your favorites"
+          detail="Tap any vendor to see everywhere they'll be. Share their page so your people can find them too."
+        />
+        <Tip
+          icon={Truck}
+          title="Sold out happens"
+          body="The good ones run out. Sold out means you found them too late - their schedule tells you where they'll be next."
+        />
+      </Section>
+
+      {/* ── Putting your schedule on the map ── */}
+      <Section title="Putting your schedule on the map">
+        <Step
+          n={1}
+          label="Set up your page once"
+          detail="Your name, what you are, a photo. No address - you're the address."
+        />
+        <Step
+          n={2}
+          label="Post your stops"
+          detail="Date, hours, drag the pin, say where to look. Post the whole week at once if your circuit's set."
+        />
+        <Step
+          n={3}
+          label="Check in when you're set up"
+          detail="One tap on I'm here turns your pin green and drops it on your exact spot. Green is what fans trust - it's the difference between 'planned' and 'there.'"
+        />
+        <Tip
+          icon={Truck}
+          title="On the day"
+          body="Tap Sold out when you're cleaned out - fans respect it. Next week, Stop here again fills everything in."
         />
       </Section>
 

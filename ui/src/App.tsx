@@ -34,6 +34,9 @@ import FreshMine from './pages/FreshMine';
 import SaleDay from './pages/SaleDay';
 import SaleDetail from './pages/SaleDetail';
 import SalesMine from './pages/SalesMine';
+import PopupsBoard from './pages/PopupsBoard';
+import PopupVendor from './pages/PopupVendor';
+import PopupsMine from './pages/PopupsMine';
 import LendAHand from './pages/LendAHand';
 import AdminDeals from './pages/profile/AdminDeals';
 import AdminSupport from './pages/profile/AdminSupport';
@@ -41,6 +44,7 @@ import AdminVolunteer from './pages/profile/AdminVolunteer';
 import AdminHappenings from './pages/profile/AdminHappenings';
 import AdminFresh from './pages/profile/AdminFresh';
 import AdminSales from './pages/profile/AdminSales';
+import AdminPopups from './pages/profile/AdminPopups';
 import KwestHome from './pages/kwest/KwestHome';
 import KwestHelp from './pages/kwest/KwestHelp';
 import KwestHunt from './pages/kwest/KwestHunt';
@@ -78,6 +82,9 @@ export default function App() {
         <Route path="/sales" element={<SaleDay />} />
         <Route path="/sales/sale/:id" element={<SaleDetail />} />
         <Route path="/sales/mine" element={<SalesMine />} />
+        <Route path="/popups" element={<PopupsBoard />} />
+        <Route path="/popups/vendor/:id" element={<PopupVendor />} />
+        <Route path="/popups/mine" element={<PopupsMine />} />
         <Route path="/lend-a-hand" element={<LendAHand />} />
         <Route path="/kwest" element={<KwestHome />} />
         <Route path="/kwest/help" element={<KwestHelp />} />
@@ -99,6 +106,7 @@ export default function App() {
         <Route path="/profile/admin/happenings" element={<AdminHappenings />} />
         <Route path="/profile/admin/fresh" element={<AdminFresh />} />
         <Route path="/profile/admin/sales" element={<AdminSales />} />
+        <Route path="/profile/admin/popups" element={<AdminPopups />} />
         <Route path="/profile/admin/kwest" element={<AdminKwest />} />
         <Route path="/profile/admin/kwest/:id" element={<AdminKwestEdit />} />
         <Route path="/profile/admin/kwest/:id/field-test" element={<AdminKwestFieldTest />} />

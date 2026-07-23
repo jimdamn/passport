@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Newspaper, ArrowLeftRight, Sprout, Signpost } from 'lucide-react';
+import { Newspaper, ArrowLeftRight, Sprout, Signpost, Truck } from 'lucide-react';
 import { getContentSummary } from '../../api/content';
 import type { ContentSummaryItem, ContentSummarySource } from '../../api/content';
 import { Badge } from '../ui/Badge';
@@ -41,6 +41,16 @@ const SALES_STATUS_LABEL: Record<string, string> = {
   hidden: 'Hidden',
   ended: 'Ended',
   removed: 'Removed',
+};
+
+// fetchPopupsSummary's `recent` list mixes vendor rows and stop rows (see
+// src/lib/contentSummary.ts), same reasoning as FRESH_STATUS_LABEL above.
+const POPUPS_STATUS_LABEL: Record<string, string> = {
+  visible: 'Live',
+  off_road: 'Off the road',
+  hidden_by_admin: 'Hidden by admin',
+  removed: 'Removed',
+  scheduled: 'Scheduled',
 };
 
 function RecentRow({ item, statusLabels }: { item: ContentSummaryItem; statusLabels: Record<string, string> }) {
@@ -219,6 +229,23 @@ export default function MyPostsCards({ tenantId }: { tenantId: string }) {
         emptyCtaLabel="Post a sale"
         emptyCtaUrl="/sales/mine"
         statusLabels={SALES_STATUS_LABEL}
+      />
+
+      <SummaryCard
+        icon={Truck}
+        title="My Schedule"
+        source={summary?.popups}
+        countLine={s => {
+          const vendors = s.counts.vendors ?? 0;
+          const upcoming = s.counts.upcoming_stops ?? 0;
+          return `${vendors} ${vendors === 1 ? 'vendor' : 'vendors'} · ${upcoming} stop${upcoming === 1 ? '' : 's'} coming up`;
+        }}
+        manageLabel="Manage my schedule"
+        manageUrl="/popups/mine"
+        emptyLine="No vendor page yet - takes about a minute to set up."
+        emptyCtaLabel="Set up my vendor page"
+        emptyCtaUrl="/popups/mine"
+        statusLabels={POPUPS_STATUS_LABEL}
       />
     </>
   );
