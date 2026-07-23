@@ -1,0 +1,414 @@
+import { useEffect, useRef, useState } from 'react';
+import type { RegionPin } from 'kk-shared-ui';
+import { api } from './client';
+import type { ApiResponse } from '../types';
+import { getHappenings, type Happening } from './happenings';
+import { listFresh, listFreshStands, standLocation, type FreshFeedPost, type FreshStandPin } from './fresh';
+import { getDeals, type Deal } from './deals';
+import { getShifts, type Shift } from './lendahand';
+
+// Around Town — the town board. Shared constants, the client-side feed/pin
+// merge, and the useLens() hook consumed by both Explore.tsx (the board) and
+// explore/MapRoom.tsx (the full map). No algorithmic personalization lives
+// here: the only inputs to ordering are the member's own explicit interest
+// picks (server-stored) and their last-used lens (localStorage, device-local)
+// — see AROUND-TOWN-BUILD-PLAN.md Section 0 and Section 10.
+
+export const LENSES = [
+  { slug: 'everything', label: 'Everything' },
+  { slug: 'events', label: 'Events' },       // happenings
+  { slug: 'fresh', label: 'Fresh' },         // fresh today
+  { slug: 'deals', label: 'Deals' },
+  { slug: 'hands', label: 'Volunteer' },     // lend a hand
+  { slug: 'places', label: 'Places' },       // the member directory
+] as const;
+export const LENS_SLUGS = LENSES.map(l => l.slug);
+
+// Picker chip labels differ from the lens-row chip labels above (warmer,
+// plan §7.2). 'everything' is never a pickable interest - it is the absence
+// of picks, so the picker only ever offers the other five.
+export const PICKER_LABELS: Record<string, string> = {
+  events: 'Events',
+  fresh: 'Fresh food',
+  deals: 'Deals',
+  hands: 'Volunteer shifts',
+  places: 'The businesses',
+};
+export const PICKABLE_SLUGS = LENSES.filter(l => l.slug !== 'everything').map(l => l.slug);
+
+export const TODAY_FEED_CAP_EVERYTHING = 5;   // single-lens feeds cap 50 (applied in todayFeedForLens)
+export const LAST_LENS_KEY = 'around_town_lens';   // localStorage, device-local
+
+// Mirrors src/handlers/fresh.ts's REGION_CENTER/REGION_BOUNDS - copied rather
+// than imported, same reasoning fresh.ts itself documents for its own copy:
+// the UI build doesn't import from the Worker's src tree.
+export const REGION_CENTER = { lat: 41.55, lon: -85.45 };
+export const REGION_BOUNDS: [[number, number], [number, number]] = [
+  [-86.3485, 40.9012],
+  [-84.4557, 42.1392],
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Interests — GET/PUT /api/t/:tenant/around/interests (Increment 2, live)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface AroundInterests {
+  interests: string[];
+  chosen_at: number | null;
+}
+
+export function getAroundInterests(tenantId: string) {
+  return api.get<ApiResponse<AroundInterests>>(`/t/${tenantId}/around/interests`);
+}
+
+export function putAroundInterests(tenantId: string, interests: string[]) {
+  return api.put<ApiResponse<AroundInterests>>(`/t/${tenantId}/around/interests`, { interests });
+}
+
+/** Toggle one slug in a pick-order-preserving list - add to the end on
+ * select, remove on deselect. Shared by the board's picker card and the
+ * profile edit drawer, which both need "the order you tapped them in". */
+export function toggleInterest(list: string[], slug: string): string[] {
+  return list.includes(slug) ? list.filter(s => s !== slug) : [...list, slug];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// useLens() — the device-local "which lens am I on" hook, shared by the board
+// and the map room so a lens change in either place is remembered in both.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface UseLensResult {
+  activeLens: string;
+  order: string[];
+  setLens: (slug: string) => void;
+}
+
+export function useLens(picks: string[]): UseLensResult {
+  // `locked` becomes true the moment we know the real default: either a
+  // remembered lens existed at mount, or the member's picks arrived and we
+  // applied "first pick" once. After that, further pick-array changes (e.g.
+  // editing interests from the profile drawer while already on the board)
+  // must never yank the visitor to a different lens mid-visit.
+  const lockedRef = useRef(false);
+
+  const [activeLens, setActiveLens] = useState<string>(() => {
+    const stored = localStorage.getItem(LAST_LENS_KEY);
+    if (stored && (LENS_SLUGS as readonly string[]).includes(stored)) {
+      lockedRef.current = true;
+      return stored;
+    }
+    return 'everything';
+  });
+
+  useEffect(() => {
+    if (lockedRef.current) return;
+    if (picks.length > 0) {
+      lockedRef.current = true;
+      setActiveLens(picks[0]);
+    }
+  }, [picks]);
+
+  function setLens(slug: string) {
+    lockedRef.current = true;
+    setActiveLens(slug);
+    localStorage.setItem(LAST_LENS_KEY, slug);
+  }
+
+  const order = picks.length > 0
+    ? [...picks, ...LENS_SLUGS.filter(s => !picks.includes(s))]
+    : LENS_SLUGS.slice();
+
+  return { activeLens, order, setLens };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The Today feed — client-side merge of the four modules' existing public
+// endpoints, plus the network-members list (for Places pins and the deals
+// coordinate match). No new backend surface (plan §2.2/§10).
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface TodayRow {
+  key: string;
+  source: 'events' | 'fresh' | 'deals' | 'hands';
+  title: string;              // real sentence, plan §7.4 composition rules
+  meta: string;                // module name + place/time line
+  href: string;                 // module deep link
+  pinLabel: string;            // popup title when this row has a map pin
+  lat: number | null;
+  lon: number | null;
+  created_at: number;          // sort key
+}
+
+export interface NetworkMember {
+  member_uid: number;
+  name: string;
+  category: string;
+  description: string | null;
+  address: string | null;
+  zip: string | null;
+  lat: number | null;
+  lon: number | null;
+  phone: string | null;
+  website: string | null;
+}
+
+export interface AroundBoardData {
+  todayRows: TodayRow[];            // every source, merged and sorted created_at DESC
+  members: NetworkMember[];         // raw network-members rows (Places lens + member pins)
+  freshStandPins: FreshStandPin[];  // every publicly visible stand (Fresh lens pins)
+  amberMemberUids: Set<string>;     // member_uid (stringified) with news today - the postcard/map overlay
+}
+
+function truncate(text: string, max: number): string {
+  if (text.length <= max) return text;
+  return text.slice(0, max - 1).trimEnd() + '…';
+}
+
+// "123 Main St, Somewhere MI" -> "123 Main St" - a short at-a-glance location
+// for the events feed row's meta line, not the full mailing address.
+function firstAddressSegment(address: string): string {
+  const idx = address.indexOf(',');
+  return idx > 0 ? address.slice(0, idx) : address;
+}
+
+function weekdayOf(unixSeconds: number): string {
+  return new Date(unixSeconds * 1000).toLocaleDateString('en-US', { weekday: 'long' });
+}
+
+function coordKey(lat: number, lon: number): string {
+  return `${lat.toFixed(5)},${lon.toFixed(5)}`;
+}
+
+export async function fetchAroundBoardData(tenantId: string): Promise<AroundBoardData> {
+  // Every source fails independently to an empty result - one module having a
+  // bad day must never blank the whole board (this mirrors how each module's
+  // own page already handles its own fetch failures).
+  const [membersRes, happeningsRes, freshRes, freshStandsRes, dealsRes, shifts] = await Promise.all([
+    api.get<ApiResponse<NetworkMember[]>>(`/t/${tenantId}/network-members`).catch(() => ({ data: [] as NetworkMember[] })),
+    getHappenings(tenantId).catch(() => ({ data: [] as Happening[] })),
+    listFresh(tenantId).catch(() => ({ data: [] as FreshFeedPost[] })),
+    listFreshStands(tenantId).catch(() => ({ data: [] as FreshStandPin[] })),
+    getDeals(tenantId).catch(() => ({ data: [] as Deal[] })),
+    getShifts().catch(() => [] as Shift[]),
+  ]);
+
+  const members = membersRes.data || [];
+  const happenings = happeningsRes.data || [];
+  const freshPosts = freshRes.data || [];
+  const freshStands = freshStandsRes.data || [];
+  const deals = dealsRes.data || [];
+
+  // member_uid (stringified) -> coords, for matching a deal to its merchant's
+  // pin (deals carry a real merchant_id) and for the Places "news today"
+  // overlay below.
+  const memberCoords = new Map<string, { lat: number; lon: number }>();
+  for (const m of members) {
+    if (m.lat != null && m.lon != null) memberCoords.set(String(m.member_uid), { lat: m.lat, lon: m.lon });
+  }
+
+  // Happenings carry no merchant_id, only a snapshotted merchant lat/lon - so
+  // coordinate equality is the only link back to a member pin (both read the
+  // same stored business record, so an exact match is reliable here).
+  const happeningCoordKeys = new Set(
+    happenings
+      .filter(h => h.merchant_lat != null && h.merchant_lon != null)
+      .map(h => coordKey(h.merchant_lat as number, h.merchant_lon as number)),
+  );
+
+  const amberMemberUids = new Set<string>();
+  for (const m of members) {
+    if (m.lat == null || m.lon == null) continue;
+    if (happeningCoordKeys.has(coordKey(m.lat, m.lon))) amberMemberUids.add(String(m.member_uid));
+  }
+  for (const d of deals) {
+    if (memberCoords.has(String(d.merchant_id))) amberMemberUids.add(String(d.merchant_id));
+  }
+
+  const nowSec = Math.floor(Date.now() / 1000);
+  const rows: TodayRow[] = [];
+
+  for (const h of happenings) {
+    rows.push({
+      key: `events:${h.id}`,
+      source: 'events',
+      title: truncate(h.body, 70),
+      meta: `Happenings · ${h.merchant_name ?? 'A member business'}${h.merchant_address ? ' · ' + firstAddressSegment(h.merchant_address) : ''}`,
+      href: '/happenings',
+      pinLabel: h.merchant_name ?? 'A member business',
+      lat: h.merchant_lat,
+      lon: h.merchant_lon,
+      created_at: h.created_at,
+    });
+  }
+
+  for (const p of freshPosts) {
+    const locationBit = p.stand.nearest_city ?? p.stand.address_hint;
+    rows.push({
+      key: `fresh:${p.id}`,
+      source: 'fresh',
+      title: `${truncate(p.body, 70)} - ${p.stand.name}`,
+      meta: `Fresh Today${locationBit ? ' · ' + locationBit : ''}`,
+      href: `/fresh/stand/${p.stand.id}`,
+      pinLabel: p.stand.name,
+      lat: p.stand.lat,
+      lon: p.stand.lon,
+      created_at: p.created_at,
+    });
+  }
+
+  for (const d of deals) {
+    const coords = memberCoords.get(String(d.merchant_id)) ?? null;
+    rows.push({
+      key: `deals:${d.id}`,
+      source: 'deals',
+      title: d.merchant_name ? `${d.title} - ${d.merchant_name}` : d.title,
+      meta: `Deals${d.ends_at ? ' · through ' + weekdayOf(d.ends_at) : ''}`,
+      href: '/deals',
+      pinLabel: d.merchant_name ?? d.title,
+      lat: coords?.lat ?? null,
+      lon: coords?.lon ?? null,
+      // Spec: deals rows sort by starts_at, falling back to "now" - never a
+      // countdown, just a recency stand-in for the merge sort below.
+      created_at: d.starts_at ?? nowSec,
+    });
+  }
+
+  // "Today or the next 7 days, with open spots." Shifts carry no free
+  // recency signal of their own (a hand-picked event_date, not a posted-at
+  // timestamp) - approximate "today" with a day-boundary a little generous
+  // on the near side rather than fuss over exact local midnight.
+  const startOfToday = nowSec - (nowSec % 86400) - 86400;
+  const sevenDaysOut = nowSec + 7 * 86400;
+  const openShifts = shifts.filter(s => s.event_date >= startOfToday && s.event_date <= sevenDaysOut && s.spots_filled < s.spots_total);
+  openShifts.forEach((s, i) => {
+    rows.push({
+      key: `hands:${s.id}`,
+      source: 'hands',
+      title: `${s.title} - ${s.business_name}`,
+      meta: `Lend a Hand · ${s.location}`,
+      href: '/lend-a-hand',
+      pinLabel: s.business_name,
+      lat: null,
+      lon: null,
+      // Spec: "hands use listing order" - there's no created_at to sort by,
+      // so anchor near "now" and step back by position to preserve the
+      // module's own ordering without re-deriving a timestamp for it.
+      created_at: nowSec - i,
+    });
+  });
+
+  rows.sort((a, b) => b.created_at - a.created_at);
+
+  return { todayRows: rows, members, freshStandPins: freshStands, amberMemberUids };
+}
+
+export function todayFeedForLens(lens: string, allRows: TodayRow[]): { rows: TodayRow[]; hasMore: boolean } {
+  if (lens === 'everything') {
+    return {
+      rows: allRows.slice(0, TODAY_FEED_CAP_EVERYTHING),
+      hasMore: allRows.length > TODAY_FEED_CAP_EVERYTHING,
+    };
+  }
+  const filtered = allRows.filter(r => r.source === lens);
+  return { rows: filtered.slice(0, 50), hasMore: false };
+}
+
+export const FEED_SECTION_LABEL: Record<string, string> = {
+  everything: 'TODAY AROUND TOWN',
+  events: 'EVENTS TODAY',
+  fresh: 'FRESH TODAY',
+  deals: 'DEALS RIGHT NOW',
+  hands: 'SHIFTS THIS WEEK',
+};
+
+export const FEED_EMPTY_COPY: Record<string, { title: string; body: string }> = {
+  everything: { title: 'Quiet day on the board.', body: 'The businesses below are always open to a visit - and mornings are when stands and events post.' },
+  events: { title: 'Nothing on the board for today.', body: 'Happenings post morning-of, most days.' },
+  fresh: { title: 'No stands have posted yet today.', body: 'Fresh posts usually land in the morning.' },
+  deals: { title: 'No deals running right now.', body: '' },
+  hands: { title: 'No open shifts this week.', body: '' },
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Pins and captions per lens - shared by the postcard (capped, static) and the
+// map room (uncapped, interactive). Plan §3.3/§4.1: "same builders... share
+// the code, do not duplicate."
+// ─────────────────────────────────────────────────────────────────────────────
+
+function freshStandPinsMapped(stands: FreshStandPin[]): RegionPin[] {
+  return stands.map(s => {
+    const location = standLocation(s.nearest_city, s.nearest_state);
+    const bodyLine = s.latest_body ? truncate(s.latest_body, 60) : 'Nothing posted today';
+    return {
+      id: `fresh:${s.id}`,
+      lat: s.lat,
+      lon: s.lon,
+      label: s.name,
+      sublabel: location ? `${location} · ${bodyLine}` : bodyLine,
+      href: `/fresh/stand/${s.id}`,
+      kind: s.has_live_post ? 'amber' : 'green',
+    };
+  });
+}
+
+export function pinsForLens(lens: string, data: AroundBoardData, opts?: { cap?: number }): RegionPin[] {
+  let pins: RegionPin[] = [];
+
+  if (lens === 'places' || lens === 'everything') {
+    const memberPins: RegionPin[] = data.members
+      .filter(m => m.lat != null && m.lon != null)
+      .map(m => ({
+        id: `member:${m.member_uid}`,
+        lat: m.lat as number,
+        lon: m.lon as number,
+        label: m.name,
+        sublabel: m.category || undefined,
+        href: `/members/${m.member_uid}`,
+        kind: data.amberMemberUids.has(String(m.member_uid)) ? 'amber' : 'green',
+      }));
+    pins = lens === 'everything' ? [...memberPins, ...freshStandPinsMapped(data.freshStandPins)] : memberPins;
+  } else if (lens === 'events') {
+    pins = data.todayRows
+      .filter(r => r.source === 'events' && r.lat != null && r.lon != null)
+      .map(r => ({
+        id: r.key, lat: r.lat as number, lon: r.lon as number,
+        label: r.pinLabel, sublabel: truncate(r.title, 60), href: r.href, kind: 'amber' as const,
+      }));
+  } else if (lens === 'fresh') {
+    pins = freshStandPinsMapped(data.freshStandPins);
+  } else if (lens === 'deals') {
+    pins = data.todayRows
+      .filter(r => r.source === 'deals' && r.lat != null && r.lon != null)
+      .map(r => ({
+        id: r.key, lat: r.lat as number, lon: r.lon as number,
+        label: r.pinLabel, sublabel: truncate(r.title, 60), href: r.href, kind: 'amber' as const,
+      }));
+  }
+  // hands: no pins, ever - shifts carry no coordinates (v1 has no volunteer
+  // pins; the caption swaps to the "no map pins yet" line instead).
+
+  const cap = opts?.cap;
+  return cap != null ? pins.slice(0, cap) : pins;
+}
+
+export function captionForLens(lens: string, data: AroundBoardData): string {
+  if (lens === 'hands') {
+    return 'Volunteer shifts list their address on each listing - no map pins yet.';
+  }
+  if (lens === 'events') {
+    const n = data.todayRows.filter(r => r.source === 'events' && r.lat != null && r.lon != null).length;
+    return `${n} happenings on the map`;
+  }
+  if (lens === 'fresh') {
+    return `${data.freshStandPins.length} stands`;
+  }
+  if (lens === 'deals') {
+    const n = data.todayRows.filter(r => r.source === 'deals' && r.lat != null && r.lon != null).length;
+    return `${n} deals on the map`;
+  }
+  // places / everything
+  const withCoords = data.members.filter(m => m.lat != null && m.lon != null);
+  const n = withCoords.length;
+  const m = withCoords.filter(mm => data.amberMemberUids.has(String(mm.member_uid))).length;
+  return m > 0 ? `${n} places · ${m} with news today` : `${n} places`;
+}
