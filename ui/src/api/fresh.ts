@@ -32,6 +32,17 @@ export function categoryLabel(key: string): string {
   return FRESH_CATEGORIES.find(c => c.key === key)?.label ?? key;
 }
 
+/**
+ * "City, State" for a stand's auto-derived nearest town/state, or null when
+ * either half is missing (lookup hasn't run yet for an older row, or KKAuth
+ * found nothing within 50 miles) - callers should omit the line entirely in
+ * that case rather than render a partial/broken string.
+ */
+export function standLocation(nearestCity: string | null, nearestState: string | null): string | null {
+  if (!nearestCity || !nearestState) return null;
+  return `${nearestCity}, ${nearestState}`;
+}
+
 // Region center for the map view, mirrored from src/handlers/fresh.ts
 // REGION_CENTER (Tri-State Lakes Region, zoom 9) — kept as a plain constant
 // here since the UI build doesn't import from the Worker's src tree.
@@ -64,6 +75,12 @@ export interface FreshFeedStand {
   address_hint: string | null;
   phone: string | null;
   categories: string[];
+  // Auto-derived nearest town/state (KKAuth's nearest-place lookup, snapshotted
+  // at create/update time) - the primary at-a-glance location label, since the
+  // service region spans dozens of towns across three states. Null means the
+  // lookup either hasn't run yet or found nothing within 50 miles.
+  nearest_city: string | null;
+  nearest_state: string | null;
 }
 
 // GET /api/t/:tenant/fresh row shape.
@@ -87,6 +104,8 @@ export interface FreshStandPin {
   address_hint: string | null;
   phone: string | null;
   categories: string[];
+  nearest_city: string | null;
+  nearest_state: string | null;
   has_live_post: 0 | 1;
   latest_body: string | null;
 }
@@ -115,6 +134,8 @@ export interface FreshStandDetail {
   address_hint: string | null;
   phone: string | null;
   categories: string[];
+  nearest_city: string | null;
+  nearest_state: string | null;
   photo_url: string | null;
   created_at: number;
   posts: FreshStandPost[];
@@ -189,6 +210,8 @@ export interface MyFreshStand {
   address_hint: string | null;
   phone: string | null;
   categories: string[];
+  nearest_city: string | null;
+  nearest_state: string | null;
   photo_url: string | null;
   is_hidden: boolean;
   admin_hidden_reason: string | null;
@@ -219,6 +242,8 @@ export interface FreshStandRecord {
   address_hint: string | null;
   phone: string | null;
   categories: string[];
+  nearest_city: string | null;
+  nearest_state: string | null;
   photo_url: string | null;
   is_hidden: 0 | 1;
   admin_hidden: 0 | 1;

@@ -2,10 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTenant } from '../context/TenantContext';
 import {
-  listFresh, listFreshStands, listFreshSeasons, categoryLabel, FRESH_CATEGORIES, REGION_CENTER,
+  listFresh, listFreshStands, listFreshSeasons, categoryLabel, standLocation, FRESH_CATEGORIES, REGION_CENTER,
   type FreshFeedPost, type FreshStandPin,
 } from '../api/fresh';
-import { Sprout, List, Map as MapIcon, Phone } from 'lucide-react';
+import { Sprout, List, Map as MapIcon, Phone, MapPin } from 'lucide-react';
 import { Spinner } from '../components/ui/Spinner';
 import { Badge } from '../components/ui/Badge';
 import { RegionMap, type RegionPin } from 'kk-shared-ui';
@@ -69,15 +69,19 @@ export default function FreshToday() {
     })();
   }, [tenant, filter]);
 
-  const pins: RegionPin[] = useMemo(() => stands.map(s => ({
-    id: s.id,
-    lat: s.lat,
-    lon: s.lon,
-    label: s.name,
-    sublabel: s.latest_body ? truncate(s.latest_body, 60) : 'Nothing posted today',
-    href: `/fresh/stand/${s.id}`,
-    kind: s.has_live_post ? 'amber' : 'green',
-  })), [stands]);
+  const pins: RegionPin[] = useMemo(() => stands.map(s => {
+    const location = standLocation(s.nearest_city, s.nearest_state);
+    const bodyLine = s.latest_body ? truncate(s.latest_body, 60) : 'Nothing posted today';
+    return {
+      id: s.id,
+      lat: s.lat,
+      lon: s.lon,
+      label: s.name,
+      sublabel: location ? `${location} · ${bodyLine}` : bodyLine,
+      href: `/fresh/stand/${s.id}`,
+      kind: s.has_live_post ? 'amber' : 'green',
+    };
+  }), [stands]);
 
   return (
     <div className="main-content" style={{ maxWidth: 800, margin: '0 auto', paddingTop: 20, paddingBottom: 80 }}>
@@ -153,7 +157,7 @@ export default function FreshToday() {
               onClick={() => navigate(`/fresh/stand/${p.stand.id}`)}
               onKeyDown={e => { if (e.key === 'Enter') navigate(`/fresh/stand/${p.stand.id}`); }}
               style={{ background: 'var(--white)', padding: 16, cursor: 'pointer', borderLeft: '4px solid var(--green)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 6 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 2 }}>
                 <span style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--green)' }}>{p.stand.name}</span>
                 <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                   {p.stand.categories.map(cat => (
@@ -167,6 +171,13 @@ export default function FreshToday() {
                   ))}
                 </div>
               </div>
+
+              {standLocation(p.stand.nearest_city, p.stand.nearest_state) && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 6, fontSize: '0.8rem', fontWeight: 600, color: 'var(--text)' }}>
+                  <MapPin size={12} style={{ color: 'var(--amber)' }} />
+                  {standLocation(p.stand.nearest_city, p.stand.nearest_state)}
+                </div>
+              )}
 
               <p style={{ margin: '0 0 8px', fontSize: '1rem', color: 'var(--text)', lineHeight: 1.45 }}>{p.body}</p>
 

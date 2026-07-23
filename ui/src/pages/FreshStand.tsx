@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useTenant } from '../context/TenantContext';
-import { getFreshStand, categoryLabel, type FreshStandDetail } from '../api/fresh';
+import { getFreshStand, categoryLabel, standLocation, type FreshStandDetail } from '../api/fresh';
 import { Sprout, Phone, MapPin } from 'lucide-react';
 import { Spinner } from '../components/ui/Spinner';
 import { Badge } from '../components/ui/Badge';
@@ -79,6 +79,12 @@ export default function FreshStand() {
       <h1 style={{ margin: '0 0 4px', fontSize: '1.5rem', fontFamily: 'var(--font-serif)', color: 'var(--green)', display: 'flex', alignItems: 'center', gap: 8 }}>
         <Sprout size={22} style={{ color: 'var(--amber)' }} /> {stand.name}
       </h1>
+
+      {standLocation(stand.nearest_city, stand.nearest_state) && (
+        <p style={{ margin: '0 0 8px', fontSize: '0.95rem', fontWeight: 700, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <MapPin size={16} style={{ color: 'var(--amber)' }} /> {standLocation(stand.nearest_city, stand.nearest_state)}
+        </p>
+      )}
 
       <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 8 }}>
         {stand.categories.map(cat => (

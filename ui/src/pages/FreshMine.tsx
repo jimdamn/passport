@@ -5,10 +5,10 @@ import { useTenant } from '../context/TenantContext';
 import {
   listMyFresh, createFreshStand, updateFreshStand, setFreshStandVisibility, deleteFreshStand,
   createFreshPost, updateFreshPost, setFreshPostSoldOut, relistFreshPost, deleteFreshPost,
-  uploadFreshPhoto, categoryLabel, FRESH_CATEGORIES, REGION_CENTER, REGION_BOUNDS,
+  uploadFreshPhoto, categoryLabel, standLocation, FRESH_CATEGORIES, REGION_CENTER, REGION_BOUNDS,
   type MyFreshStand, type MyFreshPost, type FreshStandInput,
 } from '../api/fresh';
-import { Sprout, Pencil, Trash2, Plus, Pause, Play, Camera, X } from 'lucide-react';
+import { Sprout, Pencil, Trash2, Plus, Pause, Play, Camera, X, MapPin } from 'lucide-react';
 import { Spinner } from '../components/ui/Spinner';
 import { Alert } from '../components/ui/Alert';
 import { RegionMap } from 'kk-shared-ui';
@@ -451,7 +451,7 @@ function StandCard({ stand, tenantId, onRefetch, onEdit }: {
 
   return (
     <div className="card" style={{ background: 'var(--white)', padding: 16, marginBottom: 16, borderLeft: '4px solid var(--green)' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 6 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 2 }}>
         <span style={{ fontWeight: 700, fontSize: '0.98rem', color: 'var(--green)' }}>{stand.name}</span>
         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           {stand.categories.map(cat => (
@@ -459,6 +459,16 @@ function StandCard({ stand, tenantId, onRefetch, onEdit }: {
           ))}
         </div>
       </div>
+
+      {/* Shows what neighbors see as the primary location label on the public
+          board. Null (lookup hasn't run yet, or nothing within 50 miles) is
+          rendered as nothing here - never "null, null" or a broken string. */}
+      {standLocation(stand.nearest_city, stand.nearest_state) && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 6, fontSize: '0.8rem', fontWeight: 600, color: 'var(--text)' }}>
+          <MapPin size={12} style={{ color: 'var(--amber)' }} />
+          {standLocation(stand.nearest_city, stand.nearest_state)}
+        </div>
+      )}
 
       {stand.photo_url && (
         <img src={stand.photo_url} alt="" style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 8, marginBottom: 10, display: 'block' }} />

@@ -163,6 +163,42 @@ function serializeStand(row: any) {
   return { ...row, categories: JSON.parse(row.categories || '[]') };
 }
 
+const NEAREST_PLACE_TIMEOUT_MS = 3000;
+
+/**
+ * Best-effort lookup of the nearest known town/state for a stand's pin, via
+ * KKAuth's GET /internal/nearest-place?lat=&lon= over the existing KKAUTH
+ * service binding (same X-Internal-Secret call shape as uploadFreshPhoto
+ * above). Never throws - a network error, a timeout, a non-2xx response, and
+ * KKAuth's own normal "nothing within 50 miles" result all resolve the same
+ * way: { city: null, state: null }. Stand create/update must never fail
+ * because this enrichment call failed, so every failure path is swallowed
+ * here and logged server-side instead of bubbling up.
+ */
+async function fetchNearestPlace(c: AppContext, lat: number, lon: number): Promise<{ city: string | null; state: string | null }> {
+  try {
+    const res = await c.env.KKAUTH.fetch(
+      new Request(`https://kkauth/internal/nearest-place?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`, {
+        headers: { 'X-Internal-Secret': c.env.INTERNAL_SECRET || '' },
+        signal: AbortSignal.timeout(NEAREST_PLACE_TIMEOUT_MS),
+      })
+    );
+    if (!res.ok) {
+      console.error('[fresh] nearest-place lookup returned non-OK status:', res.status);
+      return { city: null, state: null };
+    }
+    const body = await res.json<any>();
+    return {
+      city: body?.data?.city ?? null,
+      state: body?.data?.state ?? null,
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[fresh] nearest-place lookup failed:', msg);
+    return { city: null, state: null };
+  }
+}
+
 /** Cooldown + live-post cap, shared by createFreshPost and relistFreshPost. */
 async function guardCooldownAndCap(c: AppContext, standId: string) {
   const last = await c.env.DB.prepare(
@@ -261,7 +297,8 @@ export async function listFresh(c: AppContext) {
   const { results } = await c.env.DB.prepare(`
     SELECT p.id, p.body, p.photo_url, p.sold_out, p.created_at, p.expires_at,
            s.id AS stand_id, s.name AS stand_name, s.lat AS stand_lat, s.lon AS stand_lon,
-           s.address_hint AS stand_address_hint, s.phone AS stand_phone, s.categories AS stand_categories
+           s.address_hint AS stand_address_hint, s.phone AS stand_phone, s.categories AS stand_categories,
+           s.nearest_city AS stand_nearest_city, s.nearest_state AS stand_nearest_state
     FROM fresh_posts p
     JOIN fresh_stands s ON s.id = p.stand_id
     WHERE ${filters.join(' AND ')}
@@ -284,6 +321,8 @@ export async function listFresh(c: AppContext) {
       address_hint: r.stand_address_hint,
       phone: r.stand_phone,
       categories: JSON.parse(r.stand_categories || '[]'),
+      nearest_city: r.stand_nearest_city ?? null,
+      nearest_state: r.stand_nearest_state ?? null,
     },
   }));
 
@@ -300,6 +339,7 @@ export async function listFreshStands(c: AppContext) {
 
   const { results } = await c.env.DB.prepare(`
     SELECT s.id, s.name, s.lat, s.lon, s.address_hint, s.phone, s.categories,
+      s.nearest_city, s.nearest_state,
       EXISTS (
         SELECT 1 FROM fresh_posts p
         WHERE p.stand_id = s.id AND p.is_active = 1 AND p.admin_hidden = 0 AND p.expires_at > unixepoch()
@@ -319,6 +359,8 @@ export async function listFreshStands(c: AppContext) {
     id: r.id, name: r.name, lat: r.lat, lon: r.lon,
     address_hint: r.address_hint, phone: r.phone,
     categories: JSON.parse(r.categories || '[]'),
+    nearest_city: r.nearest_city ?? null,
+    nearest_state: r.nearest_state ?? null,
     has_live_post: r.has_live_post ? 1 : 0,
     latest_body: r.latest_body ?? null,
   }));
@@ -335,7 +377,8 @@ export async function getFreshStand(c: AppContext) {
   const id = c.req.param('id') ?? '';
 
   const stand = await c.env.DB.prepare(`
-    SELECT id, name, description, lat, lon, address_hint, phone, categories, photo_url, created_at
+    SELECT id, name, description, lat, lon, address_hint, phone, categories, photo_url, created_at,
+           nearest_city, nearest_state
     FROM fresh_stands
     WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL AND is_hidden = 0 AND admin_hidden = 0
   `).bind(id, tenant.id).first<any>();
@@ -430,6 +473,8 @@ export async function listMyFresh(c: AppContext) {
       address_hint: s.address_hint,
       phone: s.phone,
       categories: JSON.parse(s.categories || '[]'),
+      nearest_city: s.nearest_city ?? null,
+      nearest_state: s.nearest_state ?? null,
       photo_url: s.photo_url,
       is_hidden: !!s.is_hidden,
       admin_hidden_reason: s.admin_hidden ? s.admin_hidden_reason : null,
@@ -501,14 +546,16 @@ export async function createFreshStand(c: AppContext) {
 
   const input = parseStandInput(body);
   const id = nanoid(10);
+  const nearest = await fetchNearestPlace(c, input.lat, input.lon);
 
   await c.env.DB.prepare(`
     INSERT INTO fresh_stands
-      (id, tenant_id, kkauth_uid, name, description, lat, lon, address_hint, phone, categories, photo_url)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, tenant_id, kkauth_uid, name, description, lat, lon, address_hint, phone, categories, photo_url, nearest_city, nearest_state)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
     id, tenant.id, kkauthUid, input.name, input.description, input.lat, input.lon,
-    input.addressHint, input.phone, JSON.stringify(input.categories), input.photoUrl
+    input.addressHint, input.phone, JSON.stringify(input.categories), input.photoUrl,
+    nearest.city, nearest.state
   ).run();
 
   const stand = await c.env.DB.prepare('SELECT * FROM fresh_stands WHERE id = ?').bind(id).first<any>();
@@ -534,14 +581,27 @@ export async function updateFreshStand(c: AppContext) {
 
   const input = parseStandInput(body, existing);
 
+  // Only re-derive nearest_city/nearest_state when the pin actually moved, or
+  // when this is a lazy backfill of an older row that has never been
+  // through the lookup (nearest_city still null) - skip the redundant KKAuth
+  // call on every edit that doesn't touch lat/lon.
+  const pinMoved = input.lat !== existing.lat || input.lon !== existing.lon;
+  let nearestCity = existing.nearest_city ?? null;
+  let nearestState = existing.nearest_state ?? null;
+  if (pinMoved || nearestCity === null) {
+    const nearest = await fetchNearestPlace(c, input.lat, input.lon);
+    nearestCity = nearest.city;
+    nearestState = nearest.state;
+  }
+
   await c.env.DB.prepare(`
     UPDATE fresh_stands
     SET name = ?, description = ?, lat = ?, lon = ?, address_hint = ?, phone = ?, categories = ?, photo_url = ?,
-        updated_at = unixepoch()
+        nearest_city = ?, nearest_state = ?, updated_at = unixepoch()
     WHERE id = ? AND tenant_id = ? AND kkauth_uid = ?
   `).bind(
     input.name, input.description, input.lat, input.lon, input.addressHint, input.phone,
-    JSON.stringify(input.categories), input.photoUrl, id, tenant.id, kkauthUid
+    JSON.stringify(input.categories), input.photoUrl, nearestCity, nearestState, id, tenant.id, kkauthUid
   ).run();
 
   const stand = await c.env.DB.prepare('SELECT * FROM fresh_stands WHERE id = ?').bind(id).first<any>();
