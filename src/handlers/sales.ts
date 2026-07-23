@@ -421,6 +421,10 @@ function saleFeedShape(row: any, days: SaleDayEntry[]) {
     nearest_city: row.nearest_city ?? null,
     nearest_state: row.nearest_state ?? null,
     days,
+    // Public, like Fresh Today's sold_out flag - the detail page's day-by-day
+    // schedule needs to know which day (if any) has been wrapped, to render
+    // the strikethrough without a second authenticated round-trip.
+    wrapped_date: row.wrapped_date ?? null,
     created_at: row.created_at,
   };
 }
@@ -572,7 +576,6 @@ export async function listMySales(c: AppContext) {
         ...saleFeedShape(r, days),
         is_hidden: !!r.is_hidden,
         admin_hidden_reason: r.admin_hidden ? r.admin_hidden_reason : null,
-        wrapped_date: r.wrapped_date,
         state,
         state_note: ownerStateNote(r, days, state, now),
       },

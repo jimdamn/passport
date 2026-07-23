@@ -390,6 +390,9 @@ export default function MyProfile() {
             <Link to="/profile/admin/fresh" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
               Fresh Today
             </Link>
+            <Link to="/profile/admin/sales" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
+              Sale Day
+            </Link>
             <Link to="/redeem" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
               Redeem a Claim
             </Link>

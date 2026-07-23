@@ -31,12 +31,16 @@ import Happenings from './pages/Happenings';
 import FreshToday from './pages/FreshToday';
 import FreshStand from './pages/FreshStand';
 import FreshMine from './pages/FreshMine';
+import SaleDay from './pages/SaleDay';
+import SaleDetail from './pages/SaleDetail';
+import SalesMine from './pages/SalesMine';
 import LendAHand from './pages/LendAHand';
 import AdminDeals from './pages/profile/AdminDeals';
 import AdminSupport from './pages/profile/AdminSupport';
 import AdminVolunteer from './pages/profile/AdminVolunteer';
 import AdminHappenings from './pages/profile/AdminHappenings';
 import AdminFresh from './pages/profile/AdminFresh';
+import AdminSales from './pages/profile/AdminSales';
 import KwestHome from './pages/kwest/KwestHome';
 import KwestHelp from './pages/kwest/KwestHelp';
 import KwestHunt from './pages/kwest/KwestHunt';
@@ -71,6 +75,9 @@ export default function App() {
         <Route path="/fresh" element={<FreshToday />} />
         <Route path="/fresh/stand/:id" element={<FreshStand />} />
         <Route path="/fresh/mine" element={<FreshMine />} />
+        <Route path="/sales" element={<SaleDay />} />
+        <Route path="/sales/sale/:id" element={<SaleDetail />} />
+        <Route path="/sales/mine" element={<SalesMine />} />
         <Route path="/lend-a-hand" element={<LendAHand />} />
         <Route path="/kwest" element={<KwestHome />} />
         <Route path="/kwest/help" element={<KwestHelp />} />
@@ -91,6 +98,7 @@ export default function App() {
         <Route path="/profile/admin/volunteer" element={<AdminVolunteer />} />
         <Route path="/profile/admin/happenings" element={<AdminHappenings />} />
         <Route path="/profile/admin/fresh" element={<AdminFresh />} />
+        <Route path="/profile/admin/sales" element={<AdminSales />} />
         <Route path="/profile/admin/kwest" element={<AdminKwest />} />
         <Route path="/profile/admin/kwest/:id" element={<AdminKwestEdit />} />
         <Route path="/profile/admin/kwest/:id/field-test" element={<AdminKwestFieldTest />} />

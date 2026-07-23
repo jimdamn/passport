@@ -4,6 +4,7 @@ import { api } from './client';
 import type { ApiResponse } from '../types';
 import { getHappenings, type Happening } from './happenings';
 import { listFresh, listFreshStands, standLocation, type FreshFeedPost, type FreshStandPin } from './fresh';
+import { listSales, listSalePins, type SaleFeedRow, type SalePin } from './sales';
 import { getDeals, type Deal } from './deals';
 import { getShifts, type Shift } from './lendahand';
 
@@ -18,6 +19,7 @@ export const LENSES = [
   { slug: 'everything', label: 'Everything' },
   { slug: 'events', label: 'Events' },       // happenings
   { slug: 'fresh', label: 'Fresh' },         // fresh today
+  { slug: 'sales', label: 'Sales' },         // sale day
   { slug: 'deals', label: 'Deals' },
   { slug: 'hands', label: 'Volunteer' },     // lend a hand
   { slug: 'places', label: 'Places' },       // the member directory
@@ -26,10 +28,11 @@ export const LENS_SLUGS = LENSES.map(l => l.slug);
 
 // Picker chip labels differ from the lens-row chip labels above (warmer,
 // plan §7.2). 'everything' is never a pickable interest - it is the absence
-// of picks, so the picker only ever offers the other five.
+// of picks, so the picker only ever offers the other six.
 export const PICKER_LABELS: Record<string, string> = {
   events: 'Events',
   fresh: 'Fresh food',
+  sales: 'Sale Day',
   deals: 'Deals',
   hands: 'Volunteer shifts',
   places: 'The businesses',
@@ -137,7 +140,7 @@ export function useLens(picks: string[]): UseLensResult {
 
 export interface TodayRow {
   key: string;
-  source: 'events' | 'fresh' | 'deals' | 'hands';
+  source: 'events' | 'fresh' | 'sales' | 'deals' | 'hands';
   title: string;              // real sentence, plan §7.4 composition rules
   meta: string;                // module name + place/time line
   href: string;                 // module deep link
@@ -164,6 +167,7 @@ export interface AroundBoardData {
   todayRows: TodayRow[];            // every source, merged and sorted created_at DESC
   members: NetworkMember[];         // raw network-members rows (Places lens + member pins)
   freshStandPins: FreshStandPin[];  // every publicly visible stand (Fresh lens pins)
+  salePins: SalePin[];              // every publicly visible sale (Sales lens pins)
   amberMemberUids: Set<string>;     // member_uid (stringified) with news today - the postcard/map overlay
 }
 
@@ -191,11 +195,13 @@ export async function fetchAroundBoardData(tenantId: string): Promise<AroundBoar
   // Every source fails independently to an empty result - one module having a
   // bad day must never blank the whole board (this mirrors how each module's
   // own page already handles its own fetch failures).
-  const [membersRes, happeningsRes, freshRes, freshStandsRes, dealsRes, shifts] = await Promise.all([
+  const [membersRes, happeningsRes, freshRes, freshStandsRes, salesRes, salePinsRes, dealsRes, shifts] = await Promise.all([
     api.get<ApiResponse<NetworkMember[]>>(`/t/${tenantId}/network-members`).catch(() => ({ data: [] as NetworkMember[] })),
     getHappenings(tenantId).catch(() => ({ data: [] as Happening[] })),
     listFresh(tenantId).catch(() => ({ data: [] as FreshFeedPost[] })),
     listFreshStands(tenantId).catch(() => ({ data: [] as FreshStandPin[] })),
+    listSales(tenantId).catch(() => ({ data: [] as SaleFeedRow[] })),
+    listSalePins(tenantId).catch(() => ({ data: [] as SalePin[] })),
     getDeals(tenantId).catch(() => ({ data: [] as Deal[] })),
     getShifts().catch(() => [] as Shift[]),
   ]);
@@ -204,6 +210,8 @@ export async function fetchAroundBoardData(tenantId: string): Promise<AroundBoar
   const happenings = happeningsRes.data || [];
   const freshPosts = freshRes.data || [];
   const freshStands = freshStandsRes.data || [];
+  const sales = salesRes.data || [];
+  const salePins = salePinsRes.data || [];
   const deals = dealsRes.data || [];
 
   // member_uid (stringified) -> coords, for matching a deal to its merchant's
@@ -264,6 +272,21 @@ export async function fetchAroundBoardData(tenantId: string): Promise<AroundBoar
     });
   }
 
+  for (const s of sales) {
+    const locationBit = s.nearest_city ?? s.address_hint;
+    rows.push({
+      key: `sales:${s.id}`,
+      source: 'sales',
+      title: `${s.title} - ${s.status_note}`,
+      meta: `Sale Day${locationBit ? ' · ' + locationBit : ''}`,
+      href: `/sales/sale/${s.id}`,
+      pinLabel: s.title,
+      lat: s.lat,
+      lon: s.lon,
+      created_at: s.created_at,
+    });
+  }
+
   for (const d of deals) {
     const coords = memberCoords.get(String(d.merchant_id)) ?? null;
     rows.push({
@@ -307,7 +330,7 @@ export async function fetchAroundBoardData(tenantId: string): Promise<AroundBoar
 
   rows.sort((a, b) => b.created_at - a.created_at);
 
-  return { todayRows: rows, members, freshStandPins: freshStands, amberMemberUids };
+  return { todayRows: rows, members, freshStandPins: freshStands, salePins, amberMemberUids };
 }
 
 export function todayFeedForLens(lens: string, allRows: TodayRow[]): { rows: TodayRow[]; hasMore: boolean } {
@@ -325,6 +348,7 @@ export const FEED_SECTION_LABEL: Record<string, string> = {
   everything: 'TODAY AROUND TOWN',
   events: 'EVENTS TODAY',
   fresh: 'FRESH TODAY',
+  sales: 'SALE DAY',
   deals: 'DEALS RIGHT NOW',
   hands: 'SHIFTS THIS WEEK',
 };
@@ -333,6 +357,7 @@ export const FEED_EMPTY_COPY: Record<string, { title: string; body: string }> = 
   everything: { title: 'Quiet day on the board.', body: 'The businesses below are always open to a visit - and mornings are when stands and events post.' },
   events: { title: 'Nothing on the board for today.', body: 'Happenings post morning-of, most days.' },
   fresh: { title: 'No stands have posted yet today.', body: 'Fresh posts usually land in the morning.' },
+  sales: { title: 'No sales on the board right now.', body: 'Sales show up here as neighbors post them - weekends fill up fast.' },
   deals: { title: 'No deals running right now.', body: '' },
   hands: { title: 'No open shifts this week.', body: '' },
 };
@@ -359,6 +384,18 @@ function freshStandPinsMapped(stands: FreshStandPin[]): RegionPin[] {
   });
 }
 
+function salePinsMapped(pins: SalePin[]): RegionPin[] {
+  return pins.map(p => ({
+    id: `sales:${p.id}`,
+    lat: p.lat,
+    lon: p.lon,
+    label: p.title,
+    sublabel: p.status_note,
+    href: `/sales/sale/${p.id}`,
+    kind: p.status === 'on_now' ? 'amber' : 'green',
+  }));
+}
+
 export function pinsForLens(lens: string, data: AroundBoardData, opts?: { cap?: number }): RegionPin[] {
   let pins: RegionPin[] = [];
 
@@ -374,7 +411,9 @@ export function pinsForLens(lens: string, data: AroundBoardData, opts?: { cap?: 
         href: `/members/${m.member_uid}`,
         kind: data.amberMemberUids.has(String(m.member_uid)) ? 'amber' : 'green',
       }));
-    pins = lens === 'everything' ? [...memberPins, ...freshStandPinsMapped(data.freshStandPins)] : memberPins;
+    pins = lens === 'everything'
+      ? [...memberPins, ...freshStandPinsMapped(data.freshStandPins), ...salePinsMapped(data.salePins)]
+      : memberPins;
   } else if (lens === 'events') {
     pins = data.todayRows
       .filter(r => r.source === 'events' && r.lat != null && r.lon != null)
@@ -384,6 +423,8 @@ export function pinsForLens(lens: string, data: AroundBoardData, opts?: { cap?: 
       }));
   } else if (lens === 'fresh') {
     pins = freshStandPinsMapped(data.freshStandPins);
+  } else if (lens === 'sales') {
+    pins = salePinsMapped(data.salePins);
   } else if (lens === 'deals') {
     pins = data.todayRows
       .filter(r => r.source === 'deals' && r.lat != null && r.lon != null)
@@ -409,6 +450,9 @@ export function captionForLens(lens: string, data: AroundBoardData): string {
   }
   if (lens === 'fresh') {
     return `${data.freshStandPins.length} stands`;
+  }
+  if (lens === 'sales') {
+    return `${data.salePins.length} sales`;
   }
   if (lens === 'deals') {
     const n = data.todayRows.filter(r => r.source === 'deals' && r.lat != null && r.lon != null).length;

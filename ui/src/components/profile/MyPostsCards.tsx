@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Newspaper, ArrowLeftRight, Sprout } from 'lucide-react';
+import { Newspaper, ArrowLeftRight, Sprout, Signpost } from 'lucide-react';
 import { getContentSummary } from '../../api/content';
 import type { ContentSummaryItem, ContentSummarySource } from '../../api/content';
 import { Badge } from '../ui/Badge';
@@ -33,6 +33,14 @@ const FRESH_STATUS_LABEL: Record<string, string> = {
   live: 'Live',
   sold_out: 'Sold out',
   expired: 'Ended',
+};
+
+const SALES_STATUS_LABEL: Record<string, string> = {
+  live: 'Live',
+  paused: 'Postponed',
+  hidden: 'Hidden',
+  ended: 'Ended',
+  removed: 'Removed',
 };
 
 function RecentRow({ item, statusLabels }: { item: ContentSummaryItem; statusLabels: Record<string, string> }) {
@@ -194,6 +202,23 @@ export default function MyPostsCards({ tenantId }: { tenantId: string }) {
         emptyCtaLabel="Set up my stand"
         emptyCtaUrl="/fresh/mine"
         statusLabels={FRESH_STATUS_LABEL}
+      />
+
+      <SummaryCard
+        icon={Signpost}
+        title="My Sales"
+        source={summary?.sales}
+        countLine={s => {
+          const total = s.counts.sales ?? 0;
+          const onNow = s.counts.on_now ?? 0;
+          return `${total} ${total === 1 ? 'sale' : 'sales'} · ${onNow} on now`;
+        }}
+        manageLabel="Manage my sales"
+        manageUrl="/sales/mine"
+        emptyLine="No sales yet - takes about a minute to post one."
+        emptyCtaLabel="Post a sale"
+        emptyCtaUrl="/sales/mine"
+        statusLabels={SALES_STATUS_LABEL}
       />
     </>
   );

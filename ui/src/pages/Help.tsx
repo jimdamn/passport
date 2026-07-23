@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useTenant } from '../context/TenantContext';
 import { useAuth } from '../context/AuthContext';
-import { MapPin, Trees, Trophy, Gem, Sparkles, Sprout, Pause, Compass, type LucideIcon } from 'lucide-react';
+import { MapPin, Trees, Trophy, Gem, Sparkles, Sprout, Pause, Compass, Signpost, type LucideIcon } from 'lucide-react';
 import { Alert } from '../components/ui/Alert';
 import {
   SUPPORT_CATEGORIES, SUPPORT_STATUS_LABEL, submitSupport, getMySupport,
@@ -437,6 +437,54 @@ export default function Help() {
           icon={Pause}
           title="Going quiet for the season?"
           body="Pause your stand from My Stand - it keeps everything and hides you until spring."
+        />
+      </Section>
+
+      {/* ── Finding sales near you ── */}
+      <Section title="Finding sales near you">
+        <Step
+          n={1}
+          label="Open Sale Day"
+          detail="From Around Town, tap Sales - everything on the board is posted by neighbors."
+        />
+        <Step
+          n={2}
+          label="Check the map before you drive"
+          detail="Amber pins are open right now. Green pins are coming up - tap one to see the days and hours."
+        />
+        <Step
+          n={3}
+          label="Look for the big weekends"
+          detail="When a whole road or town runs sales together, you'll see it named at the top - tap it to see just those."
+        />
+        <Tip
+          icon={Signpost}
+          title="Done for today"
+          body="Sellers mark when they've wrapped up, so you don't drive out to closed tables."
+        />
+      </Section>
+
+      {/* ── Posting your sale ── */}
+      <Section title="Posting your sale">
+        <Step
+          n={1}
+          label="Post it once"
+          detail="Title, what's there, your days and hours, and drag the pin to the driveway. About a minute."
+        />
+        <Step
+          n={2}
+          label="Wrap up when you're done"
+          detail="Folding the tables early? One tap tells everyone - and if you're back tomorrow, the board says so."
+        />
+        <Step
+          n={3}
+          label="Rain? No problem"
+          detail="Postpone hides your sale while you move the days, then Show puts it back."
+        />
+        <Tip
+          icon={Signpost}
+          title="Running it again"
+          body="After your sale ends, one tap starts a new one with everything filled in - just pick the new days."
         />
       </Section>
 

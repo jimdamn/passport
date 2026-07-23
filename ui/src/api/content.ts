@@ -21,6 +21,7 @@ export interface ContentSummary {
   exchange: ContentSummarySource;
   field_notes: ContentSummarySource;
   fresh: ContentSummarySource;
+  sales: ContentSummarySource;
 }
 
 export async function getContentSummary(tenant: string) {

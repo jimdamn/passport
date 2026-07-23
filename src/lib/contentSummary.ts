@@ -212,7 +212,7 @@ export async function fetchSalesSummary(env: Env, tenantId: string, kkauthUid: n
     const recent: ContentSummaryItem[] = rows.slice(0, 5).map((s: any) => {
       const days = JSON.parse(s.days || '[]');
       if (!s.deleted_at && !s.admin_hidden && !s.is_hidden && isOnNow(days, s.wrapped_date)) onNow += 1;
-      const status = s.deleted_at ? 'removed' : (s.admin_hidden ? 'hidden_by_admin' : (s.is_hidden ? 'postponed' : (isEnded(days, s.wrapped_date) ? 'ended' : 'active')));
+      const status = s.deleted_at ? 'removed' : (s.admin_hidden ? 'hidden' : (s.is_hidden ? 'paused' : (isEnded(days, s.wrapped_date) ? 'ended' : 'live')));
       return {
         id: s.id,
         title: s.title,
