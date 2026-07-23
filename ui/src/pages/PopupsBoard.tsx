@@ -213,6 +213,9 @@ export default function PopupsBoard() {
                       {clockLabel(s.open)} - {clockLabel(s.close)}
                     </p>
 
+                    {s.address && (
+                      <p style={{ margin: '0 0 2px', fontSize: '0.82rem', color: 'var(--text)' }}>{s.address}</p>
+                    )}
                     {(s.location_hint || s.nearest_city) && (
                       <p style={{ margin: '0 0 6px', fontSize: '0.8rem', color: 'var(--muted)' }}>
                         {[s.location_hint, s.nearest_city].filter(Boolean).join(' · ')}

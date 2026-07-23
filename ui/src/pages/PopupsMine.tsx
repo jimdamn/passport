@@ -8,7 +8,8 @@ import {
   uploadPopupPhoto, categoryLabel, POPUP_CATEGORIES, REGION_CENTER, REGION_BOUNDS,
   type MyPopupVendor, type MyPopupStop, type PopupVendorInput, type PopupStopInput,
 } from '../api/popups';
-import { Truck, Pencil, Trash2, Camera, X, Plus, MapPin } from 'lucide-react';
+import { geocodeAddress } from '../api/geocode';
+import { Truck, Pencil, Trash2, Camera, X, Plus, MapPin, Info } from 'lucide-react';
 import { Spinner } from '../components/ui/Spinner';
 import { Alert } from '../components/ui/Alert';
 import { RegionMap } from 'kk-shared-ui';
@@ -25,6 +26,7 @@ import { RegionMap } from 'kk-shared-ui';
 const NAME_MAX = 60;
 const DESC_MAX = 280;
 const PHONE_MAX = 25;
+const ADDRESS_MAX = 120;
 const HINT_MAX = 120;
 const NOTE_MAX = 280;
 const MAX_DAYS_AHEAD = 60;
@@ -237,7 +239,7 @@ function VendorForm({ tenantId, editingVendor, onCancel, onSaved }: {
 
 interface StopSeed {
   date: string; open: string; close: string; lat: number; lon: number;
-  location_hint: string | null; note: string | null;
+  address: string | null; location_hint: string | null; note: string | null;
 }
 
 function StopForm({ tenantId, vendorId, editingStop, seed, defaultCenter, onCancel, onSaved }: {
@@ -258,15 +260,42 @@ function StopForm({ tenantId, vendorId, editingStop, seed, defaultCenter, onCanc
   const [date, setDate] = useState(editingStop?.date ?? '');
   const [open, setOpen] = useState(editingStop?.open ?? seed?.open ?? '09:00');
   const [close, setClose] = useState(editingStop?.close ?? seed?.close ?? '17:00');
+  const [address, setAddress] = useState(editingStop?.address ?? seed?.address ?? '');
   const [locationHint, setLocationHint] = useState(editingStop?.location_hint ?? seed?.location_hint ?? '');
   const [note, setNote] = useState(editingStop?.note ?? '');
   const [picked, setPicked] = useState(initialCenter);
+  const [mapCenter, setMapCenter] = useState(initialCenter);
   const [formError, setFormError] = useState('');
   const [working, setWorking] = useState(false);
 
+  const [locating, setLocating] = useState(false);
+  const [locatedMatch, setLocatedMatch] = useState('');
+  const [locateError, setLocateError] = useState('');
+
   const today = todayDateStr();
   const maxDate = addDaysToDateStr(today, MAX_DAYS_AHEAD);
-  const canSave = !!date && !!open && !!close && open < close;
+  const canSave = !!date && !!open && !!close && open < close && !!address.trim();
+
+  async function handleLocate() {
+    const addr = address.trim();
+    if (!addr) {
+      setLocateError('Type an address above first.');
+      return;
+    }
+    setLocating(true);
+    setLocateError('');
+    setLocatedMatch('');
+    try {
+      const res = await geocodeAddress(tenantId, addr);
+      setPicked({ lat: res.data.lat, lon: res.data.lon });
+      setMapCenter({ lat: res.data.lat, lon: res.data.lon });
+      setLocatedMatch(res.data.matched);
+    } catch (err: any) {
+      setLocateError(err.message || 'Include the full address - street, town, and state - so we can confirm it on the map.');
+    } finally {
+      setLocating(false);
+    }
+  }
 
   async function handleSubmit() {
     if (working || !canSave) return;
@@ -276,6 +305,7 @@ function StopForm({ tenantId, vendorId, editingStop, seed, defaultCenter, onCanc
       const body: PopupStopInput = {
         date, open, close,
         lat: picked.lat, lon: picked.lon,
+        address: address.trim(),
         location_hint: locationHint.trim() || null,
         note: note.trim() || null,
       };
@@ -317,6 +347,30 @@ function StopForm({ tenantId, vendorId, editingStop, seed, defaultCenter, onCanc
       </div>
 
       <div style={{ marginBottom: 12 }}>
+        <label style={labelStyle}>Address</label>
+        <input className="form-input" style={inputStyle} maxLength={ADDRESS_MAX} value={address}
+          placeholder="Street Address, City, State"
+          onChange={e => setAddress(e.target.value)} />
+        <div style={{ marginTop: 6 }}>
+          <button type="button" className="btn btn-secondary btn-sm" disabled={locating || !address.trim()}
+            style={{ minHeight: 32 }}
+            onClick={handleLocate}>
+            {locating ? 'Locating...' : 'Locate on map'}
+          </button>
+          {locatedMatch && <p style={{ margin: '4px 0 0', fontSize: '0.74rem', color: 'var(--muted)' }}>Found: {locatedMatch}</p>}
+          {locateError && (
+            <div style={{
+              marginTop: 6, padding: '8px 10px', display: 'flex', alignItems: 'flex-start', gap: 6,
+              background: 'rgba(200,134,10,0.08)', border: '1px solid rgba(200,134,10,0.25)', borderRadius: 'var(--r-sm)',
+            }}>
+              <Info size={13} style={{ color: 'var(--amber)', flexShrink: 0, marginTop: 1 }} />
+              <p style={{ margin: 0, fontSize: '0.74rem', color: 'var(--text)' }}>{locateError}</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div style={{ marginBottom: 12 }}>
         <label style={labelStyle}>Location hint (optional)</label>
         <input className="form-input" style={inputStyle} maxLength={HINT_MAX} value={locationHint ?? ''}
           placeholder="e.g. Legion parking lot, north side"
@@ -337,13 +391,13 @@ function StopForm({ tenantId, vendorId, editingStop, seed, defaultCenter, onCanc
       <div style={{ marginBottom: 16 }}>
         <label style={labelStyle}>Pin</label>
         <p style={{ margin: '0 0 8px', fontSize: '0.78rem', color: 'var(--muted)' }}>
-          Drag the pin to where you'll set up - the parking lot corner counts.
+          Type an address above and tap Locate to jump the pin there, then drag it the rest of the way to where you'll set up.
         </p>
         <RegionMap
           pickable
           picked={picked}
           onPick={(lat, lon) => setPicked({ lat, lon })}
-          center={initialCenter}
+          center={mapCenter}
           maxBounds={REGION_BOUNDS}
           zoom={12}
           height="320px"
@@ -509,9 +563,14 @@ function StopRow({ stop, tenantId, vendorVisible, onChanged, onError, onEdit, on
         <span style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text)' }}>{stop.date}</span>
         <span style={{ fontSize: '0.82rem', color: 'var(--muted)' }}>{clockLabel(stop.open)} - {clockLabel(stop.close)}</span>
       </div>
+      {stop.address && (
+        <p style={{ margin: '0 0 2px', fontSize: '0.8rem', color: 'var(--text)' }}>
+          <MapPin size={11} style={{ verticalAlign: '-1px', marginRight: 3, color: 'var(--amber)' }} />
+          {stop.address}
+        </p>
+      )}
       {(stop.location_hint || stop.nearest_city) && (
         <p style={{ margin: '0 0 4px', fontSize: '0.8rem', color: 'var(--muted)' }}>
-          <MapPin size={11} style={{ verticalAlign: '-1px', marginRight: 3 }} />
           {[stop.location_hint, stop.nearest_city].filter(Boolean).join(' · ')}
         </p>
       )}
@@ -731,7 +790,7 @@ function VendorCard({ vendor, tenantId, onRefetch, onEdit }: {
               onEdit={s => setStopForm({ editing: s, seed: null })}
               onRunAgain={s => setStopForm({
                 editing: null,
-                seed: { date: '', open: s.open, close: s.close, lat: s.lat, lon: s.lon, location_hint: s.location_hint, note: null },
+                seed: { date: '', open: s.open, close: s.close, lat: s.lat, lon: s.lon, address: s.address, location_hint: s.location_hint, note: null },
               })}
             />
           ))}

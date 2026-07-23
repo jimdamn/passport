@@ -47,6 +47,9 @@ function StopRow({ stop, isToday }: { stop: PopupVendorStop; isToday: boolean })
           {clockLabel(stop.open)} - {clockLabel(stop.close)}
         </span>
       </div>
+      {stop.address && (
+        <p style={{ margin: '2px 0 0', fontSize: '0.82rem', color: 'var(--text)' }}>{stop.address}</p>
+      )}
       {(stop.location_hint || stop.nearest_city) && (
         <p style={{ margin: '2px 0 0', fontSize: '0.8rem', color: 'var(--muted)' }}>
           {[stop.location_hint, stop.nearest_city].filter(Boolean).join(' · ')}

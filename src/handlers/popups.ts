@@ -45,11 +45,13 @@ const NAME_MAX = 60;
 const DESC_MAX = 280;
 const NOTE_MAX = 280;
 const HINT_MAX = 120;
+const ADDRESS_MAX = 120;
 const PHONE_MAX = 25;
 const MAX_DAYS_AHEAD = 60;            // fair vendors book far out
 
 const TIMES_INVALID_MSG = "Check the stop - it needs a date coming up, an opening time, and a closing time after it.";
 const PIN_BOUNDS_MSG = "Place the pin inside the Lakes Region - drag it to where you'll set up.";
+const ADDRESS_REQUIRED_MSG = "Add an address so the map can find your stop.";
 
 function requireAdmin(c: AppContext) {
   const user = c.get('user');
@@ -306,7 +308,7 @@ function parseVendorInput(body: any, existing?: any) {
 
 interface StopInput {
   date: string; open: string; close: string; lat: number; lon: number;
-  locationHint: string | null; note: string | null;
+  address: string; locationHint: string | null; note: string | null;
 }
 
 function parseStopInput(body: any, existing?: any): StopInput {
@@ -339,10 +341,15 @@ function parseStopInput(body: any, existing?: any): StopInput {
     throw new HTTPException(400, { message: PIN_BOUNDS_MSG });
   }
 
+  const address = body.address === undefined ? (existing?.address ?? null) : cleanText(body.address, ADDRESS_MAX);
+  if (!address) {
+    throw new HTTPException(400, { message: ADDRESS_REQUIRED_MSG });
+  }
+
   const locationHint = body.location_hint === undefined ? (existing?.location_hint ?? null) : cleanText(body.location_hint, HINT_MAX);
   const note = body.note === undefined ? (existing?.note ?? null) : cleanText(body.note, NOTE_MAX);
 
-  return { date, open, close, lat, lon, locationHint, note };
+  return { date, open, close, lat, lon, address, locationHint, note };
 }
 
 /** Cooldown + upcoming-stop cap, per vendor. Brake, not a wall - batch posting a
@@ -416,7 +423,7 @@ export async function listStops(c: AppContext) {
     return {
       id: r.id, date: r.date, open: r.open, close: r.close,
       lat: r.lat, lon: r.lon, checkin_lat: r.checkin_lat, checkin_lon: r.checkin_lon,
-      location_hint: r.location_hint, note: r.note,
+      address: r.address, location_hint: r.location_hint, note: r.note,
       nearest_city: r.nearest_city ?? null, nearest_state: r.nearest_state ?? null,
       checked_in_at: r.checked_in_at, sold_out: !!r.sold_out, cancelled_at: r.cancelled_at,
       created_at: r.created_at,
@@ -518,7 +525,7 @@ export async function getVendor(c: AppContext) {
     return {
       id: r.id, date: r.date, open: r.open, close: r.close,
       lat: r.lat, lon: r.lon, checkin_lat: r.checkin_lat, checkin_lon: r.checkin_lon,
-      location_hint: r.location_hint, note: r.note,
+      address: r.address, location_hint: r.location_hint, note: r.note,
       nearest_city: r.nearest_city ?? null, nearest_state: r.nearest_state ?? null,
       checked_in_at: r.checked_in_at, sold_out: !!r.sold_out, cancelled_at: r.cancelled_at,
       status, status_note: publicStopStatusNote(status, r),
@@ -576,7 +583,7 @@ export async function listMyPopups(c: AppContext) {
       return {
         id: r.id, date: r.date, open: r.open, close: r.close,
         lat: r.lat, lon: r.lon, checkin_lat: r.checkin_lat, checkin_lon: r.checkin_lon,
-        location_hint: r.location_hint, note: r.note,
+        address: r.address, location_hint: r.location_hint, note: r.note,
         nearest_city: r.nearest_city ?? null, nearest_state: r.nearest_state ?? null,
         checked_in_at: r.checked_in_at, sold_out: !!r.sold_out, cancelled_at: r.cancelled_at,
         admin_hidden_reason: r.admin_hidden ? r.admin_hidden_reason : null,
@@ -771,11 +778,11 @@ export async function createStop(c: AppContext) {
 
   await c.env.DB.prepare(`
     INSERT INTO popup_stops
-      (id, tenant_id, vendor_id, kkauth_uid, date, open, close, lat, lon, location_hint, note, nearest_city, nearest_state)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, tenant_id, vendor_id, kkauth_uid, date, open, close, lat, lon, address, location_hint, note, nearest_city, nearest_state)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
     id, tenant.id, vendorId, kkauthUid, input.date, input.open, input.close,
-    input.lat, input.lon, input.locationHint, input.note, nearest.city, nearest.state
+    input.lat, input.lon, input.address, input.locationHint, input.note, nearest.city, nearest.state
   ).run();
 
   const stop = await c.env.DB.prepare('SELECT * FROM popup_stops WHERE id = ?').bind(id).first<any>();
@@ -819,11 +826,11 @@ export async function updateStop(c: AppContext) {
 
   await c.env.DB.prepare(`
     UPDATE popup_stops
-    SET date = ?, open = ?, close = ?, lat = ?, lon = ?, location_hint = ?, note = ?,
+    SET date = ?, open = ?, close = ?, lat = ?, lon = ?, address = ?, location_hint = ?, note = ?,
         nearest_city = ?, nearest_state = ?, updated_at = unixepoch()
     WHERE id = ? AND tenant_id = ? AND kkauth_uid = ?
   `).bind(
-    input.date, input.open, input.close, input.lat, input.lon, input.locationHint, input.note,
+    input.date, input.open, input.close, input.lat, input.lon, input.address, input.locationHint, input.note,
     nearestCity, nearestState, id, tenant.id, kkauthUid
   ).run();
 

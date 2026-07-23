@@ -52,6 +52,7 @@ export interface PopupFeedStop {
   lon: number;
   checkin_lat: number | null;
   checkin_lon: number | null;
+  address: string | null;
   location_hint: string | null;
   note: string | null;
   nearest_city: string | null;
@@ -85,6 +86,7 @@ export interface PopupVendorStop {
   lon: number;
   checkin_lat: number | null;
   checkin_lon: number | null;
+  address: string | null;
   location_hint: string | null;
   note: string | null;
   nearest_city: string | null;
@@ -146,6 +148,7 @@ export interface MyPopupStop {
   lon: number;
   checkin_lat: number | null;
   checkin_lon: number | null;
+  address: string | null;
   location_hint: string | null;
   note: string | null;
   nearest_city: string | null;
@@ -189,6 +192,7 @@ export interface PopupStopInput {
   close: string;
   lat: number;
   lon: number;
+  address: string;
   location_hint?: string | null;
   note?: string | null;
 }
@@ -222,6 +226,7 @@ export interface PopupStopRecord {
   lon: number;
   checkin_lat: number | null;
   checkin_lon: number | null;
+  address: string | null;
   location_hint: string | null;
   note: string | null;
   nearest_city: string | null;
