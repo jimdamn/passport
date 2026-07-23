@@ -77,6 +77,13 @@ function PhotoField({ tenantId, value, onChange }: {
       const res = await uploadFreshPhoto(tenantId, file);
       onChange(res.data.url);
     } catch (err: any) {
+      // Upload failed - the real value (whatever was already saved, or null)
+      // never changed, so the preview must revert to match it exactly. Leaving
+      // the failed blob showing would make the UI lie about what Save will
+      // actually persist, and would let the remove button clear the wrong
+      // thing (see PhotoField's file-level comment).
+      URL.revokeObjectURL(objectUrl);
+      setLocalPreview(null);
       setWarning(err.message || "That photo didn't upload - you can still save without one.");
     } finally {
       setUploading(false);
