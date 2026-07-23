@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useTenant } from '../context/TenantContext';
-import { getFreshStand, categoryLabel, standLocation, type FreshStandDetail } from '../api/fresh';
+import { getFreshStand, categoryLabel, standLocation, REGION_BOUNDS, type FreshStandDetail } from '../api/fresh';
 import { Sprout, Phone, MapPin, Share2 } from 'lucide-react';
 import { Spinner } from '../components/ui/Spinner';
 import { Badge } from '../components/ui/Badge';
@@ -125,6 +125,7 @@ export default function FreshStand() {
             kind: 'green',
           }]}
           center={{ lat: stand.lat, lon: stand.lon }}
+          maxBounds={REGION_BOUNDS}
           zoom={13}
           height="240px"
         />

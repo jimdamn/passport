@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTenant } from '../context/TenantContext';
 import {
-  listFresh, listFreshStands, listFreshSeasons, categoryLabel, standLocation, FRESH_CATEGORIES, REGION_CENTER,
+  listFresh, listFreshStands, listFreshSeasons, categoryLabel, standLocation, FRESH_CATEGORIES, REGION_CENTER, REGION_BOUNDS,
   type FreshFeedPost, type FreshStandPin,
 } from '../api/fresh';
 import { Sprout, List, Map as MapIcon, Phone, MapPin, Navigation } from 'lucide-react';
@@ -281,7 +281,7 @@ export default function FreshToday() {
           <Spinner size="lg" />
         </div>
       ) : view === 'map' ? (
-        <RegionMap pins={pins} center={origin} height="60vh" />
+        <RegionMap pins={pins} center={origin} maxBounds={REGION_BOUNDS} height="60vh" />
       ) : visiblePosts.length === 0 && posts.length > 0 ? (
         // There's something posted today - it's just outside the selected
         // radius. A distinct message from the true empty state below, so it

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useTenant } from '../context/TenantContext';
-import { getSale, categoryLabel, saleLocation, type SaleFeedRow, type SaleDayEntry } from '../api/sales';
+import { getSale, categoryLabel, saleLocation, REGION_BOUNDS, type SaleFeedRow, type SaleDayEntry } from '../api/sales';
 import { Signpost, Phone, MapPin, Share2 } from 'lucide-react';
 import { Spinner } from '../components/ui/Spinner';
 import { Badge } from '../components/ui/Badge';
@@ -164,6 +164,7 @@ export default function SaleDetail() {
         <RegionMap
           pins={[{ id: sale.id, lat: sale.lat, lon: sale.lon, label: sale.title, kind: 'green' }]}
           center={{ lat: sale.lat, lon: sale.lon }}
+          maxBounds={REGION_BOUNDS}
           zoom={13}
           height="240px"
         />

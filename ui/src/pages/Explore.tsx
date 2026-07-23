@@ -11,7 +11,7 @@ import PlacesLens from './explore/PlacesLens';
 import {
   useLens, getAroundInterests, putAroundInterests, toggleInterest, fetchAroundBoardData,
   todayFeedForLens, pinsForLens, captionForLens,
-  FEED_SECTION_LABEL, FEED_EMPTY_COPY, REGION_CENTER,
+  FEED_SECTION_LABEL, FEED_EMPTY_COPY, REGION_CENTER, REGION_BOUNDS,
   type AroundInterests, type AroundBoardData, type TodayRow,
 } from '../api/around';
 
@@ -222,6 +222,7 @@ export default function Explore() {
           height="140px"
           pins={postcardPins}
           center={memberHome ?? REGION_CENTER}
+          maxBounds={REGION_BOUNDS}
           zoom={memberHome ? 10 : 9}
         />
         <span style={{

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTenant } from '../context/TenantContext';
 import {
-  listSales, listSalePins, listSaleEvents, categoryLabel, saleLocation, SALE_CATEGORIES, REGION_CENTER,
+  listSales, listSalePins, listSaleEvents, categoryLabel, saleLocation, SALE_CATEGORIES, REGION_CENTER, REGION_BOUNDS,
   type SaleFeedRow, type SalePin, type SaleEventChip,
 } from '../api/sales';
 import { Signpost, List, Map as MapIcon, Phone, MapPin } from 'lucide-react';
@@ -134,7 +134,7 @@ export default function SaleDay() {
           <Spinner size="lg" />
         </div>
       ) : view === 'map' ? (
-        <RegionMap pins={mapPins} center={REGION_CENTER} height="60vh" />
+        <RegionMap pins={mapPins} center={REGION_CENTER} maxBounds={REGION_BOUNDS} height="60vh" />
       ) : sales.length === 0 ? (
         <div className="card" style={{ padding: 24, textAlign: 'center', background: 'var(--white)' }}>
           <Signpost size={28} style={{ color: 'var(--amber)', marginBottom: 8 }} />
