@@ -33,6 +33,11 @@ import {
   adminListFreshStands, adminListFreshPosts, adminHideFreshStand, adminHideFreshPost,
   uploadFreshPhoto,
 } from '../../src/handlers/fresh';
+import {
+  listSales, listSalePins, listSaleEvents, getSale,
+  listMySales, createSale, updateSale, setSaleVisibility, wrapSale, deleteSale, uploadSalePhoto,
+  adminListSales, adminHideSale,
+} from '../../src/handlers/sales';
 import { getAroundInterests, putAroundInterests } from '../../src/handlers/around';
 
 import { listExchangeOffers } from '../../src/handlers/exchange';
@@ -178,6 +183,19 @@ tenantApp.get('/admin/fresh/posts', adminListFreshPosts);
 tenantApp.post('/admin/fresh/stands/:id/hide', adminHideFreshStand);
 tenantApp.post('/admin/fresh/posts/:id/hide', adminHideFreshPost);
 
+// Sale Day - yard/barn/moving/estate sales and auctions (any signed-in user,
+// no merchant verification). Public reads are registered on the root app
+// below, alongside listFresh/listHappenings.
+tenantApp.get('/sales/mine', listMySales);
+tenantApp.post('/sales/upload', uploadSalePhoto);
+tenantApp.post('/sales', createSale);
+tenantApp.put('/sales/:id', updateSale);
+tenantApp.post('/sales/:id/visibility', setSaleVisibility);
+tenantApp.post('/sales/:id/wrap', wrapSale);
+tenantApp.delete('/sales/:id', deleteSale);
+tenantApp.get('/admin/sales', adminListSales);
+tenantApp.post('/admin/sales/:id/hide', adminHideSale);
+
 // Around Town - private per-member interest picks that order the board's
 // lens row. No public read, no admin surface (nothing to moderate).
 tenantApp.get('/around/interests', getAroundInterests);
@@ -257,6 +275,13 @@ app.get('/api/t/:tenant/fresh', resolveTenant, listFresh);
 app.get('/api/t/:tenant/fresh/stands', resolveTenant, listFreshStands);
 app.get('/api/t/:tenant/fresh/stands/:id', resolveTenant, getFreshStand);
 app.get('/api/t/:tenant/fresh/seasons', resolveTenant, listFreshSeasons);
+app.get('/api/t/:tenant/sales', resolveTenant, listSales);
+// Registered BEFORE /sales/:id below - Hono matches overlapping patterns by
+// registration order, not static-over-dynamic priority, so :id would
+// otherwise swallow these as a sale id and 404.
+app.get('/api/t/:tenant/sales/pins', resolveTenant, listSalePins);
+app.get('/api/t/:tenant/sales/events', resolveTenant, listSaleEvents);
+app.get('/api/t/:tenant/sales/:id', resolveTenant, getSale);
 app.post('/api/t/:tenant/support', resolveTenant, submitSupport);
 app.post('/api/t/:tenant/passport/claims/register', resolveTenant, registerClaim);
 app.get('/api/t/:tenant/network-members', resolveTenant, getNetworkMembers);
