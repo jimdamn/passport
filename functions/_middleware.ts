@@ -158,6 +158,11 @@ async function isActiveEventScan(
 // Facebook groups). Stand ids are nanoid strings.
 const FRESH_STAND_PATTERN = /^\/fresh\/stand\/([\w-]+)$/;
 
+// ─── Sale Day detail-page crawler bypass + OG meta ───────────────────────────
+// Same growth rail as Fresh Today - a sale link shared into a county Facebook
+// group (the US-12 corridor weekend is the point). Sale ids are nanoid strings.
+const SALE_PATTERN = /^\/sales\/sale\/([\w-]+)$/;
+
 // Cloudflare computes this from more than just the client-sent User-Agent
 // (confirmed empirically 2026-07-20 by pointing Facebook's real Sharing
 // Debugger crawler at a live test endpoint and inspecting request.cf) - it is
@@ -213,6 +218,49 @@ async function resolveFreshStandMeta(
   } catch {
     return null;
   }
+}
+
+interface SaleMeta {
+  title: string;
+  body: string;
+  firstDate: string;
+  photoUrl: string | null;
+}
+
+// Never surface a hidden/removed/ended sale's real content to a crawler -
+// falls back to the generic tenant copy exactly like a deleted or
+// never-existed sale. Same public-visibility filter as the public API
+// (getSale in src/handlers/sales.ts): deleted_at IS NULL AND is_hidden = 0
+// AND admin_hidden = 0 AND last_date >= today.
+async function resolveSaleMeta(
+  id: string,
+  tenantSlug: string,
+  env: Env,
+): Promise<SaleMeta | null> {
+  try {
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date());
+    const sale = await env.DB.prepare(
+      'SELECT title, body, first_date, photo_url FROM sales WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL AND is_hidden = 0 AND admin_hidden = 0 AND last_date >= ?'
+    ).bind(id, tenantSlug, today).first<{ title: string; body: string; first_date: string; photo_url: string | null }>();
+    if (!sale) return null;
+
+    return {
+      title: sale.title,
+      body: sale.body,
+      firstDate: sale.first_date,
+      photoUrl: sale.photo_url || null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// 'YYYY-MM-DD' -> 'Sat Aug 8' for the share-card description's date line.
+// Anchored to UTC throughout (a pure calendar date, no wall-clock component)
+// so the weekday never shifts with the reader's or server's timezone.
+function friendlyDateLabel(dateStr: string): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' });
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -379,6 +427,7 @@ export const onRequest: PagesFunction<Env & { GEO_TOKEN_SECRET: string }> = asyn
   const isStaticAsset   = url.pathname.startsWith('/assets/');
   const isSiteAsset     = url.pathname.startsWith('/site-assets/');
   const freshStandMatch = url.pathname.match(FRESH_STAND_PATTERN);
+  const saleMatch       = url.pathname.match(SALE_PATTERN);
   let verifiedPayload: GeoTokenPayload | null = null;
   let mintEventBypass = false;
 
@@ -404,15 +453,15 @@ export const onRequest: PagesFunction<Env & { GEO_TOKEN_SECRET: string }> = asyn
       // who has no region-trust cookie; we mint a short-lived bypass below.
       if (await isActiveEventScan(url, context.env)) {
         mintEventBypass = true;
-      } else if (freshStandMatch && isPagePreviewCrawler(context.request)) {
+      } else if ((freshStandMatch || saleMatch) && isPagePreviewCrawler(context.request)) {
         // Narrow, read-only exception: a confirmed link-preview crawler
         // (Facebook, Slack, etc. - see isPagePreviewCrawler) fetching a
-        // specific Fresh Today stand's detail page gets the real page (and
-        // its OG tags below) instead of the gate, so a shared stand link
-        // previews correctly. This does not apply to any other route, does
-        // not grant write access, and does not change the gate for any real
-        // visitor - the geo-fence itself is unchanged. Mirrors field-notes'
-        // crawlerPreviewAllowed exception for /story/:id exactly.
+        // specific Fresh Today stand or Sale Day sale detail page gets the
+        // real page (and its OG tags below) instead of the gate, so a shared
+        // link previews correctly. This does not apply to any other route,
+        // does not grant write access, and does not change the gate for any
+        // real visitor - the geo-fence itself is unchanged. Mirrors
+        // field-notes' crawlerPreviewAllowed exception for /story/:id exactly.
       } else {
         return geoGatePage('Lake & Locals');
       }
@@ -484,6 +533,16 @@ export const onRequest: PagesFunction<Env & { GEO_TOKEN_SECRET: string }> = asyn
         ? truncate(stand.latestPostBody, 160)
         : "Local stand on Fresh Today - see what's out right now.";
       ogImage = stand.photoUrl;
+    }
+  }
+
+  if (saleMatch) {
+    const tenantSlug = REGIONAL_DOMAINS[hostname] ?? 'lake-locals';
+    const sale = await resolveSaleMeta(saleMatch[1], tenantSlug, context.env);
+    if (sale) {
+      ogTitle = `${truncate(sale.title, 70)} - Sale Day`;
+      ogDescription = truncate(`${friendlyDateLabel(sale.firstDate)} - ${sale.body}`, 160);
+      ogImage = sale.photoUrl;
     }
   }
 
