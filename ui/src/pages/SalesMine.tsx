@@ -7,6 +7,7 @@ import {
   categoryLabel, SALE_CATEGORIES, REGION_CENTER, REGION_BOUNDS,
   type MySale, type SaleInput, type SaleDayEntry,
 } from '../api/sales';
+import { geocodeAddress } from '../api/geocode';
 import { Signpost, Pencil, Trash2, Camera, X, Plus } from 'lucide-react';
 import { Spinner } from '../components/ui/Spinner';
 import { Alert } from '../components/ui/Alert';
@@ -177,49 +178,6 @@ function DaysEditor({ days, onChange }: { days: SaleDayEntry[]; onChange: (days:
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Address geocoding - the region's basemap carries no building footprints, so
-// dropping a pin with no starting reference means dragging it miles by eye.
-// Same US Census -> Nominatim fallback ApplyMerchant.tsx already uses for
-// merchant storefronts (Census handles rural county-road formats well;
-// Nominatim covers what Census misses). Assist only, never required - a
-// miss just leaves the pin wherever it already was, same as today.
-// ─────────────────────────────────────────────────────────────────────────────
-
-async function geocodeAddress(addr: string): Promise<{ lat: number; lon: number; matched: string } | null> {
-  try {
-    const censusRes = await fetch(
-      `https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?address=${encodeURIComponent(addr)}&benchmark=2020&format=json`
-    );
-    if (censusRes.ok) {
-      const censusData = await censusRes.json() as any;
-      const match = censusData?.result?.addressMatches?.[0];
-      if (match) {
-        return { lat: Number(match.coordinates.y), lon: Number(match.coordinates.x), matched: match.matchedAddress };
-      }
-    }
-  } catch {
-    // fall through to Nominatim
-  }
-
-  try {
-    const nomRes = await fetch(
-      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(addr)}&format=json&limit=1&countrycodes=us`,
-      { headers: { 'Accept-Language': 'en' } }
-    );
-    if (nomRes.ok) {
-      const nomData = await nomRes.json() as any[];
-      if (nomData && nomData.length > 0) {
-        return { lat: Number(nomData[0].lat), lon: Number(nomData[0].lon), matched: nomData[0].display_name };
-      }
-    }
-  } catch {
-    // both sources failed
-  }
-
-  return null;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Sale form - create + edit, one component.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -269,15 +227,16 @@ function SaleForm({ tenantId, editingSale, prefillSale, homeLocation, onCancel, 
     setLocating(true);
     setLocateError('');
     setLocatedMatch('');
-    const result = await geocodeAddress(addr);
-    setLocating(false);
-    if (!result || !Number.isFinite(result.lat) || !Number.isFinite(result.lon)) {
-      setLocateError("Couldn't find that address - try adding the town and state, or just drag the pin yourself.");
-      return;
+    try {
+      const res = await geocodeAddress(tenantId, addr);
+      setPicked({ lat: res.data.lat, lon: res.data.lon });
+      setMapCenter({ lat: res.data.lat, lon: res.data.lon });
+      setLocatedMatch(res.data.matched);
+    } catch (err: any) {
+      setLocateError(err.message || "Couldn't find that address - try adding the town and state, or just drag the pin yourself.");
+    } finally {
+      setLocating(false);
     }
-    setPicked({ lat: result.lat, lon: result.lon });
-    setMapCenter({ lat: result.lat, lon: result.lon });
-    setLocatedMatch(result.matched);
   }
 
   async function handleSubmit() {

@@ -38,6 +38,7 @@ import {
   listMySales, createSale, updateSale, setSaleVisibility, wrapSale, deleteSale, uploadSalePhoto,
   adminListSales, adminHideSale,
 } from '../../src/handlers/sales';
+import { geocodeAddress } from '../../src/handlers/geocode';
 import { getAroundInterests, putAroundInterests } from '../../src/handlers/around';
 
 import { listExchangeOffers } from '../../src/handlers/exchange';
@@ -198,6 +199,14 @@ tenantApp.post('/sales/:id/wrap', wrapSale);
 tenantApp.delete('/sales/:id', deleteSale);
 tenantApp.get('/admin/sales', adminListSales);
 tenantApp.post('/admin/sales/:id/hide', adminHideSale);
+
+// Address geocoding proxy - used by the Sale Day and Fresh Today pin-picker
+// forms. Server-side because the US Census Geocoder sends no CORS headers;
+// a direct browser fetch to it is silently blocked and always falls through
+// to the weaker Nominatim-only path. No tenant data touched - authenticated
+// purely to keep this from being an open geocoding proxy for anyone on the
+// internet.
+tenantApp.get('/geocode', geocodeAddress);
 
 // Around Town - private per-member interest picks that order the board's
 // lens row. No public read, no admin surface (nothing to moderate).
