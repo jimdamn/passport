@@ -177,6 +177,49 @@ function DaysEditor({ days, onChange }: { days: SaleDayEntry[]; onChange: (days:
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Address geocoding - the region's basemap carries no building footprints, so
+// dropping a pin with no starting reference means dragging it miles by eye.
+// Same US Census -> Nominatim fallback ApplyMerchant.tsx already uses for
+// merchant storefronts (Census handles rural county-road formats well;
+// Nominatim covers what Census misses). Assist only, never required - a
+// miss just leaves the pin wherever it already was, same as today.
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function geocodeAddress(addr: string): Promise<{ lat: number; lon: number; matched: string } | null> {
+  try {
+    const censusRes = await fetch(
+      `https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?address=${encodeURIComponent(addr)}&benchmark=2020&format=json`
+    );
+    if (censusRes.ok) {
+      const censusData = await censusRes.json() as any;
+      const match = censusData?.result?.addressMatches?.[0];
+      if (match) {
+        return { lat: Number(match.coordinates.y), lon: Number(match.coordinates.x), matched: match.matchedAddress };
+      }
+    }
+  } catch {
+    // fall through to Nominatim
+  }
+
+  try {
+    const nomRes = await fetch(
+      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(addr)}&format=json&limit=1&countrycodes=us`,
+      { headers: { 'Accept-Language': 'en' } }
+    );
+    if (nomRes.ok) {
+      const nomData = await nomRes.json() as any[];
+      if (nomData && nomData.length > 0) {
+        return { lat: Number(nomData[0].lat), lon: Number(nomData[0].lon), matched: nomData[0].display_name };
+      }
+    }
+  } catch {
+    // both sources failed
+  }
+
+  return null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Sale form - create + edit, one component.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -206,11 +249,36 @@ function SaleForm({ tenantId, editingSale, prefillSale, homeLocation, onCancel, 
   const [photoUrl, setPhotoUrl] = useState<string | null>(seed?.photo_url ?? null);
   const [days, setDays] = useState<SaleDayEntry[]>(editingSale ? editingSale.days : []);
   const [picked, setPicked] = useState(initialCenter);
+  const [mapCenter, setMapCenter] = useState(initialCenter);
   const [formError, setFormError] = useState('');
   const [working, setWorking] = useState(false);
 
+  const [locating, setLocating] = useState(false);
+  const [locatedMatch, setLocatedMatch] = useState('');
+  const [locateError, setLocateError] = useState('');
+
   const daysValid = days.length > 0 && days.every(d => d.date && d.open && d.close && d.open < d.close);
   const canSave = !!title.trim() && !!body.trim() && !!category && daysValid;
+
+  async function handleLocate() {
+    const addr = addressHint.trim();
+    if (!addr) {
+      setLocateError('Type an address hint above first.');
+      return;
+    }
+    setLocating(true);
+    setLocateError('');
+    setLocatedMatch('');
+    const result = await geocodeAddress(addr);
+    setLocating(false);
+    if (!result || !Number.isFinite(result.lat) || !Number.isFinite(result.lon)) {
+      setLocateError("Couldn't find that address - try adding the town and state, or just drag the pin yourself.");
+      return;
+    }
+    setPicked({ lat: result.lat, lon: result.lon });
+    setMapCenter({ lat: result.lat, lon: result.lon });
+    setLocatedMatch(result.matched);
+  }
 
   async function handleSubmit() {
     if (working || !canSave) return;
@@ -290,6 +358,15 @@ function SaleForm({ tenantId, editingSale, prefillSale, homeLocation, onCancel, 
           <input className="form-input" style={inputStyle} maxLength={ADDRESS_HINT_MAX} value={addressHint ?? ''}
             placeholder="e.g. Corner of Rd 400 N and Rd 700 W"
             onChange={e => setAddressHint(e.target.value)} />
+          <div style={{ marginTop: 6 }}>
+            <button type="button" className="btn btn-secondary btn-sm" disabled={locating || !addressHint.trim()}
+              style={{ minHeight: 32 }}
+              onClick={handleLocate}>
+              {locating ? 'Locating...' : 'Locate on map'}
+            </button>
+            {locatedMatch && <p style={{ margin: '4px 0 0', fontSize: '0.74rem', color: 'var(--muted)' }}>Found: {locatedMatch}</p>}
+            {locateError && <p style={{ margin: '4px 0 0', fontSize: '0.74rem', color: 'var(--error)' }}>{locateError}</p>}
+          </div>
         </div>
         <div>
           <label style={labelStyle}>Phone (optional)</label>
@@ -312,13 +389,13 @@ function SaleForm({ tenantId, editingSale, prefillSale, homeLocation, onCancel, 
       <div style={{ marginBottom: 16 }}>
         <label style={labelStyle}>Sale location</label>
         <p style={{ margin: '0 0 8px', fontSize: '0.78rem', color: 'var(--muted)' }}>
-          Drag the pin to the sale - the driveway is what people are looking for.
+          Type an address above and tap Locate to jump the pin there, then drag it the rest of the way to the driveway.
         </p>
         <RegionMap
           pickable
           picked={picked}
           onPick={(lat, lon) => setPicked({ lat, lon })}
-          center={initialCenter}
+          center={mapCenter}
           maxBounds={REGION_BOUNDS}
           zoom={12}
           height="320px"
