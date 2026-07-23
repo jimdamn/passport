@@ -33,6 +33,7 @@ import {
   adminListFreshStands, adminListFreshPosts, adminHideFreshStand, adminHideFreshPost,
   uploadFreshPhoto,
 } from '../../src/handlers/fresh';
+import { getAroundInterests, putAroundInterests } from '../../src/handlers/around';
 
 import { listExchangeOffers } from '../../src/handlers/exchange';
 import { getContentSummary } from '../../src/handlers/content';
@@ -176,6 +177,11 @@ tenantApp.get('/admin/fresh/stands', adminListFreshStands);
 tenantApp.get('/admin/fresh/posts', adminListFreshPosts);
 tenantApp.post('/admin/fresh/stands/:id/hide', adminHideFreshStand);
 tenantApp.post('/admin/fresh/posts/:id/hide', adminHideFreshPost);
+
+// Around Town - private per-member interest picks that order the board's
+// lens row. No public read, no admin surface (nothing to moderate).
+tenantApp.get('/around/interests', getAroundInterests);
+tenantApp.put('/around/interests', putAroundInterests);
 
 // Support messages ("Talk to us") - unified platform inbox (kk-business forwards in).
 tenantApp.get('/support/mine', getMySupport);
