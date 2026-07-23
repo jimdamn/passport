@@ -242,6 +242,80 @@ export async function fetchSalesSummary(env: Env, tenantId: string, kkauthUid: n
   }
 }
 
+/**
+ * Pop-Ups' content-summary source - a LOCAL D1 query (this board lives in
+ * this same app), same reasoning as fetchFreshSummary/fetchSalesSummary
+ * above. Counts vendors + upcoming stops (not deleted, not cancelled, date
+ * on or after today in board TZ) for the caller; recent = last 5
+ * vendors/stops by created_at; attention = admin-hidden (vendor or stop).
+ */
+export async function fetchPopupsSummary(env: Env, tenantId: string, kkauthUid: number | null): Promise<ContentSummarySource> {
+  if (!kkauthUid) return emptySource();
+  try {
+    const { results: vendorResults } = await env.DB.prepare(
+      'SELECT id, name, is_hidden, admin_hidden, admin_hidden_reason, deleted_at, created_at FROM popup_vendors WHERE tenant_id = ? AND kkauth_uid = ? ORDER BY created_at DESC'
+    ).bind(tenantId, kkauthUid).all<any>();
+    const vendorRows = vendorResults || [];
+    const liveVendorIds = vendorRows.filter((v: any) => !v.deleted_at).map((v: any) => v.id);
+
+    const BOARD_TZ = 'America/New_York';
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: BOARD_TZ }).format(new Date());
+
+    let upcomingStops = 0;
+    let stopRows: any[] = [];
+    if (liveVendorIds.length) {
+      const placeholders = liveVendorIds.map(() => '?').join(',');
+      const upcoming = await env.DB.prepare(
+        `SELECT COUNT(*) AS n FROM popup_stops WHERE vendor_id IN (${placeholders}) AND deleted_at IS NULL AND cancelled_at IS NULL AND admin_hidden = 0 AND date >= ?`
+      ).bind(...liveVendorIds, today).first<{ n: number }>();
+      upcomingStops = upcoming?.n ?? 0;
+
+      // Unsliced: attention_total below must count every admin-hidden stop,
+      // not just the ones that make the top-5 "recent" cut.
+      const { results } = await env.DB.prepare(
+        `SELECT id, vendor_id, date, admin_hidden, admin_hidden_reason, deleted_at, created_at FROM popup_stops WHERE vendor_id IN (${placeholders}) ORDER BY created_at DESC`
+      ).bind(...liveVendorIds).all<any>();
+      stopRows = results || [];
+    }
+
+    const vendorNameById = new Map(vendorRows.map((v: any) => [v.id, v.name]));
+
+    const recentVendorItems: ContentSummaryItem[] = vendorRows.map((v: any) => ({
+      id: v.id,
+      title: v.name,
+      status: v.deleted_at ? 'removed' : (v.admin_hidden ? 'hidden_by_admin' : (v.is_hidden ? 'off_road' : 'visible')),
+      hidden: !!v.is_hidden || !!v.admin_hidden,
+      attention: !!v.admin_hidden,
+      created_at: v.created_at,
+    }));
+    const recentStopItems: ContentSummaryItem[] = stopRows.map((s: any) => ({
+      id: s.id,
+      title: `${vendorNameById.get(s.vendor_id) ?? 'A stop'} - ${s.date}`,
+      status: s.deleted_at ? 'removed' : (s.admin_hidden ? 'hidden_by_admin' : 'scheduled'),
+      hidden: !s.deleted_at ? !!s.admin_hidden : true,
+      attention: !!s.admin_hidden,
+      created_at: s.created_at,
+    }));
+
+    const recent = [...recentVendorItems, ...recentStopItems]
+      .sort((a, b) => b.created_at - a.created_at)
+      .slice(0, 5);
+
+    const attentionTotal =
+      vendorRows.filter((v: any) => v.admin_hidden).length +
+      stopRows.filter((s: any) => s.admin_hidden).length;
+
+    return {
+      ok: true,
+      counts: { vendors: liveVendorIds.length, upcoming_stops: upcomingStops },
+      recent,
+      attention_total: attentionTotal,
+    };
+  } catch {
+    return emptySource();
+  }
+}
+
 export async function fetchFieldNotesSummary(env: Env, tenantId: string, authHeader: string | null): Promise<ContentSummarySource> {
   if (!authHeader) return emptySource();
   const baseUrl = env.FIELD_NOTES_BASE_URL || DEFAULT_FIELD_NOTES_BASE_URL;

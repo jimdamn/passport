@@ -1,6 +1,6 @@
 import type { Context } from 'hono';
 import type { Env } from '../types';
-import { fetchExchangeSummary, fetchFieldNotesSummary, fetchFreshSummary, fetchSalesSummary } from '../lib/contentSummary';
+import { fetchExchangeSummary, fetchFieldNotesSummary, fetchFreshSummary, fetchSalesSummary, fetchPopupsSummary } from '../lib/contentSummary';
 
 type AppContext = Context<{ Bindings: Env }>;
 
@@ -14,12 +14,13 @@ export async function getContentSummary(c: AppContext) {
   const authHeader = c.req.header('Authorization') ?? null;
   const user = c.get('user');
 
-  const [exchange, field_notes, fresh, sales] = await Promise.all([
+  const [exchange, field_notes, fresh, sales, popups] = await Promise.all([
     fetchExchangeSummary(c.env, tenant.id, authHeader),
     fetchFieldNotesSummary(c.env, tenant.id, authHeader),
     fetchFreshSummary(c.env, tenant.id, user ? Number(user.sub) : null),
     fetchSalesSummary(c.env, tenant.id, user ? Number(user.sub) : null),
+    fetchPopupsSummary(c.env, tenant.id, user ? Number(user.sub) : null),
   ]);
 
-  return c.json({ data: { exchange, field_notes, fresh, sales } });
+  return c.json({ data: { exchange, field_notes, fresh, sales, popups } });
 }

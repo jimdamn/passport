@@ -38,6 +38,12 @@ import {
   listMySales, createSale, updateSale, setSaleVisibility, wrapSale, deleteSale, uploadSalePhoto,
   adminListSales, adminHideSale,
 } from '../../src/handlers/sales';
+import {
+  listStops, listStopPins, getVendor,
+  listMyPopups, createVendor, updateVendor, setVendorVisibility, deleteVendor,
+  createStop, updateStop, checkInStop, setStopSoldOut, cancelStop, deleteStop, uploadPopupPhoto,
+  adminListVendors, adminListStops, adminHideVendor, adminHideStop,
+} from '../../src/handlers/popups';
 import { geocodeAddress } from '../../src/handlers/geocode';
 import { getAroundInterests, putAroundInterests } from '../../src/handlers/around';
 
@@ -200,6 +206,28 @@ tenantApp.delete('/sales/:id', deleteSale);
 tenantApp.get('/admin/sales', adminListSales);
 tenantApp.post('/admin/sales/:id/hide', adminHideSale);
 
+// Pop-Ups - mobile/pop-up business board (any signed-in user, no merchant
+// verification). Public reads are registered on the root app below, alongside
+// listFresh/listSales. No "mine" registration-order gotcha here - the public
+// detail route is nested at /popups/vendors/:id, not /popups/:id, so it never
+// shares a path prefix with /popups/mine (ARCHITECTURE.md §7 "mine" note).
+tenantApp.post('/popups/upload', uploadPopupPhoto);
+tenantApp.get('/popups/mine', listMyPopups);
+tenantApp.post('/popups/vendors', createVendor);
+tenantApp.put('/popups/vendors/:id', updateVendor);
+tenantApp.post('/popups/vendors/:id/visibility', setVendorVisibility);
+tenantApp.delete('/popups/vendors/:id', deleteVendor);
+tenantApp.post('/popups/vendors/:id/stops', createStop);
+tenantApp.put('/popups/stops/:id', updateStop);
+tenantApp.post('/popups/stops/:id/checkin', checkInStop);
+tenantApp.post('/popups/stops/:id/sold-out', setStopSoldOut);
+tenantApp.post('/popups/stops/:id/cancel', cancelStop);
+tenantApp.delete('/popups/stops/:id', deleteStop);
+tenantApp.get('/admin/popups/vendors', adminListVendors);
+tenantApp.get('/admin/popups/stops', adminListStops);
+tenantApp.post('/admin/popups/vendors/:id/hide', adminHideVendor);
+tenantApp.post('/admin/popups/stops/:id/hide', adminHideStop);
+
 // Address geocoding proxy - used by the Sale Day and Fresh Today pin-picker
 // forms. Server-side because the US Census Geocoder sends no CORS headers;
 // a direct browser fetch to it is silently blocked and always falls through
@@ -301,6 +329,14 @@ app.get('/api/t/:tenant/sales/events', resolveTenant, listSaleEvents);
 // tenantApp.
 app.get('/api/t/:tenant/sales/mine', resolveTenant, requireAuth, listMySales);
 app.get('/api/t/:tenant/sales/:id', resolveTenant, getSale);
+// Pop-Ups - the feed, then the map pins (both static segments), then the
+// vendor detail route. Registered in this order per the plan's own §1.2 note
+// even though no actual collision exists here (/popups/pins is a distinct
+// prefix from /popups/vendors/:id) - keeps the file's ordering convention
+// consistent with every other board module.
+app.get('/api/t/:tenant/popups', resolveTenant, listStops);
+app.get('/api/t/:tenant/popups/pins', resolveTenant, listStopPins);
+app.get('/api/t/:tenant/popups/vendors/:id', resolveTenant, getVendor);
 app.post('/api/t/:tenant/support', resolveTenant, submitSupport);
 app.post('/api/t/:tenant/passport/claims/register', resolveTenant, registerClaim);
 app.get('/api/t/:tenant/network-members', resolveTenant, getNetworkMembers);
