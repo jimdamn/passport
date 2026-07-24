@@ -9,6 +9,7 @@ import { listPopups, listPopupPins, type PopupFeedStop, type PopupStopPin } from
 import { listMeals, listMealPins, type MealFeedRow, type MealPin } from './meals';
 import { getDeals, type Deal } from './deals';
 import { getShifts, type Shift } from './lendahand';
+import { listPetPosts, listPetPins, speciesLabel, type PetFeedRow, type PetPin } from './pets';
 
 // Around Town — the town board. Shared constants, the client-side feed/pin
 // merge, and the useLens() hook consumed by both Explore.tsx (the board) and
@@ -27,12 +28,13 @@ export const LENSES = [
   { slug: 'deals', label: 'Deals' },
   { slug: 'hands', label: 'Volunteer' },     // lend a hand
   { slug: 'places', label: 'Places' },       // the member directory
+  { slug: 'pets', label: 'Pets' },           // home safe
 ] as const;
 export const LENS_SLUGS = LENSES.map(l => l.slug);
 
 // Picker chip labels differ from the lens-row chip labels above (warmer,
 // plan §7.2). 'everything' is never a pickable interest - it is the absence
-// of picks, so the picker only ever offers the other six.
+// of picks, so the picker only ever offers the other seven.
 export const PICKER_LABELS: Record<string, string> = {
   events: 'Events',
   fresh: 'Fresh food',
@@ -42,6 +44,7 @@ export const PICKER_LABELS: Record<string, string> = {
   deals: 'Deals',
   hands: 'Volunteer shifts',
   places: 'The businesses',
+  pets: 'Lost & found pets',
 };
 export const PICKABLE_SLUGS = LENSES.filter(l => l.slug !== 'everything').map(l => l.slug);
 
@@ -146,7 +149,7 @@ export function useLens(picks: string[]): UseLensResult {
 
 export interface TodayRow {
   key: string;
-  source: 'events' | 'fresh' | 'sales' | 'popups' | 'meals' | 'deals' | 'hands';
+  source: 'events' | 'fresh' | 'sales' | 'popups' | 'meals' | 'deals' | 'hands' | 'pets';
   title: string;              // real sentence, plan §7.4 composition rules
   meta: string;                // module name + place/time line
   href: string;                 // module deep link
@@ -176,6 +179,7 @@ export interface AroundBoardData {
   salePins: SalePin[];              // every publicly visible sale (Sales lens pins)
   popupStopPins: PopupStopPin[];    // every publicly visible stop (Pop-Ups lens pins, both layers)
   mealPins: MealPin[];              // every publicly visible meal (Meals lens pins)
+  petPins: PetPin[];                // every publicly visible pet post (Pets lens pins)
   amberMemberUids: Set<string>;     // member_uid (stringified) with news today - the postcard/map overlay
 }
 
@@ -203,7 +207,7 @@ export async function fetchAroundBoardData(tenantId: string): Promise<AroundBoar
   // Every source fails independently to an empty result - one module having a
   // bad day must never blank the whole board (this mirrors how each module's
   // own page already handles its own fetch failures).
-  const [membersRes, happeningsRes, freshRes, freshStandsRes, salesRes, salePinsRes, popupsRes, popupPinsRes, mealsRes, mealPinsRes, dealsRes, shifts] = await Promise.all([
+  const [membersRes, happeningsRes, freshRes, freshStandsRes, salesRes, salePinsRes, popupsRes, popupPinsRes, mealsRes, mealPinsRes, dealsRes, shifts, petsRes, petPinsRes] = await Promise.all([
     api.get<ApiResponse<NetworkMember[]>>(`/t/${tenantId}/network-members`).catch(() => ({ data: [] as NetworkMember[] })),
     getHappenings(tenantId).catch(() => ({ data: [] as Happening[] })),
     listFresh(tenantId).catch(() => ({ data: [] as FreshFeedPost[] })),
@@ -216,6 +220,8 @@ export async function fetchAroundBoardData(tenantId: string): Promise<AroundBoar
     listMealPins(tenantId).catch(() => ({ data: [] as MealPin[] })),
     getDeals(tenantId).catch(() => ({ data: [] as Deal[] })),
     getShifts().catch(() => [] as Shift[]),
+    listPetPosts(tenantId).catch(() => ({ data: [] as PetFeedRow[] })),
+    listPetPins(tenantId).catch(() => ({ data: [] as PetPin[] })),
   ]);
 
   const members = membersRes.data || [];
@@ -229,6 +235,8 @@ export async function fetchAroundBoardData(tenantId: string): Promise<AroundBoar
   const meals = mealsRes.data || [];
   const mealPins = mealPinsRes.data || [];
   const deals = dealsRes.data || [];
+  const petPosts = petsRes.data || [];
+  const petPins = petPinsRes.data || [];
 
   // member_uid (stringified) -> coords, for matching a deal to its merchant's
   // pin (deals carry a real merchant_id) and for the Places "news today"
@@ -350,6 +358,22 @@ export async function fetchAroundBoardData(tenantId: string): Promise<AroundBoar
     });
   }
 
+  for (const p of petPosts) {
+    const locationBit = p.location_hint ?? p.nearest_city;
+    const title = p.pet_name || speciesLabel(p.species);
+    rows.push({
+      key: `pets:${p.id}`,
+      source: 'pets',
+      title: `${p.type === 'lost' ? 'Lost' : 'Found'}: ${title}`,
+      meta: `Home Safe${locationBit ? ' · near ' + locationBit : ''}`,
+      href: `/pets/post/${p.id}`,
+      pinLabel: title,
+      lat: p.lat,
+      lon: p.lon,
+      created_at: p.created_at,
+    });
+  }
+
   // "Today or the next 7 days, with open spots." Shifts carry no free
   // recency signal of their own (a hand-picked event_date, not a posted-at
   // timestamp) - approximate "today" with a day-boundary a little generous
@@ -376,7 +400,7 @@ export async function fetchAroundBoardData(tenantId: string): Promise<AroundBoar
 
   rows.sort((a, b) => b.created_at - a.created_at);
 
-  return { todayRows: rows, members, freshStandPins: freshStands, salePins, popupStopPins, mealPins, amberMemberUids };
+  return { todayRows: rows, members, freshStandPins: freshStands, salePins, popupStopPins, mealPins, petPins, amberMemberUids };
 }
 
 export function todayFeedForLens(lens: string, allRows: TodayRow[]): { rows: TodayRow[]; hasMore: boolean } {
@@ -399,6 +423,7 @@ export const FEED_SECTION_LABEL: Record<string, string> = {
   meals: 'COMMUNITY TABLE',
   deals: 'DEALS RIGHT NOW',
   hands: 'SHIFTS THIS WEEK',
+  pets: 'HOME SAFE',
 };
 
 export const FEED_EMPTY_COPY: Record<string, { title: string; body: string }> = {
@@ -410,6 +435,7 @@ export const FEED_EMPTY_COPY: Record<string, { title: string; body: string }> = 
   meals: { title: 'Nothing on the table right now.', body: 'Fire halls, churches and clubs post their meals here - breakfasts, fish fries, benefits.' },
   deals: { title: 'No deals running right now.', body: '' },
   hands: { title: 'No open shifts this week.', body: '' },
+  pets: { title: 'No lost or found pets posted right now.', body: '' },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -476,6 +502,21 @@ function mealPinsMapped(pins: MealPin[]): RegionPin[] {
   }));
 }
 
+// AMBER = lost (a missing pet - caution), GREEN = found or home safe - Home
+// Safe's own traffic-light convention (HOME-SAFE-BUILD-PLAN.md §1), already
+// computed server-side into pin.kind.
+function petPinsMapped(pins: PetPin[]): RegionPin[] {
+  return pins.map(p => ({
+    id: `pets:${p.id}`,
+    lat: p.lat,
+    lon: p.lon,
+    label: p.pet_name || speciesLabel(p.species),
+    sublabel: p.status === 'home_safe' ? 'Home safe' : (p.type === 'lost' ? `Lost near ${p.location_hint || p.nearest_city || 'the area'}` : `Found near ${p.location_hint || p.nearest_city || 'the area'}`),
+    href: `/pets/post/${p.id}`,
+    kind: p.kind,
+  }));
+}
+
 export function pinsForLens(lens: string, data: AroundBoardData, opts?: { cap?: number }): RegionPin[] {
   let pins: RegionPin[] = [];
 
@@ -492,7 +533,7 @@ export function pinsForLens(lens: string, data: AroundBoardData, opts?: { cap?: 
         kind: data.amberMemberUids.has(String(m.member_uid)) ? 'amber' : 'green',
       }));
     pins = lens === 'everything'
-      ? [...memberPins, ...freshStandPinsMapped(data.freshStandPins), ...salePinsMapped(data.salePins), ...popupPinsMapped(data.popupStopPins), ...mealPinsMapped(data.mealPins)]
+      ? [...memberPins, ...freshStandPinsMapped(data.freshStandPins), ...salePinsMapped(data.salePins), ...popupPinsMapped(data.popupStopPins), ...mealPinsMapped(data.mealPins), ...petPinsMapped(data.petPins)]
       : memberPins;
   } else if (lens === 'events') {
     pins = data.todayRows
@@ -509,6 +550,8 @@ export function pinsForLens(lens: string, data: AroundBoardData, opts?: { cap?: 
     pins = popupPinsMapped(data.popupStopPins);
   } else if (lens === 'meals') {
     pins = mealPinsMapped(data.mealPins);
+  } else if (lens === 'pets') {
+    pins = petPinsMapped(data.petPins);
   } else if (lens === 'deals') {
     pins = data.todayRows
       .filter(r => r.source === 'deals' && r.lat != null && r.lon != null)
@@ -544,6 +587,9 @@ export function captionForLens(lens: string, data: AroundBoardData): string {
   }
   if (lens === 'meals') {
     return `${data.mealPins.length} meals on the board`;
+  }
+  if (lens === 'pets') {
+    return `${data.petPins.length} lost & found posts`;
   }
   if (lens === 'deals') {
     const n = data.todayRows.filter(r => r.source === 'deals' && r.lat != null && r.lon != null).length;

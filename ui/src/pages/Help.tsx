@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useTenant } from '../context/TenantContext';
 import { useAuth } from '../context/AuthContext';
-import { MapPin, Trees, Trophy, Gem, Sparkles, Sprout, Pause, Compass, Signpost, Truck, UtensilsCrossed, type LucideIcon } from 'lucide-react';
+import { MapPin, Trees, Trophy, Gem, Sparkles, Sprout, Pause, Compass, Signpost, Truck, UtensilsCrossed, PawPrint, type LucideIcon } from 'lucide-react';
 import { Alert } from '../components/ui/Alert';
 import {
   SUPPORT_CATEGORIES, SUPPORT_STATUS_LABEL, submitSupport, getMySupport,
@@ -581,6 +581,54 @@ export default function Help() {
           icon={UtensilsCrossed}
           title="Between seasons?"
           body="Go quiet from My Kitchen - it keeps everything and hides you until you're cooking again."
+        />
+      </Section>
+
+      {/* ── If you've lost a pet ── */}
+      <Section title="If you've lost a pet">
+        <Step
+          n={1}
+          label="Post it fast"
+          detail="A photo, where they were last seen, your number. Minutes matter more than perfect words."
+        />
+        <Step
+          n={2}
+          label="Share the link"
+          detail="Post it to any Facebook group, text it to anyone - the card carries the photo and a map. Every share is another set of eyes."
+        />
+        <Step
+          n={3}
+          label="When the phone rings"
+          detail="Ask the caller to describe something you left out of the post - a marking, the collar. Good neighbors won't mind, and it keeps the rare bad actor away."
+        />
+        <Tip
+          icon={PawPrint}
+          title="Don't give up at 30 days"
+          body="The board asks once a month if you're still looking - one tap keeps the post out there. Pets come home after months. Mark it Home safe when they do - the whole region gets to see the good ending."
+        />
+      </Section>
+
+      {/* ── If you've found one ── */}
+      <Section title="If you've found one">
+        <Step
+          n={1}
+          label="Keep them safe, then post"
+          detail="A found post takes a minute and it's often faster than the pet's family thinking to look. No collar? Post anyway."
+        />
+        <Step
+          n={2}
+          label="Get them scanned - it's free"
+          detail="Any vet or shelter will scan for a microchip at no charge, no appointment usually needed. It's the fastest way home there is."
+        />
+        <Step
+          n={3}
+          label="Hand them back smart"
+          detail="Ask for a photo of the pet or a vet record before handing them over. Real owners have plenty of both."
+        />
+        <Tip
+          icon={PawPrint}
+          title="Check the amber pins"
+          body="Somebody may already be looking for exactly who's in your garage - check the Lost posts before you post, and call the number if it matches."
         />
       </Section>
 

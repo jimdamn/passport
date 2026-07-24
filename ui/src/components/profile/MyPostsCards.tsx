@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Newspaper, ArrowLeftRight, Sprout, Signpost, Truck, UtensilsCrossed } from 'lucide-react';
+import { Newspaper, ArrowLeftRight, Sprout, Signpost, Truck, UtensilsCrossed, PawPrint } from 'lucide-react';
 import { getContentSummary } from '../../api/content';
 import type { ContentSummaryItem, ContentSummarySource } from '../../api/content';
 import { Badge } from '../ui/Badge';
@@ -61,6 +61,16 @@ const MEALS_STATUS_LABEL: Record<string, string> = {
   hidden_by_admin: 'Hidden by admin',
   removed: 'Removed',
   scheduled: 'Scheduled',
+};
+
+// fetchPetsSummary's `recent` list carries Home Safe's own status vocabulary
+// directly (looking/archived/home_safe/hidden_by_admin) rather than a
+// generic live/paused/hidden set - see src/lib/contentSummary.ts.
+const PETS_STATUS_LABEL: Record<string, string> = {
+  looking: 'Looking',
+  archived: 'Archived',
+  home_safe: 'Home safe',
+  hidden_by_admin: 'Hidden by admin',
 };
 
 function RecentRow({ item, statusLabels }: { item: ContentSummaryItem; statusLabels: Record<string, string> }) {
@@ -273,6 +283,23 @@ export default function MyPostsCards({ tenantId }: { tenantId: string }) {
         emptyCtaLabel="Set up our kitchen"
         emptyCtaUrl="/meals/mine"
         statusLabels={MEALS_STATUS_LABEL}
+      />
+
+      <SummaryCard
+        icon={PawPrint}
+        title="Home Safe"
+        source={summary?.pets}
+        countLine={s => {
+          const looking = s.counts.looking ?? 0;
+          const homeSafe = s.counts.home_safe ?? 0;
+          return `${looking} looking · ${homeSafe} home safe`;
+        }}
+        manageLabel="Manage my posts"
+        manageUrl="/pets/mine"
+        emptyLine="No posts yet - here if you ever need it."
+        emptyCtaLabel="Report a pet"
+        emptyCtaUrl="/pets/mine"
+        statusLabels={PETS_STATUS_LABEL}
       />
     </>
   );

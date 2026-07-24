@@ -34,6 +34,7 @@ export const LENSES = [
   { slug: 'deals', label: 'Deals' },
   { slug: 'hands', label: 'Volunteer' },     // lend a hand
   { slug: 'places', label: 'Places' },       // the member directory
+  { slug: 'pets', label: 'Pets' },           // home safe
 ] as const;
 export const LENS_SLUGS = LENSES.map((l) => l.slug);
 

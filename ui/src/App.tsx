@@ -34,6 +34,9 @@ import FreshMine from './pages/FreshMine';
 import SaleDay from './pages/SaleDay';
 import SaleDetail from './pages/SaleDetail';
 import SalesMine from './pages/SalesMine';
+import PetsBoard from './pages/PetsBoard';
+import PetPost from './pages/PetPost';
+import PetsMine from './pages/PetsMine';
 import PopupsBoard from './pages/PopupsBoard';
 import PopupVendor from './pages/PopupVendor';
 import PopupsMine from './pages/PopupsMine';
@@ -48,6 +51,7 @@ import AdminVolunteer from './pages/profile/AdminVolunteer';
 import AdminHappenings from './pages/profile/AdminHappenings';
 import AdminFresh from './pages/profile/AdminFresh';
 import AdminSales from './pages/profile/AdminSales';
+import AdminPets from './pages/profile/AdminPets';
 import AdminPopups from './pages/profile/AdminPopups';
 import AdminMeals from './pages/profile/AdminMeals';
 import KwestHome from './pages/kwest/KwestHome';
@@ -87,6 +91,9 @@ export default function App() {
         <Route path="/sales" element={<SaleDay />} />
         <Route path="/sales/sale/:id" element={<SaleDetail />} />
         <Route path="/sales/mine" element={<SalesMine />} />
+        <Route path="/pets" element={<PetsBoard />} />
+        <Route path="/pets/post/:id" element={<PetPost />} />
+        <Route path="/pets/mine" element={<PetsMine />} />
         <Route path="/popups" element={<PopupsBoard />} />
         <Route path="/popups/vendor/:id" element={<PopupVendor />} />
         <Route path="/popups/mine" element={<PopupsMine />} />
@@ -115,6 +122,7 @@ export default function App() {
         <Route path="/profile/admin/happenings" element={<AdminHappenings />} />
         <Route path="/profile/admin/fresh" element={<AdminFresh />} />
         <Route path="/profile/admin/sales" element={<AdminSales />} />
+        <Route path="/profile/admin/pets" element={<AdminPets />} />
         <Route path="/profile/admin/popups" element={<AdminPopups />} />
         <Route path="/profile/admin/meals" element={<AdminMeals />} />
         <Route path="/profile/admin/kwest" element={<AdminKwest />} />

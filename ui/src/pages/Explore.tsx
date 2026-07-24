@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTenant } from '../context/TenantContext';
 import { RegionMap } from 'kk-shared-ui';
-import { CalendarDays, ChevronRight, HeartHandshake, Maximize2, Signpost, Sprout, Tag, Truck, UtensilsCrossed, type LucideIcon } from 'lucide-react';
+import { CalendarDays, ChevronRight, HeartHandshake, Maximize2, PawPrint, Signpost, Sprout, Tag, Truck, UtensilsCrossed, type LucideIcon } from 'lucide-react';
 import { Spinner } from '../components/ui/Spinner';
 import LensRow from '../components/explore/LensRow';
 import InterestChips from '../components/explore/InterestChips';
@@ -42,6 +42,7 @@ const SOURCE_ICON: Record<TodayRow['source'], LucideIcon> = {
   meals: UtensilsCrossed,
   deals: Tag,
   hands: HeartHandshake,
+  pets: PawPrint,
 };
 
 function FeedRowCard({ row }: { row: TodayRow }) {
@@ -288,6 +289,8 @@ export default function Explore() {
         <Link to="/deals" style={{ color: 'var(--amber)' }}>Deals</Link>
         <span style={{ color: 'var(--muted)' }}>·</span>
         <Link to="/lend-a-hand" style={{ color: 'var(--amber)' }}>Lend a Hand</Link>
+        <span style={{ color: 'var(--muted)' }}>·</span>
+        <Link to="/pets" style={{ color: 'var(--amber)' }}>Home Safe</Link>
       </div>
 
       {/* Places lens - the member directory, intact */}
