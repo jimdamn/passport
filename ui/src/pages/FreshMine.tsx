@@ -12,7 +12,7 @@ import { geocodeAddress } from '../api/geocode';
 import { Sprout, Pencil, Trash2, Plus, Pause, Play, Camera, X, MapPin, Info } from 'lucide-react';
 import { Spinner } from '../components/ui/Spinner';
 import { Alert } from '../components/ui/Alert';
-import { RegionMap } from 'kk-shared-ui';
+import { RegionMap, resizeForUpload } from 'kk-shared-ui';
 
 // Fresh Today's authenticated "My Stand" page. Follows FreshToday/FreshStand's
 // visual conventions exactly (serif header + amber Sprout icon, white .card
@@ -67,7 +67,7 @@ function PhotoField({ tenantId, value, onChange }: {
     setWarning('');
 
     if (file.size > MAX_PHOTO_BYTES) {
-      setWarning('That photo is quite large (over 8 MB) - try a smaller one.');
+      setWarning('That photo is over 8 MB - most phone photos are smaller. Try another one.');
       return;
     }
 
@@ -75,7 +75,8 @@ function PhotoField({ tenantId, value, onChange }: {
     setLocalPreview(objectUrl);
     setUploading(true);
     try {
-      const res = await uploadFreshPhoto(tenantId, file);
+      const optimized = await resizeForUpload(file);
+      const res = await uploadFreshPhoto(tenantId, optimized);
       onChange(res.data.url);
     } catch (err: any) {
       // Upload failed - the real value (whatever was already saved, or null)

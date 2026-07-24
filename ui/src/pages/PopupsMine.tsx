@@ -12,7 +12,7 @@ import { geocodeAddress } from '../api/geocode';
 import { Truck, Pencil, Trash2, Camera, X, Plus, MapPin, Info } from 'lucide-react';
 import { Spinner } from '../components/ui/Spinner';
 import { Alert } from '../components/ui/Alert';
-import { RegionMap } from 'kk-shared-ui';
+import { RegionMap, resizeForUpload } from 'kk-shared-ui';
 
 // Pop-Ups' authenticated "My Schedule" page (POP-UPS-BUILD-PLAN.md §5.4).
 // Follows FreshMine.tsx's nested stand->posts conventions (serif header +
@@ -71,7 +71,7 @@ function PhotoField({ tenantId, value, onChange }: {
     setWarning('');
 
     if (file.size > MAX_PHOTO_BYTES) {
-      setWarning('That photo is quite large (over 8 MB) - try a smaller one.');
+      setWarning('That photo is over 8 MB - most phone photos are smaller. Try another one.');
       return;
     }
 
@@ -79,7 +79,8 @@ function PhotoField({ tenantId, value, onChange }: {
     setLocalPreview(objectUrl);
     setUploading(true);
     try {
-      const res = await uploadPopupPhoto(tenantId, file);
+      const optimized = await resizeForUpload(file);
+      const res = await uploadPopupPhoto(tenantId, optimized);
       onChange(res.data.url);
     } catch (err: any) {
       URL.revokeObjectURL(objectUrl);

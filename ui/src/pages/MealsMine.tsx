@@ -12,7 +12,7 @@ import { geocodeAddress } from '../api/geocode';
 import { UtensilsCrossed, Pencil, Trash2, Camera, X, Plus, Info, ChevronDown, ChevronUp } from 'lucide-react';
 import { Spinner } from '../components/ui/Spinner';
 import { Alert } from '../components/ui/Alert';
-import { RegionMap } from 'kk-shared-ui';
+import { RegionMap, resizeForUpload } from 'kk-shared-ui';
 
 // Community Table's authenticated "My Kitchen" page (plan §5.5). Follows
 // PopupsMine.tsx's vendor->stop nested conventions (serif header + amber
@@ -72,7 +72,7 @@ function PhotoField({ tenantId, value, onChange }: {
     setWarning('');
 
     if (file.size > MAX_PHOTO_BYTES) {
-      setWarning('That photo is quite large (over 8 MB) - try a smaller one.');
+      setWarning('That photo is over 8 MB - most phone photos are smaller. Try another one.');
       return;
     }
 
@@ -80,7 +80,8 @@ function PhotoField({ tenantId, value, onChange }: {
     setLocalPreview(objectUrl);
     setUploading(true);
     try {
-      const res = await uploadMealPhoto(tenantId, file);
+      const optimized = await resizeForUpload(file);
+      const res = await uploadMealPhoto(tenantId, optimized);
       onChange(res.data.url);
     } catch (err: any) {
       URL.revokeObjectURL(objectUrl);

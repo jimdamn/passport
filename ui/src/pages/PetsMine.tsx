@@ -10,7 +10,7 @@ import {
 import { PawPrint, Pencil, Trash2, Camera, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { Spinner } from '../components/ui/Spinner';
 import { Alert } from '../components/ui/Alert';
-import { RegionMap } from 'kk-shared-ui';
+import { RegionMap, resizeForUpload } from 'kk-shared-ui';
 
 // Home Safe's authenticated "My Posts" page. Follows SalesMine.tsx's visual
 // conventions exactly (serif header + amber icon, white .card rows with a
@@ -66,7 +66,7 @@ function PhotoField({ tenantId, value, onChange }: {
     setWarning('');
 
     if (file.size > MAX_PHOTO_BYTES) {
-      setWarning('That photo is quite large (over 8 MB) - try a smaller one.');
+      setWarning('That photo is over 8 MB - most phone photos are smaller. Try another one.');
       return;
     }
 
@@ -74,7 +74,8 @@ function PhotoField({ tenantId, value, onChange }: {
     setLocalPreview(objectUrl);
     setUploading(true);
     try {
-      const res = await uploadPetPhoto(tenantId, file);
+      const optimized = await resizeForUpload(file);
+      const res = await uploadPetPhoto(tenantId, optimized);
       onChange(res.data.url);
     } catch (err: any) {
       URL.revokeObjectURL(objectUrl);
