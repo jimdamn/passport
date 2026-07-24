@@ -316,6 +316,81 @@ export async function fetchPopupsSummary(env: Env, tenantId: string, kkauthUid: 
   }
 }
 
+/**
+ * Community Table's content-summary source - a LOCAL D1 query (this board
+ * lives in this same app), same reasoning as fetchFreshSummary/
+ * fetchSalesSummary/fetchPopupsSummary above. Counts kitchens + upcoming
+ * meals (not deleted, not cancelled, date on or after today in board TZ) for
+ * the caller; recent = last 5 kitchens/meals by created_at; attention =
+ * admin-hidden (kitchen or meal).
+ */
+export async function fetchMealsSummary(env: Env, tenantId: string, kkauthUid: number | null): Promise<ContentSummarySource> {
+  if (!kkauthUid) return emptySource();
+  try {
+    const { results: kitchenResults } = await env.DB.prepare(
+      'SELECT id, name, is_hidden, admin_hidden, admin_hidden_reason, deleted_at, created_at FROM meal_kitchens WHERE tenant_id = ? AND kkauth_uid = ? ORDER BY created_at DESC'
+    ).bind(tenantId, kkauthUid).all<any>();
+    const kitchenRows = kitchenResults || [];
+    const liveKitchenIds = kitchenRows.filter((k: any) => !k.deleted_at).map((k: any) => k.id);
+
+    const BOARD_TZ = 'America/New_York';
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: BOARD_TZ }).format(new Date());
+
+    let upcomingMeals = 0;
+    let mealRows: any[] = [];
+    if (liveKitchenIds.length) {
+      const placeholders = liveKitchenIds.map(() => '?').join(',');
+      const upcoming = await env.DB.prepare(
+        `SELECT COUNT(*) AS n FROM meals WHERE kitchen_id IN (${placeholders}) AND deleted_at IS NULL AND cancelled_at IS NULL AND admin_hidden = 0 AND date >= ?`
+      ).bind(...liveKitchenIds, today).first<{ n: number }>();
+      upcomingMeals = upcoming?.n ?? 0;
+
+      // Unsliced: attention_total below must count every admin-hidden meal,
+      // not just the ones that make the top-5 "recent" cut.
+      const { results } = await env.DB.prepare(
+        `SELECT id, kitchen_id, title, date, admin_hidden, admin_hidden_reason, deleted_at, created_at FROM meals WHERE kitchen_id IN (${placeholders}) ORDER BY created_at DESC`
+      ).bind(...liveKitchenIds).all<any>();
+      mealRows = results || [];
+    }
+
+    const kitchenNameById = new Map(kitchenRows.map((k: any) => [k.id, k.name]));
+
+    const recentKitchenItems: ContentSummaryItem[] = kitchenRows.map((k: any) => ({
+      id: k.id,
+      title: k.name,
+      status: k.deleted_at ? 'removed' : (k.admin_hidden ? 'hidden_by_admin' : (k.is_hidden ? 'quiet' : 'visible')),
+      hidden: !!k.is_hidden || !!k.admin_hidden,
+      attention: !!k.admin_hidden,
+      created_at: k.created_at,
+    }));
+    const recentMealItems: ContentSummaryItem[] = mealRows.map((m: any) => ({
+      id: m.id,
+      title: `${kitchenNameById.get(m.kitchen_id) ?? 'A meal'} - ${m.title}`,
+      status: m.deleted_at ? 'removed' : (m.admin_hidden ? 'hidden_by_admin' : 'scheduled'),
+      hidden: !m.deleted_at ? !!m.admin_hidden : true,
+      attention: !!m.admin_hidden,
+      created_at: m.created_at,
+    }));
+
+    const recent = [...recentKitchenItems, ...recentMealItems]
+      .sort((a, b) => b.created_at - a.created_at)
+      .slice(0, 5);
+
+    const attentionTotal =
+      kitchenRows.filter((k: any) => k.admin_hidden).length +
+      mealRows.filter((m: any) => m.admin_hidden).length;
+
+    return {
+      ok: true,
+      counts: { kitchens: liveKitchenIds.length, upcoming_meals: upcomingMeals },
+      recent,
+      attention_total: attentionTotal,
+    };
+  } catch {
+    return emptySource();
+  }
+}
+
 export async function fetchFieldNotesSummary(env: Env, tenantId: string, authHeader: string | null): Promise<ContentSummarySource> {
   if (!authHeader) return emptySource();
   const baseUrl = env.FIELD_NOTES_BASE_URL || DEFAULT_FIELD_NOTES_BASE_URL;

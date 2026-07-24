@@ -44,6 +44,12 @@ import {
   createStop, updateStop, checkInStop, setStopSoldOut, cancelStop, deleteStop, uploadPopupPhoto,
   adminListVendors, adminListStops, adminHideVendor, adminHideStop,
 } from '../../src/handlers/popups';
+import {
+  listMeals, listMealPins, getKitchen, getMeal,
+  listMyMeals, createKitchen, updateKitchen, setKitchenVisibility, deleteKitchen,
+  createMeal, updateMeal, setMealSoldOut, cancelMeal, deleteMeal, uploadMealPhoto,
+  adminListKitchens, adminListMeals, adminHideKitchen, adminHideMeal,
+} from '../../src/handlers/meals';
 import { geocodeAddress } from '../../src/handlers/geocode';
 import { getAroundInterests, putAroundInterests } from '../../src/handlers/around';
 
@@ -228,6 +234,29 @@ tenantApp.get('/admin/popups/stops', adminListStops);
 tenantApp.post('/admin/popups/vendors/:id/hide', adminHideVendor);
 tenantApp.post('/admin/popups/stops/:id/hide', adminHideStop);
 
+// Community Table - community-meal board (fire halls, churches, Legion/VFW;
+// any signed-in user, no organization verification). Public reads are
+// registered on the root app below, alongside listFresh/listSales/listStops.
+// No "mine" registration-order gotcha here - the public detail routes are
+// nested at /meals/kitchens/:id and /meals/meals/:id, not directly
+// /meals/:id, so neither shares a path prefix with /meals/mine
+// (ARCHITECTURE.md §7 "mine" note; same reasoning as Pop-Ups' /popups/mine).
+tenantApp.get('/meals/mine', listMyMeals);
+tenantApp.post('/meals/upload', uploadMealPhoto);
+tenantApp.post('/meals/kitchens', createKitchen);
+tenantApp.put('/meals/kitchens/:id', updateKitchen);
+tenantApp.post('/meals/kitchens/:id/visibility', setKitchenVisibility);
+tenantApp.delete('/meals/kitchens/:id', deleteKitchen);
+tenantApp.post('/meals/kitchens/:id/meals', createMeal);
+tenantApp.put('/meals/meals/:id', updateMeal);
+tenantApp.post('/meals/meals/:id/sold-out', setMealSoldOut);
+tenantApp.post('/meals/meals/:id/cancel', cancelMeal);
+tenantApp.delete('/meals/meals/:id', deleteMeal);
+tenantApp.get('/admin/meals/kitchens', adminListKitchens);
+tenantApp.get('/admin/meals/meals', adminListMeals);
+tenantApp.post('/admin/meals/kitchens/:id/hide', adminHideKitchen);
+tenantApp.post('/admin/meals/meals/:id/hide', adminHideMeal);
+
 // Address geocoding proxy - used by the Sale Day and Fresh Today pin-picker
 // forms. Server-side because the US Census Geocoder sends no CORS headers;
 // a direct browser fetch to it is silently blocked and always falls through
@@ -338,6 +367,16 @@ app.get('/api/t/:tenant/popups', resolveTenant, listStops);
 app.get('/api/t/:tenant/popups/pins', resolveTenant, listStopPins);
 app.get('/api/t/:tenant/popups/events', resolveTenant, listPopupEvents);
 app.get('/api/t/:tenant/popups/vendors/:id', resolveTenant, getVendor);
+// Community Table - the feed, then the map pins (static segment), then the
+// kitchen detail route, then the meal detail route. Registered in this order
+// per the plan's own note even where no actual collision exists (each
+// segment after /meals/ is a distinct literal - "pins" vs "kitchens" vs
+// "meals" - same as Pop-Ups' equivalent note) - keeps the file's ordering
+// convention consistent with every other board module.
+app.get('/api/t/:tenant/meals', resolveTenant, listMeals);
+app.get('/api/t/:tenant/meals/pins', resolveTenant, listMealPins);
+app.get('/api/t/:tenant/meals/kitchens/:id', resolveTenant, getKitchen);
+app.get('/api/t/:tenant/meals/meals/:id', resolveTenant, getMeal);
 app.post('/api/t/:tenant/support', resolveTenant, submitSupport);
 app.post('/api/t/:tenant/passport/claims/register', resolveTenant, registerClaim);
 app.get('/api/t/:tenant/network-members', resolveTenant, getNetworkMembers);
