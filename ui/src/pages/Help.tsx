@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useTenant } from '../context/TenantContext';
 import { useAuth } from '../context/AuthContext';
-import { MapPin, Trees, Trophy, Gem, Sparkles, Sprout, Pause, Compass, Signpost, Truck, type LucideIcon } from 'lucide-react';
+import { MapPin, Trees, Trophy, Gem, Sparkles, Sprout, Pause, Compass, Signpost, Truck, UtensilsCrossed, type LucideIcon } from 'lucide-react';
 import { Alert } from '../components/ui/Alert';
 import {
   SUPPORT_CATEGORIES, SUPPORT_STATUS_LABEL, submitSupport, getMySupport,
@@ -533,6 +533,54 @@ export default function Help() {
           icon={Truck}
           title="On the day"
           body="Tap Sold out when you're cleaned out - fans respect it. Next week, Stop here again fills everything in."
+        />
+      </Section>
+
+      {/* ── Finding a meal near you ── */}
+      <Section title="Finding a meal near you">
+        <Step
+          n={1}
+          label="Open Community Table"
+          detail="From Around Town, tap Meals - fish fries, breakfasts, suppers and benefits, all posted by the folks cooking them."
+        />
+        <Step
+          n={2}
+          label="Check who it helps"
+          detail="Most meals raise money for something - new gear, a scholarship, a neighbor going through a hard time. It says so right on the card."
+        />
+        <Step
+          n={3}
+          label="Show up hungry"
+          detail="Bring cash - most doors run a cash box. Sold out means the town showed up before you."
+        />
+        <Tip
+          icon={UtensilsCrossed}
+          title="Cancelled happens"
+          body="Weather and life get in the way. A cancelled meal stays on the board with a Cancelled mark so nobody drives out for nothing."
+        />
+      </Section>
+
+      {/* ── Putting your kitchen on the board ── */}
+      <Section title="Putting your kitchen on the board">
+        <Step
+          n={1}
+          label="Set up your kitchen once"
+          detail="Name it, drag the pin to the hall, done. Works for fire departments, churches, clubs and anyone cooking for a cause."
+        />
+        <Step
+          n={2}
+          label="Post each meal"
+          detail="Date, serving times, what's cooking and what it costs, and who it helps. Post the whole season at once if you like."
+        />
+        <Step
+          n={3}
+          label="On the day"
+          detail="Tap Sold out when the food's gone - folks respect it. Next time, Serve it again fills everything in."
+        />
+        <Tip
+          icon={UtensilsCrossed}
+          title="Between seasons?"
+          body="Go quiet from My Kitchen - it keeps everything and hides you until you're cooking again."
         />
       </Section>
 

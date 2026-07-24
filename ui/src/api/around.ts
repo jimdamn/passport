@@ -6,6 +6,7 @@ import { getHappenings, type Happening } from './happenings';
 import { listFresh, listFreshStands, standLocation, type FreshFeedPost, type FreshStandPin } from './fresh';
 import { listSales, listSalePins, type SaleFeedRow, type SalePin } from './sales';
 import { listPopups, listPopupPins, type PopupFeedStop, type PopupStopPin } from './popups';
+import { listMeals, listMealPins, type MealFeedRow, type MealPin } from './meals';
 import { getDeals, type Deal } from './deals';
 import { getShifts, type Shift } from './lendahand';
 
@@ -22,6 +23,7 @@ export const LENSES = [
   { slug: 'fresh', label: 'Fresh' },         // fresh today
   { slug: 'sales', label: 'Sales' },         // sale day
   { slug: 'popups', label: 'Pop-Ups' },      // mobile/pop-up vendors
+  { slug: 'meals', label: 'Meals' },         // community table
   { slug: 'deals', label: 'Deals' },
   { slug: 'hands', label: 'Volunteer' },     // lend a hand
   { slug: 'places', label: 'Places' },       // the member directory
@@ -36,6 +38,7 @@ export const PICKER_LABELS: Record<string, string> = {
   fresh: 'Fresh food',
   sales: 'Sale Day',
   popups: 'Pop-Ups',
+  meals: 'Community meals',
   deals: 'Deals',
   hands: 'Volunteer shifts',
   places: 'The businesses',
@@ -143,7 +146,7 @@ export function useLens(picks: string[]): UseLensResult {
 
 export interface TodayRow {
   key: string;
-  source: 'events' | 'fresh' | 'sales' | 'popups' | 'deals' | 'hands';
+  source: 'events' | 'fresh' | 'sales' | 'popups' | 'meals' | 'deals' | 'hands';
   title: string;              // real sentence, plan §7.4 composition rules
   meta: string;                // module name + place/time line
   href: string;                 // module deep link
@@ -172,6 +175,7 @@ export interface AroundBoardData {
   freshStandPins: FreshStandPin[];  // every publicly visible stand (Fresh lens pins)
   salePins: SalePin[];              // every publicly visible sale (Sales lens pins)
   popupStopPins: PopupStopPin[];    // every publicly visible stop (Pop-Ups lens pins, both layers)
+  mealPins: MealPin[];              // every publicly visible meal (Meals lens pins)
   amberMemberUids: Set<string>;     // member_uid (stringified) with news today - the postcard/map overlay
 }
 
@@ -199,7 +203,7 @@ export async function fetchAroundBoardData(tenantId: string): Promise<AroundBoar
   // Every source fails independently to an empty result - one module having a
   // bad day must never blank the whole board (this mirrors how each module's
   // own page already handles its own fetch failures).
-  const [membersRes, happeningsRes, freshRes, freshStandsRes, salesRes, salePinsRes, popupsRes, popupPinsRes, dealsRes, shifts] = await Promise.all([
+  const [membersRes, happeningsRes, freshRes, freshStandsRes, salesRes, salePinsRes, popupsRes, popupPinsRes, mealsRes, mealPinsRes, dealsRes, shifts] = await Promise.all([
     api.get<ApiResponse<NetworkMember[]>>(`/t/${tenantId}/network-members`).catch(() => ({ data: [] as NetworkMember[] })),
     getHappenings(tenantId).catch(() => ({ data: [] as Happening[] })),
     listFresh(tenantId).catch(() => ({ data: [] as FreshFeedPost[] })),
@@ -208,6 +212,8 @@ export async function fetchAroundBoardData(tenantId: string): Promise<AroundBoar
     listSalePins(tenantId).catch(() => ({ data: [] as SalePin[] })),
     listPopups(tenantId).catch(() => ({ data: [] as PopupFeedStop[] })),
     listPopupPins(tenantId).catch(() => ({ data: [] as PopupStopPin[] })),
+    listMeals(tenantId).catch(() => ({ data: [] as MealFeedRow[] })),
+    listMealPins(tenantId).catch(() => ({ data: [] as MealPin[] })),
     getDeals(tenantId).catch(() => ({ data: [] as Deal[] })),
     getShifts().catch(() => [] as Shift[]),
   ]);
@@ -220,6 +226,8 @@ export async function fetchAroundBoardData(tenantId: string): Promise<AroundBoar
   const salePins = salePinsRes.data || [];
   const popupStops = popupsRes.data || [];
   const popupStopPins = popupPinsRes.data || [];
+  const meals = mealsRes.data || [];
+  const mealPins = mealPinsRes.data || [];
   const deals = dealsRes.data || [];
 
   // member_uid (stringified) -> coords, for matching a deal to its merchant's
@@ -310,6 +318,21 @@ export async function fetchAroundBoardData(tenantId: string): Promise<AroundBoar
     });
   }
 
+  for (const m of meals) {
+    const locationBit = m.kitchen.nearest_city ?? m.venue_hint;
+    rows.push({
+      key: `meals:${m.id}`,
+      source: 'meals',
+      title: `${m.title} - ${m.kitchen.name}`,
+      meta: `Community Table${locationBit ? ' · ' + locationBit : ''}`,
+      href: `/meals/meal/${m.id}`,
+      pinLabel: m.title,
+      lat: m.lat,
+      lon: m.lon,
+      created_at: m.created_at,
+    });
+  }
+
   for (const d of deals) {
     const coords = memberCoords.get(String(d.merchant_id)) ?? null;
     rows.push({
@@ -353,7 +376,7 @@ export async function fetchAroundBoardData(tenantId: string): Promise<AroundBoar
 
   rows.sort((a, b) => b.created_at - a.created_at);
 
-  return { todayRows: rows, members, freshStandPins: freshStands, salePins, popupStopPins, amberMemberUids };
+  return { todayRows: rows, members, freshStandPins: freshStands, salePins, popupStopPins, mealPins, amberMemberUids };
 }
 
 export function todayFeedForLens(lens: string, allRows: TodayRow[]): { rows: TodayRow[]; hasMore: boolean } {
@@ -373,6 +396,7 @@ export const FEED_SECTION_LABEL: Record<string, string> = {
   fresh: 'FRESH TODAY',
   sales: 'SALE DAY',
   popups: 'POP-UPS',
+  meals: 'COMMUNITY TABLE',
   deals: 'DEALS RIGHT NOW',
   hands: 'SHIFTS THIS WEEK',
 };
@@ -383,6 +407,7 @@ export const FEED_EMPTY_COPY: Record<string, { title: string; body: string }> = 
   fresh: { title: 'No stands have posted yet today.', body: 'Fresh posts usually land in the morning.' },
   sales: { title: 'No sales on the board right now.', body: 'Sales show up here as neighbors post them - weekends fill up fast.' },
   popups: { title: "Nobody's popped up yet.", body: 'Food trucks, pop-up shops and market vendors post their stops here - today\'s and the week ahead.' },
+  meals: { title: 'Nothing on the table right now.', body: 'Fire halls, churches and clubs post their meals here - breakfasts, fish fries, benefits.' },
   deals: { title: 'No deals running right now.', body: '' },
   hands: { title: 'No open shifts this week.', body: '' },
 };
@@ -439,6 +464,18 @@ function popupPinsMapped(pins: PopupStopPin[]): RegionPin[] {
   }));
 }
 
+function mealPinsMapped(pins: MealPin[]): RegionPin[] {
+  return pins.map(p => ({
+    id: `meals:${p.id}`,
+    lat: p.lat,
+    lon: p.lon,
+    label: p.title,
+    sublabel: p.status_note,
+    href: `/meals/meal/${p.id}`,
+    kind: (p.status === 'serving_now' || p.status === 'today') ? 'amber' : 'green',
+  }));
+}
+
 export function pinsForLens(lens: string, data: AroundBoardData, opts?: { cap?: number }): RegionPin[] {
   let pins: RegionPin[] = [];
 
@@ -455,7 +492,7 @@ export function pinsForLens(lens: string, data: AroundBoardData, opts?: { cap?: 
         kind: data.amberMemberUids.has(String(m.member_uid)) ? 'amber' : 'green',
       }));
     pins = lens === 'everything'
-      ? [...memberPins, ...freshStandPinsMapped(data.freshStandPins), ...salePinsMapped(data.salePins), ...popupPinsMapped(data.popupStopPins)]
+      ? [...memberPins, ...freshStandPinsMapped(data.freshStandPins), ...salePinsMapped(data.salePins), ...popupPinsMapped(data.popupStopPins), ...mealPinsMapped(data.mealPins)]
       : memberPins;
   } else if (lens === 'events') {
     pins = data.todayRows
@@ -470,6 +507,8 @@ export function pinsForLens(lens: string, data: AroundBoardData, opts?: { cap?: 
     pins = salePinsMapped(data.salePins);
   } else if (lens === 'popups') {
     pins = popupPinsMapped(data.popupStopPins);
+  } else if (lens === 'meals') {
+    pins = mealPinsMapped(data.mealPins);
   } else if (lens === 'deals') {
     pins = data.todayRows
       .filter(r => r.source === 'deals' && r.lat != null && r.lon != null)
@@ -502,6 +541,9 @@ export function captionForLens(lens: string, data: AroundBoardData): string {
   if (lens === 'popups') {
     const confirmed = data.popupStopPins.filter(p => p.layer === 'confirmed').length;
     return confirmed > 0 ? `${data.popupStopPins.length} stops · ${confirmed} checked in` : `${data.popupStopPins.length} stops`;
+  }
+  if (lens === 'meals') {
+    return `${data.mealPins.length} meals on the board`;
   }
   if (lens === 'deals') {
     const n = data.todayRows.filter(r => r.source === 'deals' && r.lat != null && r.lon != null).length;

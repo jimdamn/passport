@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTenant } from '../context/TenantContext';
 import { RegionMap } from 'kk-shared-ui';
-import { CalendarDays, ChevronRight, HeartHandshake, Maximize2, Signpost, Sprout, Tag, Truck, type LucideIcon } from 'lucide-react';
+import { CalendarDays, ChevronRight, HeartHandshake, Maximize2, Signpost, Sprout, Tag, Truck, UtensilsCrossed, type LucideIcon } from 'lucide-react';
 import { Spinner } from '../components/ui/Spinner';
 import LensRow from '../components/explore/LensRow';
 import InterestChips from '../components/explore/InterestChips';
@@ -39,6 +39,7 @@ const SOURCE_ICON: Record<TodayRow['source'], LucideIcon> = {
   fresh: Sprout,
   sales: Signpost,
   popups: Truck,
+  meals: UtensilsCrossed,
   deals: Tag,
   hands: HeartHandshake,
 };
@@ -281,6 +282,8 @@ export default function Explore() {
         <Link to="/sales" style={{ color: 'var(--amber)' }}>Sale Day</Link>
         <span style={{ color: 'var(--muted)' }}>·</span>
         <Link to="/popups" style={{ color: 'var(--amber)' }}>Pop-Ups</Link>
+        <span style={{ color: 'var(--muted)' }}>·</span>
+        <Link to="/meals" style={{ color: 'var(--amber)' }}>Community Table</Link>
         <span style={{ color: 'var(--muted)' }}>·</span>
         <Link to="/deals" style={{ color: 'var(--amber)' }}>Deals</Link>
         <span style={{ color: 'var(--muted)' }}>·</span>

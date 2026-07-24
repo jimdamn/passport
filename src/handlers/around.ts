@@ -30,6 +30,7 @@ export const LENSES = [
   { slug: 'fresh', label: 'Fresh' },         // fresh today
   { slug: 'sales', label: 'Sales' },         // sale day
   { slug: 'popups', label: 'Pop-Ups' },      // mobile/pop-up vendors
+  { slug: 'meals', label: 'Meals' },         // community table
   { slug: 'deals', label: 'Deals' },
   { slug: 'hands', label: 'Volunteer' },     // lend a hand
   { slug: 'places', label: 'Places' },       // the member directory

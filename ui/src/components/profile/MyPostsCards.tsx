@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Newspaper, ArrowLeftRight, Sprout, Signpost, Truck } from 'lucide-react';
+import { Newspaper, ArrowLeftRight, Sprout, Signpost, Truck, UtensilsCrossed } from 'lucide-react';
 import { getContentSummary } from '../../api/content';
 import type { ContentSummaryItem, ContentSummarySource } from '../../api/content';
 import { Badge } from '../ui/Badge';
@@ -48,6 +48,16 @@ const SALES_STATUS_LABEL: Record<string, string> = {
 const POPUPS_STATUS_LABEL: Record<string, string> = {
   visible: 'Live',
   off_road: 'Off the road',
+  hidden_by_admin: 'Hidden by admin',
+  removed: 'Removed',
+  scheduled: 'Scheduled',
+};
+
+// fetchMealsSummary's `recent` list mixes kitchen rows and meal rows (see
+// src/lib/contentSummary.ts), same reasoning as FRESH_STATUS_LABEL above.
+const MEALS_STATUS_LABEL: Record<string, string> = {
+  visible: 'Live',
+  quiet: 'Quiet',
   hidden_by_admin: 'Hidden by admin',
   removed: 'Removed',
   scheduled: 'Scheduled',
@@ -246,6 +256,23 @@ export default function MyPostsCards({ tenantId }: { tenantId: string }) {
         emptyCtaLabel="Set up my vendor page"
         emptyCtaUrl="/popups/mine"
         statusLabels={POPUPS_STATUS_LABEL}
+      />
+
+      <SummaryCard
+        icon={UtensilsCrossed}
+        title="My Kitchen"
+        source={summary?.meals}
+        countLine={s => {
+          const kitchens = s.counts.kitchens ?? 0;
+          const upcoming = s.counts.upcoming_meals ?? 0;
+          return `${kitchens} ${kitchens === 1 ? 'kitchen' : 'kitchens'} · ${upcoming} meal${upcoming === 1 ? '' : 's'} coming up`;
+        }}
+        manageLabel="Manage my kitchen"
+        manageUrl="/meals/mine"
+        emptyLine="No kitchen yet - takes about a minute to set up."
+        emptyCtaLabel="Set up our kitchen"
+        emptyCtaUrl="/meals/mine"
+        statusLabels={MEALS_STATUS_LABEL}
       />
     </>
   );
