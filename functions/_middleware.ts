@@ -157,6 +157,14 @@ async function isActiveEventScan(
 // Stand detail pages are the route that gets shared externally (into county
 // Facebook groups). Stand ids are nanoid strings.
 const FRESH_STAND_PATTERN = /^\/fresh\/stand\/([\w-]+)$/;
+// The board itself (not a specific stand) - exact path only, so it never
+// swallows /fresh/stand/:id or /fresh/mine.
+const FRESH_BOARD_PATTERN = /^\/fresh\/?$/;
+// Static illustrated banner (uploaded to SITE_ASSETS at og/fresh-today-social-banner.jpg) -
+// used for the board's own share preview, and as the fallback image for any
+// stand page that hasn't uploaded its own photo. Same fallback contract as
+// POPUPS_BANNER_PATH below.
+const FRESH_BANNER_PATH = '/site-assets/og/fresh-today-social-banner.jpg';
 
 // ─── Sale Day detail-page crawler bypass + OG meta ───────────────────────────
 // Same growth rail as Fresh Today - a sale link shared into a county Facebook
@@ -498,6 +506,7 @@ export const onRequest: PagesFunction<Env & { GEO_TOKEN_SECRET: string }> = asyn
   const isStaticAsset   = url.pathname.startsWith('/assets/');
   const isSiteAsset     = url.pathname.startsWith('/site-assets/');
   const freshStandMatch = url.pathname.match(FRESH_STAND_PATTERN);
+  const freshBoardMatch = url.pathname.match(FRESH_BOARD_PATTERN);
   const saleMatch       = url.pathname.match(SALE_PATTERN);
   const popupVendorMatch = url.pathname.match(POPUP_VENDOR_PATTERN);
   const popupBoardMatch = url.pathname.match(POPUP_BOARD_PATTERN);
@@ -526,7 +535,7 @@ export const onRequest: PagesFunction<Env & { GEO_TOKEN_SECRET: string }> = asyn
       // who has no region-trust cookie; we mint a short-lived bypass below.
       if (await isActiveEventScan(url, context.env)) {
         mintEventBypass = true;
-      } else if ((freshStandMatch || saleMatch || popupVendorMatch || popupBoardMatch) && isPagePreviewCrawler(context.request)) {
+      } else if ((freshStandMatch || freshBoardMatch || saleMatch || popupVendorMatch || popupBoardMatch) && isPagePreviewCrawler(context.request)) {
         // Narrow, read-only exception: a confirmed link-preview crawler
         // (Facebook, Slack, etc. - see isPagePreviewCrawler) fetching a
         // specific Fresh Today stand, Sale Day sale, or Pop-Ups vendor detail
@@ -598,6 +607,12 @@ export const onRequest: PagesFunction<Env & { GEO_TOKEN_SECRET: string }> = asyn
   let ogDescription = `Explore local shops, dining, and scenic spots in northeast Indiana. Scan badges, check in at destinations, and support regional businesses.`;
   let ogImage: string | null = null;
 
+  if (freshBoardMatch) {
+    ogTitle = 'Fresh Today - Lake & Locals';
+    ogDescription = "What's out right now - farm stands, u-pick, eggs, and more.";
+    ogImage = `${url.origin}${FRESH_BANNER_PATH}`;
+  }
+
   if (freshStandMatch) {
     const tenantSlug = REGIONAL_DOMAINS[hostname] ?? 'lake-locals';
     const stand = await resolveFreshStandMeta(freshStandMatch[1], tenantSlug, context.env);
@@ -606,7 +621,9 @@ export const onRequest: PagesFunction<Env & { GEO_TOKEN_SECRET: string }> = asyn
       ogDescription = stand.latestPostBody
         ? truncate(stand.latestPostBody, 160)
         : "Local stand on Fresh Today - see what's out right now.";
-      ogImage = stand.photoUrl;
+      // No uploaded stand photo - the illustrated board banner stands in,
+      // same fallback contract as krowdkraft-exchange's offer share cards.
+      ogImage = stand.photoUrl ?? `${url.origin}${FRESH_BANNER_PATH}`;
     }
   }
 
@@ -670,11 +687,11 @@ export const onRequest: PagesFunction<Env & { GEO_TOKEN_SECRET: string }> = asyn
     });
 
   if (ogImage) {
-    // The banner is a known, fixed 1200x630 asset - declare its dimensions so
-    // Facebook doesn't have to infer them on first fetch (the warning our own
-    // Sharing Debugger walk surfaced). Real uploaded vendor/stand/sale photos
-    // have no guaranteed size, so this only applies to the banner itself.
-    const isBanner = ogImage.endsWith(POPUPS_BANNER_PATH);
+    // Both banners are known, fixed 1200x630 assets - declare their dimensions
+    // so Facebook doesn't have to infer them on first fetch (the warning our
+    // own Sharing Debugger walk surfaced). Real uploaded vendor/stand/sale
+    // photos have no guaranteed size, so this only applies to the banners.
+    const isBanner = ogImage.endsWith(POPUPS_BANNER_PATH) || ogImage.endsWith(FRESH_BANNER_PATH);
     rewriter
       .on('meta[property="og:image"]', {
         element(el) {
