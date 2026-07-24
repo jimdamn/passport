@@ -171,6 +171,11 @@ const FRESH_BANNER_PATH = '/site-assets/og/fresh-today-social-banner.jpg';
 // group (the US-12 corridor weekend is the point). Sale ids are nanoid strings.
 const SALE_PATTERN = /^\/sales\/sale\/([\w-]+)$/;
 
+// ─── Community Table meal-page crawler bypass + OG meta ─────────────────────
+// Same growth rail as Fresh Today/Sale Day - a meal link shared into a county
+// Facebook group (benefit dinners are the point). Meal ids are nanoid strings.
+const MEAL_PATTERN = /^\/meals\/meal\/([\w-]+)$/;
+
 // ─── Pop-Ups vendor-page crawler bypass + OG meta ────────────────────────────
 // Same growth rail, but fans share the VENDOR (their whole schedule), not one
 // stop - the vendor page is the shareable object (POP-UPS-BUILD-PLAN.md §6.1).
@@ -322,6 +327,58 @@ async function resolvePopupVendorMeta(
   }
 }
 
+interface MealMeta {
+  title: string;
+  body: string;
+  category: string;
+  date: string;
+  open: string;
+  close: string;
+  benefitLine: string | null;
+  photoUrl: string | null;
+}
+
+// Never surface a hidden/removed meal's real content to a crawler - falls
+// back to the generic tenant copy exactly like a deleted or never-existed
+// meal. Same public-visibility filter as the public API (getMeal in
+// src/handlers/meals.ts): m.deleted_at IS NULL AND m.admin_hidden = 0 AND
+// m.date >= today AND its kitchen passes the same filter. A cancelled or
+// sold-out meal still shares correctly (those states stay publicly visible
+// by design) - only deleted/admin-hidden/past meals fall back.
+async function resolveMealMeta(
+  id: string,
+  tenantSlug: string,
+  env: Env,
+): Promise<MealMeta | null> {
+  try {
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date());
+    const meal = await env.DB.prepare(`
+      SELECT m.title, m.body, m.category, m.date, m.open, m.close, m.benefit_line, m.photo_url
+      FROM meals m
+      JOIN meal_kitchens k ON k.id = m.kitchen_id
+      WHERE m.id = ? AND m.tenant_id = ? AND m.deleted_at IS NULL AND m.admin_hidden = 0 AND m.date >= ?
+        AND k.deleted_at IS NULL AND k.is_hidden = 0 AND k.admin_hidden = 0
+    `).bind(id, tenantSlug, today).first<{
+      title: string; body: string; category: string; date: string; open: string; close: string;
+      benefit_line: string | null; photo_url: string | null;
+    }>();
+    if (!meal) return null;
+
+    return {
+      title: meal.title,
+      body: meal.body,
+      category: meal.category,
+      date: meal.date,
+      open: meal.open,
+      close: meal.close,
+      benefitLine: meal.benefit_line,
+      photoUrl: meal.photo_url || null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 // 'HH:MM' -> '8' or '1:30' - the compact, no-AM/PM hour used only in the
 // Pop-Ups OG description's terse next-stop teaser ("8 to 1"), distinct from
 // the app's usual clockLabel-style "8 AM" formatting used everywhere a
@@ -332,6 +389,17 @@ function compactHour(hhmm: string): string {
   let h12 = h % 12;
   if (h12 === 0) h12 = 12;
   return mStr === '00' ? `${h12}` : `${h12}:${mStr}`;
+}
+
+// 'HH:MM'-'HH:MM' -> '4-7 PM' (same period) or '11 AM-1 PM' (crosses noon) -
+// the compact window format for the meal OG description
+// ("Fri Feb 20, 4-7 PM - Benefit for the Miller family - fish, fries...").
+function mealWindowLabel(open: string, close: string): string {
+  const period = (hhmm: string) => (Number(hhmm.split(':')[0]) >= 12 ? 'PM' : 'AM');
+  const openPeriod = period(open);
+  const closePeriod = period(close);
+  const openLabel = openPeriod === closePeriod ? compactHour(open) : `${compactHour(open)} ${openPeriod}`;
+  return `${openLabel}-${compactHour(close)} ${closePeriod}`;
 }
 
 // 'YYYY-MM-DD' -> 'Sat Aug 8' for the share-card description's date line.
@@ -510,6 +578,7 @@ export const onRequest: PagesFunction<Env & { GEO_TOKEN_SECRET: string }> = asyn
   const saleMatch       = url.pathname.match(SALE_PATTERN);
   const popupVendorMatch = url.pathname.match(POPUP_VENDOR_PATTERN);
   const popupBoardMatch = url.pathname.match(POPUP_BOARD_PATTERN);
+  const mealMatch       = url.pathname.match(MEAL_PATTERN);
   let verifiedPayload: GeoTokenPayload | null = null;
   let mintEventBypass = false;
 
@@ -535,16 +604,16 @@ export const onRequest: PagesFunction<Env & { GEO_TOKEN_SECRET: string }> = asyn
       // who has no region-trust cookie; we mint a short-lived bypass below.
       if (await isActiveEventScan(url, context.env)) {
         mintEventBypass = true;
-      } else if ((freshStandMatch || freshBoardMatch || saleMatch || popupVendorMatch || popupBoardMatch) && isPagePreviewCrawler(context.request)) {
+      } else if ((freshStandMatch || freshBoardMatch || saleMatch || popupVendorMatch || popupBoardMatch || mealMatch) && isPagePreviewCrawler(context.request)) {
         // Narrow, read-only exception: a confirmed link-preview crawler
         // (Facebook, Slack, etc. - see isPagePreviewCrawler) fetching a
-        // specific Fresh Today stand, Sale Day sale, or Pop-Ups vendor detail
-        // page gets the real page (and its OG tags below) instead of the
-        // gate, so a shared link previews correctly. This does not apply to
-        // any other route, does not grant write access, and does not change
-        // the gate for any real visitor - the geo-fence itself is unchanged.
-        // Mirrors field-notes' crawlerPreviewAllowed exception for /story/:id
-        // exactly.
+        // specific Fresh Today stand, Sale Day sale, Pop-Ups vendor, or
+        // Community Table meal detail page gets the real page (and its OG
+        // tags below) instead of the gate, so a shared link previews
+        // correctly. This does not apply to any other route, does not grant
+        // write access, and does not change the gate for any real visitor -
+        // the geo-fence itself is unchanged. Mirrors field-notes'
+        // crawlerPreviewAllowed exception for /story/:id exactly.
       } else {
         return geoGatePage('Lake & Locals');
       }
@@ -660,6 +729,23 @@ export const onRequest: PagesFunction<Env & { GEO_TOKEN_SECRET: string }> = asyn
       // No uploaded vendor photo - the illustrated board banner stands in,
       // same fallback contract as krowdkraft-exchange's offer share cards.
       ogImage = vendor.photoUrl ?? `${url.origin}${POPUPS_BANNER_PATH}`;
+    }
+  }
+
+  if (mealMatch) {
+    const tenantSlug = REGIONAL_DOMAINS[hostname] ?? 'lake-locals';
+    const meal = await resolveMealMeta(mealMatch[1], tenantSlug, context.env);
+    if (meal) {
+      ogTitle = `${truncate(meal.title, 70)} - Community Table`;
+      const dateWindowLine = `${friendlyDateLabel(meal.date)}, ${mealWindowLabel(meal.open, meal.close)}`;
+      const descParts = [dateWindowLine];
+      if (meal.benefitLine) descParts.push(meal.benefitLine);
+      descParts.push(meal.body);
+      ogDescription = truncate(descParts.join(' - '), 160);
+      // No static board banner for Community Table (donor precedent: Sale
+      // Day also has none) - a meal with no uploaded photo shares with no
+      // image rather than a stand-in.
+      ogImage = meal.photoUrl;
     }
   }
 
