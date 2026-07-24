@@ -124,7 +124,15 @@ export default function PetPost() {
   const [revealed, setRevealed] = useState<{ phone: string | null; email: string | null } | null>(null);
 
   useEffect(() => {
-    if (!tenant || !id) return;
+    // Guard on tenant.id, not just tenant's truthiness - TenantContext starts
+    // with a non-null DEFAULT_TENANT whose id is '' until the real tenant
+    // bootstrap call resolves. Firing this fetch against that empty id hits
+    // /api/t//pets/:id, which doesn't match any route and falls through to
+    // the SPA shell (200 OK, text/html) - res.json() then throws, and if that
+    // failure resolves after the real fetch's success, it clobbers good state
+    // and shows a false 404. Skipping the fetch entirely until a real tenant
+    // id is present avoids the race outright.
+    if (!tenant?.id || !id) return;
     setLoading(true);
     setNotFound(false);
     setRevealed(null);

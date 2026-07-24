@@ -198,6 +198,17 @@ const POPUP_BOARD_PATTERN = /^\/popups\/?$/;
 // exchange-offer-fallback.jpg pattern exactly.
 const POPUPS_BANNER_PATH = '/site-assets/og/popups-social-banner.jpg';
 
+// ─── Home Safe pet-post-page crawler bypass + OG meta ────────────────────────
+// This board's whole reason to exist is the share card - every lost-pet post
+// shared into a county Facebook group is the platform's highest-empathy card.
+// Pet post ids are nanoid strings. No board-level pattern (unlike Fresh Today
+// /Pop-Ups/Community Table) - the plan scopes this to the detail page only.
+const PET_POST_PATTERN = /^\/pets\/post\/([\w-]+)$/;
+
+const PET_SPECIES_LABELS: Record<string, string> = {
+  dog: 'Dog', cat: 'Cat', bird: 'Bird', small_pet: 'Small Pet', horse_livestock: 'Horse & Livestock', other: 'Other',
+};
+
 // Cloudflare computes this from more than just the client-sent User-Agent
 // (confirmed empirically 2026-07-20 by pointing Facebook's real Sharing
 // Debugger crawler at a live test endpoint and inspecting request.cf) - it is
@@ -381,6 +392,57 @@ async function resolveMealMeta(
       close: meal.close,
       benefitLine: meal.benefit_line,
       photoUrl: meal.photo_url || null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+interface PetPostMeta {
+  ogTitle: string;
+  ogDescription: string;
+  photoUrl: string | null;
+}
+
+// Never surface a removed/admin-hidden/expired-past-the-glow post's real
+// content to a crawler - falls back to the generic tenant copy exactly like
+// a deleted or never-existed post. Same public-visibility filter as the
+// public API (getPetPost in src/handlers/pets.ts): deleted_at IS NULL AND
+// admin_hidden = 0 AND ((resolved_at IS NULL AND active_until > now) OR
+// resolved_at > now - 3 days). A resolved post's HOME SAFE card keeps
+// circulating through its 3-day glow window, same as the board itself - the
+// good news is the point, so let it travel.
+async function resolvePetPostMeta(
+  id: string,
+  tenantSlug: string,
+  env: Env,
+): Promise<PetPostMeta | null> {
+  try {
+    const row = await env.DB.prepare(`
+      SELECT type, species, pet_name, body, photo_url, nearest_city, resolved_at
+      FROM pet_posts
+      WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL AND admin_hidden = 0
+        AND ((resolved_at IS NULL AND active_until > unixepoch()) OR resolved_at > (unixepoch() - 259200))
+    `).bind(id, tenantSlug).first<{
+      type: string; species: string; pet_name: string | null; body: string;
+      photo_url: string | null; nearest_city: string | null; resolved_at: number | null;
+    }>();
+    if (!row) return null;
+
+    const speciesLabel = PET_SPECIES_LABELS[row.species] ?? row.species;
+    let ogTitle: string;
+    if (row.resolved_at) {
+      ogTitle = `HOME SAFE: ${row.pet_name || speciesLabel}`;
+    } else if (row.type === 'lost') {
+      ogTitle = `LOST: ${row.pet_name || speciesLabel} near ${row.nearest_city || 'the Lakes Region'}`;
+    } else {
+      ogTitle = `FOUND: ${speciesLabel} near ${row.nearest_city || 'the Lakes Region'}`;
+    }
+
+    return {
+      ogTitle: truncate(ogTitle, 70),
+      ogDescription: truncate(row.body, 160),
+      photoUrl: row.photo_url || null,
     };
   } catch {
     return null;
@@ -588,6 +650,7 @@ export const onRequest: PagesFunction<Env & { GEO_TOKEN_SECRET: string }> = asyn
   const popupBoardMatch = url.pathname.match(POPUP_BOARD_PATTERN);
   const mealMatch       = url.pathname.match(MEAL_PATTERN);
   const mealBoardMatch  = url.pathname.match(MEAL_BOARD_PATTERN);
+  const petPostMatch    = url.pathname.match(PET_POST_PATTERN);
   let verifiedPayload: GeoTokenPayload | null = null;
   let mintEventBypass = false;
 
@@ -613,16 +676,17 @@ export const onRequest: PagesFunction<Env & { GEO_TOKEN_SECRET: string }> = asyn
       // who has no region-trust cookie; we mint a short-lived bypass below.
       if (await isActiveEventScan(url, context.env)) {
         mintEventBypass = true;
-      } else if ((freshStandMatch || freshBoardMatch || saleMatch || popupVendorMatch || popupBoardMatch || mealMatch || mealBoardMatch) && isPagePreviewCrawler(context.request)) {
+      } else if ((freshStandMatch || freshBoardMatch || saleMatch || popupVendorMatch || popupBoardMatch || mealMatch || mealBoardMatch || petPostMatch) && isPagePreviewCrawler(context.request)) {
         // Narrow, read-only exception: a confirmed link-preview crawler
         // (Facebook, Slack, etc. - see isPagePreviewCrawler) fetching a
-        // specific Fresh Today stand, Sale Day sale, Pop-Ups vendor, or
-        // Community Table meal/board page gets the real page (and its OG
-        // tags below) instead of the gate, so a shared link previews
-        // correctly. This does not apply to any other route, does not grant
-        // write access, and does not change the gate for any real visitor -
-        // the geo-fence itself is unchanged. Mirrors field-notes'
-        // crawlerPreviewAllowed exception for /story/:id exactly.
+        // specific Fresh Today stand, Sale Day sale, Pop-Ups vendor,
+        // Community Table meal/board, or Home Safe pet post page gets the
+        // real page (and its OG tags below) instead of the gate, so a
+        // shared link previews correctly. This does not apply to any other
+        // route, does not grant write access, and does not change the gate
+        // for any real visitor - the geo-fence itself is unchanged. Mirrors
+        // field-notes' crawlerPreviewAllowed exception for /story/:id
+        // exactly.
       } else {
         return geoGatePage('Lake & Locals');
       }
@@ -761,6 +825,19 @@ export const onRequest: PagesFunction<Env & { GEO_TOKEN_SECRET: string }> = asyn
       // same fallback contract as Fresh Today's stand pages / Pop-Ups'
       // vendor pages.
       ogImage = meal.photoUrl ?? `${url.origin}${COMMUNITY_TABLE_BANNER_PATH}`;
+    }
+  }
+
+  if (petPostMatch) {
+    const tenantSlug = REGIONAL_DOMAINS[hostname] ?? 'lake-locals';
+    const pet = await resolvePetPostMeta(petPostMatch[1], tenantSlug, context.env);
+    if (pet) {
+      ogTitle = pet.ogTitle;
+      ogDescription = pet.ogDescription;
+      // No illustrated-banner fallback on this board (deliberate) - the pet
+      // photo IS the card, or there is no image tag at all. A generic banner
+      // here would misrepresent a specific missing animal as a stock graphic.
+      ogImage = pet.photoUrl;
     }
   }
 
