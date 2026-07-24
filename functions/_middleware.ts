@@ -201,9 +201,16 @@ const POPUPS_BANNER_PATH = '/site-assets/og/popups-social-banner.jpg';
 // ─── Home Safe pet-post-page crawler bypass + OG meta ────────────────────────
 // This board's whole reason to exist is the share card - every lost-pet post
 // shared into a county Facebook group is the platform's highest-empathy card.
-// Pet post ids are nanoid strings. No board-level pattern (unlike Fresh Today
-// /Pop-Ups/Community Table) - the plan scopes this to the detail page only.
+// Pet post ids are nanoid strings.
 const PET_POST_PATTERN = /^\/pets\/post\/([\w-]+)$/;
+// The board itself (not a specific post) - exact path only, so it never
+// swallows /pets/post/:id or /pets/mine.
+const PET_BOARD_PATTERN = /^\/pets\/?$/;
+// Static illustrated banner (uploaded to SITE_ASSETS at og/home-safe-social-banner.jpg) -
+// used for the board's own share preview, and as the fallback image for any
+// pet post that hasn't uploaded its own photo. Same fallback contract as
+// FRESH_BANNER_PATH / POPUPS_BANNER_PATH / COMMUNITY_TABLE_BANNER_PATH above.
+const HOME_SAFE_BANNER_PATH = '/site-assets/og/home-safe-social-banner.jpg';
 
 const PET_SPECIES_LABELS: Record<string, string> = {
   dog: 'Dog', cat: 'Cat', bird: 'Bird', small_pet: 'Small Pet', horse_livestock: 'Horse & Livestock', other: 'Other',
@@ -651,6 +658,7 @@ export const onRequest: PagesFunction<Env & { GEO_TOKEN_SECRET: string }> = asyn
   const mealMatch       = url.pathname.match(MEAL_PATTERN);
   const mealBoardMatch  = url.pathname.match(MEAL_BOARD_PATTERN);
   const petPostMatch    = url.pathname.match(PET_POST_PATTERN);
+  const petBoardMatch   = url.pathname.match(PET_BOARD_PATTERN);
   let verifiedPayload: GeoTokenPayload | null = null;
   let mintEventBypass = false;
 
@@ -676,7 +684,7 @@ export const onRequest: PagesFunction<Env & { GEO_TOKEN_SECRET: string }> = asyn
       // who has no region-trust cookie; we mint a short-lived bypass below.
       if (await isActiveEventScan(url, context.env)) {
         mintEventBypass = true;
-      } else if ((freshStandMatch || freshBoardMatch || saleMatch || popupVendorMatch || popupBoardMatch || mealMatch || mealBoardMatch || petPostMatch) && isPagePreviewCrawler(context.request)) {
+      } else if ((freshStandMatch || freshBoardMatch || saleMatch || popupVendorMatch || popupBoardMatch || mealMatch || mealBoardMatch || petPostMatch || petBoardMatch) && isPagePreviewCrawler(context.request)) {
         // Narrow, read-only exception: a confirmed link-preview crawler
         // (Facebook, Slack, etc. - see isPagePreviewCrawler) fetching a
         // specific Fresh Today stand, Sale Day sale, Pop-Ups vendor,
@@ -828,16 +836,22 @@ export const onRequest: PagesFunction<Env & { GEO_TOKEN_SECRET: string }> = asyn
     }
   }
 
+  if (petBoardMatch) {
+    ogTitle = 'Home Safe - Lake & Locals';
+    ogDescription = "Lost and found pets across the Lakes Region - post it, share it, bring them home.";
+    ogImage = `${url.origin}${HOME_SAFE_BANNER_PATH}`;
+  }
+
   if (petPostMatch) {
     const tenantSlug = REGIONAL_DOMAINS[hostname] ?? 'lake-locals';
     const pet = await resolvePetPostMeta(petPostMatch[1], tenantSlug, context.env);
     if (pet) {
       ogTitle = pet.ogTitle;
       ogDescription = pet.ogDescription;
-      // No illustrated-banner fallback on this board (deliberate) - the pet
-      // photo IS the card, or there is no image tag at all. A generic banner
-      // here would misrepresent a specific missing animal as a stock graphic.
-      ogImage = pet.photoUrl;
+      // No uploaded post photo - the illustrated board banner stands in,
+      // same fallback contract as Fresh Today's stand pages / Pop-Ups'
+      // vendor pages / Community Table's meal pages.
+      ogImage = pet.photoUrl ?? `${url.origin}${HOME_SAFE_BANNER_PATH}`;
     }
   }
 
@@ -865,11 +879,11 @@ export const onRequest: PagesFunction<Env & { GEO_TOKEN_SECRET: string }> = asyn
     });
 
   if (ogImage) {
-    // Both banners are known, fixed 1200x630 assets - declare their dimensions
+    // All banners are known, fixed 1200x630 assets - declare their dimensions
     // so Facebook doesn't have to infer them on first fetch (the warning our
-    // own Sharing Debugger walk surfaced). Real uploaded vendor/stand/sale
-    // photos have no guaranteed size, so this only applies to the banners.
-    const isBanner = ogImage.endsWith(POPUPS_BANNER_PATH) || ogImage.endsWith(FRESH_BANNER_PATH) || ogImage.endsWith(COMMUNITY_TABLE_BANNER_PATH);
+    // own Sharing Debugger walk surfaced). Real uploaded vendor/stand/sale/
+    // pet photos have no guaranteed size, so this only applies to the banners.
+    const isBanner = ogImage.endsWith(POPUPS_BANNER_PATH) || ogImage.endsWith(FRESH_BANNER_PATH) || ogImage.endsWith(COMMUNITY_TABLE_BANNER_PATH) || ogImage.endsWith(HOME_SAFE_BANNER_PATH);
     rewriter
       .on('meta[property="og:image"]', {
         element(el) {
