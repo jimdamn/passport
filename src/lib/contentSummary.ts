@@ -391,6 +391,62 @@ export async function fetchMealsSummary(env: Env, tenantId: string, kkauthUid: n
   }
 }
 
+/**
+ * Home Safe's content-summary source - a LOCAL D1 query (this board lives in
+ * this same app), same reasoning as fetchFreshSummary/fetchSalesSummary/
+ * fetchPopupsSummary/fetchMealsSummary above. Excludes deleted posts (Home
+ * Safe's own convention - removed posts drop out entirely, see pets.ts's
+ * listMyPetPosts). Counts { looking, home_safe } for the caller; recent =
+ * last 5 by created_at; attention = admin-hidden count. Status is computed
+ * with the same petStatus() logic as src/handlers/pets.ts - copied rather
+ * than imported since that file's pure helper isn't exported for cross-module
+ * reuse (mirrors this file's own per-source independence).
+ */
+export async function fetchPetsSummary(env: Env, tenantId: string, kkauthUid: number | null): Promise<ContentSummarySource> {
+  if (!kkauthUid) return emptySource();
+  try {
+    const { results } = await env.DB.prepare(
+      'SELECT id, type, species, pet_name, active_until, resolved_at, admin_hidden, admin_hidden_reason, created_at FROM pet_posts WHERE tenant_id = ? AND kkauth_uid = ? AND deleted_at IS NULL ORDER BY created_at DESC'
+    ).bind(tenantId, kkauthUid).all<any>();
+    const rows = results || [];
+    const now = Math.floor(Date.now() / 1000);
+
+    function status(r: any): 'looking' | 'archived' | 'home_safe' {
+      if (r.resolved_at) return 'home_safe';
+      if (now >= r.active_until) return 'archived';
+      return 'looking';
+    }
+
+    let looking = 0;
+    let homeSafe = 0;
+    for (const r of rows) {
+      const s = status(r);
+      if (s === 'looking') looking += 1;
+      else if (s === 'home_safe') homeSafe += 1;
+    }
+
+    const recent: ContentSummaryItem[] = rows.slice(0, 5).map((r: any) => ({
+      id: r.id,
+      title: r.pet_name || r.species,
+      status: r.admin_hidden ? 'hidden_by_admin' : status(r),
+      hidden: !!r.admin_hidden,
+      attention: !!r.admin_hidden,
+      created_at: r.created_at,
+    }));
+
+    const attentionTotal = rows.filter((r: any) => r.admin_hidden).length;
+
+    return {
+      ok: true,
+      counts: { looking, home_safe: homeSafe },
+      recent,
+      attention_total: attentionTotal,
+    };
+  } catch {
+    return emptySource();
+  }
+}
+
 export async function fetchFieldNotesSummary(env: Env, tenantId: string, authHeader: string | null): Promise<ContentSummarySource> {
   if (!authHeader) return emptySource();
   const baseUrl = env.FIELD_NOTES_BASE_URL || DEFAULT_FIELD_NOTES_BASE_URL;

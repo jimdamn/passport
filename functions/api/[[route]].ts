@@ -50,6 +50,11 @@ import {
   createMeal, updateMeal, setMealSoldOut, cancelMeal, deleteMeal, uploadMealPhoto,
   adminListKitchens, adminListMeals, adminHideKitchen, adminHideMeal,
 } from '../../src/handlers/meals';
+import {
+  listPetPosts, listPetPins, getPetPost,
+  listMyPetPosts, createPetPost, updatePetPost, resolvePetPost, renewPetPost, deletePetPost,
+  revealPetContact, uploadPetPhoto, adminListPetPosts, adminHidePetPost,
+} from '../../src/handlers/pets';
 import { geocodeAddress } from '../../src/handlers/geocode';
 import { getAroundInterests, putAroundInterests } from '../../src/handlers/around';
 
@@ -257,6 +262,25 @@ tenantApp.get('/admin/meals/meals', adminListMeals);
 tenantApp.post('/admin/meals/kitchens/:id/hide', adminHideKitchen);
 tenantApp.post('/admin/meals/meals/:id/hide', adminHideMeal);
 
+// Home Safe - lost-and-found pet posts (any signed-in user; ONE table, no
+// stand/profile entity). Public reads are registered on the root app below,
+// alongside listFresh/listSales/listStops/listMeals. /pets/mine is ALSO
+// registered on the root app (not here) - see the note by
+// app.get('/api/t/:tenant/pets/mine', ...) below; mounting it on tenantApp
+// would lose to the public /pets/:id pattern and 404 as "Post not found."
+// (same class of bug as GET /sales/mine, documented further up in this file).
+// No credits, no KKGame calls, no notifications, ever (standing constraint,
+// HOME-SAFE-BUILD-PLAN.md).
+tenantApp.post('/pets/upload', uploadPetPhoto);
+tenantApp.post('/pets', createPetPost);
+tenantApp.put('/pets/posts/:id', updatePetPost);
+tenantApp.post('/pets/posts/:id/home-safe', resolvePetPost);
+tenantApp.post('/pets/posts/:id/renew', renewPetPost);
+tenantApp.post('/pets/posts/:id/contact', revealPetContact);
+tenantApp.delete('/pets/posts/:id', deletePetPost);
+tenantApp.get('/admin/pets', adminListPetPosts);
+tenantApp.post('/admin/pets/:id/hide', adminHidePetPost);
+
 // Address geocoding proxy - used by the Sale Day and Fresh Today pin-picker
 // forms. Server-side because the US Census Geocoder sends no CORS headers;
 // a direct browser fetch to it is silently blocked and always falls through
@@ -377,6 +401,21 @@ app.get('/api/t/:tenant/meals', resolveTenant, listMeals);
 app.get('/api/t/:tenant/meals/pins', resolveTenant, listMealPins);
 app.get('/api/t/:tenant/meals/kitchens/:id', resolveTenant, getKitchen);
 app.get('/api/t/:tenant/meals/meals/:id', resolveTenant, getMeal);
+// Home Safe - the feed, then the map pins (static segment), then the post
+// detail route. /pets/pins registered BEFORE /pets/:id - Hono matches
+// overlapping patterns by registration order, not static-over-dynamic
+// priority, so :id would otherwise swallow "pins" as a post id and 404
+// (same lesson as Sale Day's /sales/pins note above).
+app.get('/api/t/:tenant/pets', resolveTenant, listPetPosts);
+app.get('/api/t/:tenant/pets/pins', resolveTenant, listPetPins);
+// Also registered BEFORE /pets/:id, and on the root app rather than
+// tenantApp, for the same reason GET /sales/mine is above: Hono resolves
+// overlapping patterns by registration order, not static-over-dynamic
+// priority, so "mine" would otherwise be swallowed as a post id and 404 as
+// "Post not found." requireAuth is chained inline since this route isn't on
+// tenantApp.
+app.get('/api/t/:tenant/pets/mine', resolveTenant, requireAuth, listMyPetPosts);
+app.get('/api/t/:tenant/pets/:id', resolveTenant, getPetPost);
 app.post('/api/t/:tenant/support', resolveTenant, submitSupport);
 app.post('/api/t/:tenant/passport/claims/register', resolveTenant, registerClaim);
 app.get('/api/t/:tenant/network-members', resolveTenant, getNetworkMembers);
