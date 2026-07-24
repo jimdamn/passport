@@ -47,6 +47,7 @@ const NOTE_MAX = 280;
 const HINT_MAX = 120;
 const ADDRESS_MAX = 120;
 const PHONE_MAX = 25;
+const EVENT_NAME_MAX = 60;
 const MAX_DAYS_AHEAD = 60;            // fair vendors book far out
 
 const TIMES_INVALID_MSG = "Check the stop - it needs a date coming up, an opening time, and a closing time after it.";
@@ -308,7 +309,7 @@ function parseVendorInput(body: any, existing?: any) {
 
 interface StopInput {
   date: string; open: string; close: string; lat: number; lon: number;
-  address: string; locationHint: string | null; note: string | null;
+  address: string; locationHint: string | null; note: string | null; eventName: string | null;
 }
 
 function parseStopInput(body: any, existing?: any): StopInput {
@@ -348,8 +349,9 @@ function parseStopInput(body: any, existing?: any): StopInput {
 
   const locationHint = body.location_hint === undefined ? (existing?.location_hint ?? null) : cleanText(body.location_hint, HINT_MAX);
   const note = body.note === undefined ? (existing?.note ?? null) : cleanText(body.note, NOTE_MAX);
+  const eventName = body.event_name === undefined ? (existing?.event_name ?? null) : cleanText(body.event_name, EVENT_NAME_MAX);
 
-  return { date, open, close, lat, lon, address, locationHint, note };
+  return { date, open, close, lat, lon, address, locationHint, note, eventName };
 }
 
 /** Cooldown + upcoming-stop cap, per vendor. Brake, not a wall - batch posting a
@@ -382,12 +384,13 @@ async function guardStopCapAndCooldown(c: AppContext, vendorId: string) {
 
 /**
  * GET /api/t/:tenant/popups — the feed. Joins stops -> vendors. Optional
- * ?category= (vendor category) and ?when=today|coming.
+ * ?category= (vendor category), ?when=today|coming, and ?event= (event_name).
  */
 export async function listStops(c: AppContext) {
   const tenant = c.get('tenant');
   const category = c.req.query('category');
   const when = c.req.query('when');
+  const event = c.req.query('event');
   const today = boardDateStr();
   const now = Math.floor(Date.now() / 1000);
 
@@ -407,6 +410,10 @@ export async function listStops(c: AppContext) {
     filters.push('s.date > ?');
     binds.push(today);
   }
+  if (event) {
+    filters.push('s.event_name = ?');
+    binds.push(event);
+  }
 
   const { results } = await c.env.DB.prepare(`
     SELECT s.*, v.id AS vendor_id, v.name AS vendor_name, v.category AS vendor_category,
@@ -423,7 +430,7 @@ export async function listStops(c: AppContext) {
     return {
       id: r.id, date: r.date, open: r.open, close: r.close,
       lat: r.lat, lon: r.lon, checkin_lat: r.checkin_lat, checkin_lon: r.checkin_lon,
-      address: r.address, location_hint: r.location_hint, note: r.note,
+      address: r.address, location_hint: r.location_hint, note: r.note, event_name: r.event_name ?? null,
       nearest_city: r.nearest_city ?? null, nearest_state: r.nearest_state ?? null,
       checked_in_at: r.checked_in_at, sold_out: !!r.sold_out, cancelled_at: r.cancelled_at,
       created_at: r.created_at,
@@ -448,6 +455,7 @@ export async function listStopPins(c: AppContext) {
   const tenant = c.get('tenant');
   const category = c.req.query('category');
   const when = c.req.query('when');
+  const event = c.req.query('event');
   const today = boardDateStr();
   const now = Math.floor(Date.now() / 1000);
 
@@ -466,6 +474,10 @@ export async function listStopPins(c: AppContext) {
   } else if (when === 'coming') {
     filters.push('s.date > ?');
     binds.push(today);
+  }
+  if (event) {
+    filters.push('s.event_name = ?');
+    binds.push(event);
   }
 
   const { results } = await c.env.DB.prepare(`
@@ -491,6 +503,36 @@ export async function listStopPins(c: AppContext) {
       layer: stopLayer(status, r.checked_in_at),
     };
   });
+
+  return c.json({ data });
+}
+
+/**
+ * GET /api/t/:tenant/popups/events — event chips, 2+ visible stops sharing an
+ * event_name (mirrors sales.ts's listSaleEvents). Registered before
+ * /popups/vendors/:id (Hono order, sibling lesson).
+ */
+export async function listPopupEvents(c: AppContext) {
+  const tenant = c.get('tenant');
+  const today = boardDateStr();
+  const now = Math.floor(Date.now() / 1000);
+
+  const { results } = await c.env.DB.prepare(`
+    SELECT s.event_name, s.date FROM popup_stops s
+    JOIN popup_vendors v ON v.id = s.vendor_id
+    WHERE s.tenant_id = ? AND s.deleted_at IS NULL AND s.admin_hidden = 0 AND s.cancelled_at IS NULL AND s.date >= ?
+      AND v.deleted_at IS NULL AND v.is_hidden = 0 AND v.admin_hidden = 0 AND s.event_name IS NOT NULL
+  `).bind(tenant.id, today).all<any>();
+
+  const counts = new Map<string, number>();
+  for (const r of (results || [])) {
+    if (now >= endOfBoardDay(r.date)) continue;
+    counts.set(r.event_name, (counts.get(r.event_name) ?? 0) + 1);
+  }
+
+  const data = [...counts.entries()]
+    .filter(([, n]) => n >= 2)
+    .map(([event_name, count]) => ({ event_name, count }));
 
   return c.json({ data });
 }
@@ -525,7 +567,7 @@ export async function getVendor(c: AppContext) {
     return {
       id: r.id, date: r.date, open: r.open, close: r.close,
       lat: r.lat, lon: r.lon, checkin_lat: r.checkin_lat, checkin_lon: r.checkin_lon,
-      address: r.address, location_hint: r.location_hint, note: r.note,
+      address: r.address, location_hint: r.location_hint, note: r.note, event_name: r.event_name ?? null,
       nearest_city: r.nearest_city ?? null, nearest_state: r.nearest_state ?? null,
       checked_in_at: r.checked_in_at, sold_out: !!r.sold_out, cancelled_at: r.cancelled_at,
       status, status_note: publicStopStatusNote(status, r),
@@ -583,7 +625,7 @@ export async function listMyPopups(c: AppContext) {
       return {
         id: r.id, date: r.date, open: r.open, close: r.close,
         lat: r.lat, lon: r.lon, checkin_lat: r.checkin_lat, checkin_lon: r.checkin_lon,
-        address: r.address, location_hint: r.location_hint, note: r.note,
+        address: r.address, location_hint: r.location_hint, note: r.note, event_name: r.event_name ?? null,
         nearest_city: r.nearest_city ?? null, nearest_state: r.nearest_state ?? null,
         checked_in_at: r.checked_in_at, sold_out: !!r.sold_out, cancelled_at: r.cancelled_at,
         admin_hidden_reason: r.admin_hidden ? r.admin_hidden_reason : null,
@@ -778,11 +820,11 @@ export async function createStop(c: AppContext) {
 
   await c.env.DB.prepare(`
     INSERT INTO popup_stops
-      (id, tenant_id, vendor_id, kkauth_uid, date, open, close, lat, lon, address, location_hint, note, nearest_city, nearest_state)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, tenant_id, vendor_id, kkauth_uid, date, open, close, lat, lon, address, location_hint, note, event_name, nearest_city, nearest_state)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
     id, tenant.id, vendorId, kkauthUid, input.date, input.open, input.close,
-    input.lat, input.lon, input.address, input.locationHint, input.note, nearest.city, nearest.state
+    input.lat, input.lon, input.address, input.locationHint, input.note, input.eventName, nearest.city, nearest.state
   ).run();
 
   const stop = await c.env.DB.prepare('SELECT * FROM popup_stops WHERE id = ?').bind(id).first<any>();
@@ -826,11 +868,11 @@ export async function updateStop(c: AppContext) {
 
   await c.env.DB.prepare(`
     UPDATE popup_stops
-    SET date = ?, open = ?, close = ?, lat = ?, lon = ?, address = ?, location_hint = ?, note = ?,
+    SET date = ?, open = ?, close = ?, lat = ?, lon = ?, address = ?, location_hint = ?, note = ?, event_name = ?,
         nearest_city = ?, nearest_state = ?, updated_at = unixepoch()
     WHERE id = ? AND tenant_id = ? AND kkauth_uid = ?
   `).bind(
-    input.date, input.open, input.close, input.lat, input.lon, input.address, input.locationHint, input.note,
+    input.date, input.open, input.close, input.lat, input.lon, input.address, input.locationHint, input.note, input.eventName,
     nearestCity, nearestState, id, tenant.id, kkauthUid
   ).run();
 

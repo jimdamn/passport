@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTenant } from '../context/TenantContext';
 import {
-  listPopups, listPopupPins, categoryLabel, POPUP_CATEGORIES, REGION_CENTER, REGION_BOUNDS,
-  type PopupFeedStop, type PopupStopPin, type PopupWhen,
+  listPopups, listPopupPins, listPopupEvents, categoryLabel, POPUP_CATEGORIES, REGION_CENTER, REGION_BOUNDS,
+  type PopupFeedStop, type PopupStopPin, type PopupWhen, type PopupEventChip,
 } from '../api/popups';
 import { Truck, List, Map as MapIcon, Phone } from 'lucide-react';
 import { Spinner } from '../components/ui/Spinner';
@@ -55,11 +55,20 @@ export default function PopupsBoard() {
 
   const [stops, setStops] = useState<PopupFeedStop[]>([]);
   const [pins, setPins] = useState<PopupStopPin[]>([]);
+  const [events, setEvents] = useState<PopupEventChip[]>([]);
   const [when, setWhen] = useState<PopupWhen | 'all'>('all');
   const [category, setCategory] = useState<string>('all');
+  const [eventFilter, setEventFilter] = useState<string | null>(null);
   const [view, setView] = useState<'list' | 'map'>('list');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  // Event chips don't depend on the when/category/event filter - load once
+  // per tenant (same pattern as SaleDay.tsx's listSaleEvents effect).
+  useEffect(() => {
+    if (!tenant) return;
+    listPopupEvents(tenant.id).then(res => setEvents(res.data || [])).catch(() => setEvents([]));
+  }, [tenant]);
 
   useEffect(() => {
     if (!tenant) return;
@@ -70,8 +79,8 @@ export default function PopupsBoard() {
         const whenParam = when === 'all' ? undefined : when;
         const categoryParam = category === 'all' ? undefined : category;
         const [feedRes, pinsRes] = await Promise.all([
-          listPopups(tenant.id, categoryParam, whenParam),
-          listPopupPins(tenant.id, categoryParam, whenParam),
+          listPopups(tenant.id, categoryParam, whenParam, eventFilter ?? undefined),
+          listPopupPins(tenant.id, categoryParam, whenParam, eventFilter ?? undefined),
         ]);
         setStops(feedRes.data || []);
         setPins(pinsRes.data || []);
@@ -81,7 +90,7 @@ export default function PopupsBoard() {
         setLoading(false);
       }
     })();
-  }, [tenant, when, category]);
+  }, [tenant, when, category, eventFilter]);
 
   const today = todayBoardDateStr();
   const tomorrow = tomorrowBoardDateStr();
@@ -123,6 +132,22 @@ export default function PopupsBoard() {
 
       {error && (
         <p style={{ margin: '0 0 12px', fontSize: '0.82rem', color: 'var(--red, #b3352c)' }}>{error}</p>
+      )}
+
+      {/* Event chip row - grouping for vendors sharing a fair/market/festival.
+          Omitted entirely when no event has 2+ visible stops. */}
+      {events.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflowX: 'auto', paddingBottom: 8, marginBottom: 8, WebkitOverflowScrolling: 'touch' }}>
+          <span style={{ fontSize: '0.78rem', color: 'var(--muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>At the same event:</span>
+          {events.map(e => (
+            <button key={e.event_name}
+              onClick={() => setEventFilter(prev => prev === e.event_name ? null : e.event_name)}
+              className={`btn btn-sm ${eventFilter === e.event_name ? 'btn-amber' : 'btn-secondary'}`}
+              style={{ minHeight: 32, whiteSpace: 'nowrap', flexShrink: 0 }}>
+              {e.event_name}
+            </button>
+          ))}
+        </div>
       )}
 
       {/* When chips - the differentiator, first row */}
@@ -200,13 +225,24 @@ export default function PopupsBoard() {
                     style={{ background: 'var(--white)', padding: 16, cursor: 'pointer', borderLeft: '4px solid var(--green)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 2 }}>
                       <span style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--green)' }}>{s.vendor.name}</span>
-                      <span style={{
-                        fontSize: '0.66rem', fontWeight: 700, textTransform: 'uppercase', padding: '2px 8px',
-                        borderRadius: 'var(--r-sm)', background: 'rgba(80,120,80,0.12)', color: 'var(--green)',
-                        whiteSpace: 'nowrap',
-                      }}>
-                        {categoryLabel(s.vendor.category)}
-                      </span>
+                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                        <span style={{
+                          fontSize: '0.66rem', fontWeight: 700, textTransform: 'uppercase', padding: '2px 8px',
+                          borderRadius: 'var(--r-sm)', background: 'rgba(80,120,80,0.12)', color: 'var(--green)',
+                          whiteSpace: 'nowrap',
+                        }}>
+                          {categoryLabel(s.vendor.category)}
+                        </span>
+                        {s.event_name && (
+                          <span style={{
+                            fontSize: '0.66rem', fontWeight: 700, textTransform: 'uppercase', padding: '2px 8px',
+                            borderRadius: 'var(--r-sm)', background: 'rgba(200,134,10,0.14)', color: 'var(--amber)',
+                            whiteSpace: 'nowrap',
+                          }}>
+                            {s.event_name}
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     <p style={{ margin: '0 0 4px', fontSize: '0.85rem', color: 'var(--text)' }}>

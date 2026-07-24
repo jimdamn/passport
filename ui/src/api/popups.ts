@@ -55,6 +55,7 @@ export interface PopupFeedStop {
   address: string | null;
   location_hint: string | null;
   note: string | null;
+  event_name: string | null;
   nearest_city: string | null;
   nearest_state: string | null;
   checked_in_at: number | null;
@@ -89,6 +90,7 @@ export interface PopupVendorStop {
   address: string | null;
   location_hint: string | null;
   note: string | null;
+  event_name: string | null;
   nearest_city: string | null;
   nearest_state: string | null;
   checked_in_at: number | null;
@@ -112,20 +114,31 @@ export interface PopupVendorDetail {
 
 export type PopupWhen = 'today' | 'coming';
 
-export function listPopups(tenant: string, category?: string, when?: PopupWhen) {
+export function listPopups(tenant: string, category?: string, when?: PopupWhen, event?: string) {
   const params = new URLSearchParams();
   if (category) params.set('category', category);
   if (when) params.set('when', when);
+  if (event) params.set('event', event);
   const q = params.toString();
   return api.get<ApiResponse<PopupFeedStop[]>>(`/t/${tenant}/popups${q ? `?${q}` : ''}`);
 }
 
-export function listPopupPins(tenant: string, category?: string, when?: PopupWhen) {
+export function listPopupPins(tenant: string, category?: string, when?: PopupWhen, event?: string) {
   const params = new URLSearchParams();
   if (category) params.set('category', category);
   if (when) params.set('when', when);
+  if (event) params.set('event', event);
   const q = params.toString();
   return api.get<ApiResponse<PopupStopPin[]>>(`/t/${tenant}/popups/pins${q ? `?${q}` : ''}`);
+}
+
+export interface PopupEventChip {
+  event_name: string;
+  count: number;
+}
+
+export function listPopupEvents(tenant: string) {
+  return api.get<ApiResponse<PopupEventChip[]>>(`/t/${tenant}/popups/events`);
 }
 
 export function getPopupVendor(tenant: string, id: string) {
@@ -151,6 +164,7 @@ export interface MyPopupStop {
   address: string | null;
   location_hint: string | null;
   note: string | null;
+  event_name: string | null;
   nearest_city: string | null;
   nearest_state: string | null;
   checked_in_at: number | null;
@@ -195,6 +209,7 @@ export interface PopupStopInput {
   address: string;
   location_hint?: string | null;
   note?: string | null;
+  event_name?: string | null;
 }
 
 // Raw popup_vendors row (returned by create/update/visibility) - the owner UI
@@ -229,6 +244,7 @@ export interface PopupStopRecord {
   address: string | null;
   location_hint: string | null;
   note: string | null;
+  event_name: string | null;
   nearest_city: string | null;
   nearest_state: string | null;
   checked_in_at: number | null;

@@ -39,7 +39,7 @@ import {
   adminListSales, adminHideSale,
 } from '../../src/handlers/sales';
 import {
-  listStops, listStopPins, getVendor,
+  listStops, listStopPins, listPopupEvents, getVendor,
   listMyPopups, createVendor, updateVendor, setVendorVisibility, deleteVendor,
   createStop, updateStop, checkInStop, setStopSoldOut, cancelStop, deleteStop, uploadPopupPhoto,
   adminListVendors, adminListStops, adminHideVendor, adminHideStop,
@@ -336,6 +336,7 @@ app.get('/api/t/:tenant/sales/:id', resolveTenant, getSale);
 // consistent with every other board module.
 app.get('/api/t/:tenant/popups', resolveTenant, listStops);
 app.get('/api/t/:tenant/popups/pins', resolveTenant, listStopPins);
+app.get('/api/t/:tenant/popups/events', resolveTenant, listPopupEvents);
 app.get('/api/t/:tenant/popups/vendors/:id', resolveTenant, getVendor);
 app.post('/api/t/:tenant/support', resolveTenant, submitSupport);
 app.post('/api/t/:tenant/passport/claims/register', resolveTenant, registerClaim);

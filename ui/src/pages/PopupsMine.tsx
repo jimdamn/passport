@@ -29,6 +29,7 @@ const PHONE_MAX = 25;
 const ADDRESS_MAX = 120;
 const HINT_MAX = 120;
 const NOTE_MAX = 280;
+const EVENT_NAME_MAX = 60;
 const MAX_DAYS_AHEAD = 60;
 
 const inputStyle = { minHeight: 40, margin: 0 } as const;
@@ -239,7 +240,7 @@ function VendorForm({ tenantId, editingVendor, onCancel, onSaved }: {
 
 interface StopSeed {
   date: string; open: string; close: string; lat: number; lon: number;
-  address: string | null; location_hint: string | null; note: string | null;
+  address: string | null; location_hint: string | null; note: string | null; event_name: string | null;
 }
 
 function StopForm({ tenantId, vendorId, editingStop, seed, defaultCenter, onCancel, onSaved }: {
@@ -263,6 +264,7 @@ function StopForm({ tenantId, vendorId, editingStop, seed, defaultCenter, onCanc
   const [address, setAddress] = useState(editingStop?.address ?? seed?.address ?? '');
   const [locationHint, setLocationHint] = useState(editingStop?.location_hint ?? seed?.location_hint ?? '');
   const [note, setNote] = useState(editingStop?.note ?? '');
+  const [eventName, setEventName] = useState(editingStop?.event_name ?? seed?.event_name ?? '');
   const [picked, setPicked] = useState(initialCenter);
   const [mapCenter, setMapCenter] = useState(initialCenter);
   const [formError, setFormError] = useState('');
@@ -308,6 +310,7 @@ function StopForm({ tenantId, vendorId, editingStop, seed, defaultCenter, onCanc
         address: address.trim(),
         location_hint: locationHint.trim() || null,
         note: note.trim() || null,
+        event_name: eventName.trim() || null,
       };
       if (editingStop) {
         await updatePopupStop(tenantId, editingStop.id, body);
@@ -386,6 +389,16 @@ function StopForm({ tenantId, vendorId, editingStop, seed, defaultCenter, onCanc
           placeholder="Anything special this stop? Example: New smash burger this week. Card and cash."
           style={{ margin: 0, resize: 'vertical' }}
           onChange={e => setNote(e.target.value)} />
+      </div>
+
+      <div style={{ marginBottom: 16 }}>
+        <label style={labelStyle}>Event name (optional)</label>
+        <input className="form-input" style={inputStyle} maxLength={EVENT_NAME_MAX} value={eventName ?? ''}
+          placeholder="e.g. Angola Farmers Market"
+          onChange={e => setEventName(e.target.value)} />
+        <p style={{ margin: '6px 0 0', fontSize: '0.78rem', color: 'var(--muted)' }}>
+          Part of a bigger event? Name it and your stop shows up with the rest. Example: Angola Farmers Market
+        </p>
       </div>
 
       <div style={{ marginBottom: 16 }}>
@@ -563,6 +576,14 @@ function StopRow({ stop, tenantId, vendorVisible, onChanged, onError, onEdit, on
         <span style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text)' }}>{stop.date}</span>
         <span style={{ fontSize: '0.82rem', color: 'var(--muted)' }}>{clockLabel(stop.open)} - {clockLabel(stop.close)}</span>
       </div>
+      {stop.event_name && (
+        <span style={{
+          display: 'inline-block', marginBottom: 4, fontSize: '0.66rem', fontWeight: 700, textTransform: 'uppercase',
+          padding: '2px 8px', borderRadius: 'var(--r-sm)', background: 'rgba(200,134,10,0.14)', color: 'var(--amber)',
+        }}>
+          {stop.event_name}
+        </span>
+      )}
       {stop.address && (
         <p style={{ margin: '0 0 2px', fontSize: '0.8rem', color: 'var(--text)' }}>
           <MapPin size={11} style={{ verticalAlign: '-1px', marginRight: 3, color: 'var(--amber)' }} />
@@ -790,7 +811,7 @@ function VendorCard({ vendor, tenantId, onRefetch, onEdit }: {
               onEdit={s => setStopForm({ editing: s, seed: null })}
               onRunAgain={s => setStopForm({
                 editing: null,
-                seed: { date: '', open: s.open, close: s.close, lat: s.lat, lon: s.lon, address: s.address, location_hint: s.location_hint, note: null },
+                seed: { date: '', open: s.open, close: s.close, lat: s.lat, lon: s.lon, address: s.address, location_hint: s.location_hint, note: null, event_name: s.event_name },
               })}
             />
           ))}

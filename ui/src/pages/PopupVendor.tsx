@@ -47,6 +47,14 @@ function StopRow({ stop, isToday }: { stop: PopupVendorStop; isToday: boolean })
           {clockLabel(stop.open)} - {clockLabel(stop.close)}
         </span>
       </div>
+      {stop.event_name && (
+        <span style={{
+          display: 'inline-block', marginTop: 2, fontSize: '0.66rem', fontWeight: 700, textTransform: 'uppercase',
+          padding: '2px 8px', borderRadius: 'var(--r-sm)', background: 'rgba(200,134,10,0.14)', color: 'var(--amber)',
+        }}>
+          {stop.event_name}
+        </span>
+      )}
       {stop.address && (
         <p style={{ margin: '2px 0 0', fontSize: '0.82rem', color: 'var(--text)' }}>{stop.address}</p>
       )}
