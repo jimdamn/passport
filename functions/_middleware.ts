@@ -168,6 +168,14 @@ const SALE_PATTERN = /^\/sales\/sale\/([\w-]+)$/;
 // stop - the vendor page is the shareable object (POP-UPS-BUILD-PLAN.md §6.1).
 // Vendor ids are nanoid strings.
 const POPUP_VENDOR_PATTERN = /^\/popups\/vendor\/([\w-]+)$/;
+// The board itself (not a specific vendor) - exact path only, so it never
+// swallows /popups/vendor/:id or /popups/mine.
+const POPUP_BOARD_PATTERN = /^\/popups\/?$/;
+// Static illustrated banner (uploaded to SITE_ASSETS at og/popups-social-banner.jpg) -
+// used for the board's own share preview, and as the fallback image for any
+// vendor page that hasn't uploaded its own photo. Mirrors krowdkraft-exchange's
+// exchange-offer-fallback.jpg pattern exactly.
+const POPUPS_BANNER_PATH = '/site-assets/og/popups-social-banner.jpg';
 
 // Cloudflare computes this from more than just the client-sent User-Agent
 // (confirmed empirically 2026-07-20 by pointing Facebook's real Sharing
@@ -492,6 +500,7 @@ export const onRequest: PagesFunction<Env & { GEO_TOKEN_SECRET: string }> = asyn
   const freshStandMatch = url.pathname.match(FRESH_STAND_PATTERN);
   const saleMatch       = url.pathname.match(SALE_PATTERN);
   const popupVendorMatch = url.pathname.match(POPUP_VENDOR_PATTERN);
+  const popupBoardMatch = url.pathname.match(POPUP_BOARD_PATTERN);
   let verifiedPayload: GeoTokenPayload | null = null;
   let mintEventBypass = false;
 
@@ -517,7 +526,7 @@ export const onRequest: PagesFunction<Env & { GEO_TOKEN_SECRET: string }> = asyn
       // who has no region-trust cookie; we mint a short-lived bypass below.
       if (await isActiveEventScan(url, context.env)) {
         mintEventBypass = true;
-      } else if ((freshStandMatch || saleMatch || popupVendorMatch) && isPagePreviewCrawler(context.request)) {
+      } else if ((freshStandMatch || saleMatch || popupVendorMatch || popupBoardMatch) && isPagePreviewCrawler(context.request)) {
         // Narrow, read-only exception: a confirmed link-preview crawler
         // (Facebook, Slack, etc. - see isPagePreviewCrawler) fetching a
         // specific Fresh Today stand, Sale Day sale, or Pop-Ups vendor detail
@@ -611,6 +620,12 @@ export const onRequest: PagesFunction<Env & { GEO_TOKEN_SECRET: string }> = asyn
     }
   }
 
+  if (popupBoardMatch) {
+    ogTitle = 'Pop-Ups - Lake & Locals';
+    ogDescription = "Food trucks, pop-up shops and traveling vendors - where they are today, and where they'll be next.";
+    ogImage = `${url.origin}${POPUPS_BANNER_PATH}`;
+  }
+
   if (popupVendorMatch) {
     const tenantSlug = REGIONAL_DOMAINS[hostname] ?? 'lake-locals';
     const vendor = await resolvePopupVendorMeta(popupVendorMatch[1], tenantSlug, context.env);
@@ -625,7 +640,9 @@ export const onRequest: PagesFunction<Env & { GEO_TOKEN_SECRET: string }> = asyn
           : 'On the road in the Lakes Region - schedule on Pop-Ups.',
         160,
       );
-      ogImage = vendor.photoUrl;
+      // No uploaded vendor photo - the illustrated board banner stands in,
+      // same fallback contract as krowdkraft-exchange's offer share cards.
+      ogImage = vendor.photoUrl ?? `${url.origin}${POPUPS_BANNER_PATH}`;
     }
   }
 
@@ -653,9 +670,19 @@ export const onRequest: PagesFunction<Env & { GEO_TOKEN_SECRET: string }> = asyn
     });
 
   if (ogImage) {
+    // The banner is a known, fixed 1200x630 asset - declare its dimensions so
+    // Facebook doesn't have to infer them on first fetch (the warning our own
+    // Sharing Debugger walk surfaced). Real uploaded vendor/stand/sale photos
+    // have no guaranteed size, so this only applies to the banner itself.
+    const isBanner = ogImage.endsWith(POPUPS_BANNER_PATH);
     rewriter
       .on('meta[property="og:image"]', {
-        element(el) { el.setAttribute('content', ogImage as string); },
+        element(el) {
+          el.setAttribute('content', ogImage as string);
+          if (isBanner) {
+            el.after('<meta property="og:image:width" content="1200" /><meta property="og:image:height" content="630" />', { html: true });
+          }
+        },
       })
       .on('meta[name="twitter:image"]', {
         element(el) { el.setAttribute('content', ogImage as string); },
