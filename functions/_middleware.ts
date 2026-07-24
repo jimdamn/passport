@@ -175,6 +175,14 @@ const SALE_PATTERN = /^\/sales\/sale\/([\w-]+)$/;
 // Same growth rail as Fresh Today/Sale Day - a meal link shared into a county
 // Facebook group (benefit dinners are the point). Meal ids are nanoid strings.
 const MEAL_PATTERN = /^\/meals\/meal\/([\w-]+)$/;
+// The board itself (not a specific meal) - exact path only, so it never
+// swallows /meals/meal/:id, /meals/kitchen/:id, or /meals/mine.
+const MEAL_BOARD_PATTERN = /^\/meals\/?$/;
+// Static illustrated banner (uploaded to SITE_ASSETS at og/community-table-social-banner.jpg) -
+// used for the board's own share preview, and as the fallback image for any
+// meal that hasn't uploaded its own photo. Same fallback contract as
+// FRESH_BANNER_PATH / POPUPS_BANNER_PATH above.
+const COMMUNITY_TABLE_BANNER_PATH = '/site-assets/og/community-table-social-banner.jpg';
 
 // ─── Pop-Ups vendor-page crawler bypass + OG meta ────────────────────────────
 // Same growth rail, but fans share the VENDOR (their whole schedule), not one
@@ -579,6 +587,7 @@ export const onRequest: PagesFunction<Env & { GEO_TOKEN_SECRET: string }> = asyn
   const popupVendorMatch = url.pathname.match(POPUP_VENDOR_PATTERN);
   const popupBoardMatch = url.pathname.match(POPUP_BOARD_PATTERN);
   const mealMatch       = url.pathname.match(MEAL_PATTERN);
+  const mealBoardMatch  = url.pathname.match(MEAL_BOARD_PATTERN);
   let verifiedPayload: GeoTokenPayload | null = null;
   let mintEventBypass = false;
 
@@ -604,11 +613,11 @@ export const onRequest: PagesFunction<Env & { GEO_TOKEN_SECRET: string }> = asyn
       // who has no region-trust cookie; we mint a short-lived bypass below.
       if (await isActiveEventScan(url, context.env)) {
         mintEventBypass = true;
-      } else if ((freshStandMatch || freshBoardMatch || saleMatch || popupVendorMatch || popupBoardMatch || mealMatch) && isPagePreviewCrawler(context.request)) {
+      } else if ((freshStandMatch || freshBoardMatch || saleMatch || popupVendorMatch || popupBoardMatch || mealMatch || mealBoardMatch) && isPagePreviewCrawler(context.request)) {
         // Narrow, read-only exception: a confirmed link-preview crawler
         // (Facebook, Slack, etc. - see isPagePreviewCrawler) fetching a
         // specific Fresh Today stand, Sale Day sale, Pop-Ups vendor, or
-        // Community Table meal detail page gets the real page (and its OG
+        // Community Table meal/board page gets the real page (and its OG
         // tags below) instead of the gate, so a shared link previews
         // correctly. This does not apply to any other route, does not grant
         // write access, and does not change the gate for any real visitor -
@@ -732,6 +741,12 @@ export const onRequest: PagesFunction<Env & { GEO_TOKEN_SECRET: string }> = asyn
     }
   }
 
+  if (mealBoardMatch) {
+    ogTitle = 'Community Table - Lake & Locals';
+    ogDescription = "Fish fries, pancake breakfasts, suppers and benefits - who's serving, when, and who it helps.";
+    ogImage = `${url.origin}${COMMUNITY_TABLE_BANNER_PATH}`;
+  }
+
   if (mealMatch) {
     const tenantSlug = REGIONAL_DOMAINS[hostname] ?? 'lake-locals';
     const meal = await resolveMealMeta(mealMatch[1], tenantSlug, context.env);
@@ -742,10 +757,10 @@ export const onRequest: PagesFunction<Env & { GEO_TOKEN_SECRET: string }> = asyn
       if (meal.benefitLine) descParts.push(meal.benefitLine);
       descParts.push(meal.body);
       ogDescription = truncate(descParts.join(' - '), 160);
-      // No static board banner for Community Table (donor precedent: Sale
-      // Day also has none) - a meal with no uploaded photo shares with no
-      // image rather than a stand-in.
-      ogImage = meal.photoUrl;
+      // No uploaded meal photo - the illustrated board banner stands in,
+      // same fallback contract as Fresh Today's stand pages / Pop-Ups'
+      // vendor pages.
+      ogImage = meal.photoUrl ?? `${url.origin}${COMMUNITY_TABLE_BANNER_PATH}`;
     }
   }
 
@@ -777,7 +792,7 @@ export const onRequest: PagesFunction<Env & { GEO_TOKEN_SECRET: string }> = asyn
     // so Facebook doesn't have to infer them on first fetch (the warning our
     // own Sharing Debugger walk surfaced). Real uploaded vendor/stand/sale
     // photos have no guaranteed size, so this only applies to the banners.
-    const isBanner = ogImage.endsWith(POPUPS_BANNER_PATH) || ogImage.endsWith(FRESH_BANNER_PATH);
+    const isBanner = ogImage.endsWith(POPUPS_BANNER_PATH) || ogImage.endsWith(FRESH_BANNER_PATH) || ogImage.endsWith(COMMUNITY_TABLE_BANNER_PATH);
     rewriter
       .on('meta[property="og:image"]', {
         element(el) {
