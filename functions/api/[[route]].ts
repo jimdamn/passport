@@ -84,6 +84,7 @@ import {
   resolveSponsorDrawer, sponsorBeacon, uploadSponsorPhoto,
   adminListSponsors, adminCreateSponsor, adminUpdateSponsor, adminSetSponsorActive,
   adminEndSponsor, adminDeleteSponsor, adminGetSponsorFeature, adminSetSponsorFeature,
+  adminGetInlineSponsorsFeature, adminSetInlineSponsorsFeature,
 } from '../../src/handlers/sponsors';
 
 import { logger } from '../../src/lib/logger';
@@ -317,6 +318,8 @@ tenantApp.post('/admin/sponsors/:id/end', adminEndSponsor);
 tenantApp.delete('/admin/sponsors/:id', adminDeleteSponsor);
 tenantApp.get('/admin/sponsors/feature', adminGetSponsorFeature);
 tenantApp.post('/admin/sponsors/feature', adminSetSponsorFeature);
+tenantApp.get('/admin/sponsors/inline-feature', adminGetInlineSponsorsFeature);
+tenantApp.post('/admin/sponsors/inline-feature', adminSetInlineSponsorsFeature);
 
 // KrowdKwest - guest progress migrates onto the account on sign-in.
 tenantApp.post('/kwest/attach', attachKwestGuest);

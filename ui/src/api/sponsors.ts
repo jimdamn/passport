@@ -51,16 +51,41 @@ export function routeLabel(app: string, route: string): string {
   return SPONSOR_ROUTES_BY_APP[app as SponsorApp]?.find(r => r.value === route)?.label ?? route;
 }
 
+// Inline Sponsor Banner (INLINE-SPONSOR-BANNER-BUILD-PLAN.md) - mirrors
+// src/handlers/sponsors.ts's SPONSOR_PLACEMENTS / SPONSOR_BANNER_SIZES exactly,
+// kept in sync by hand (same reason as SPONSOR_APPS above).
+export const SPONSOR_PLACEMENTS = [
+  { value: 'route_drawer', label: 'Sponsor Drawer' },
+  { value: 'inline_top', label: 'Top Banner' },
+  { value: 'inline_footer', label: 'Footer Banner' },
+  { value: 'inline_mid_feed', label: 'Feed Mid-Banner' },
+  { value: 'inline_mid_story', label: 'Story Mid-Banner' },
+] as const;
+export type SponsorPlacementType = typeof SPONSOR_PLACEMENTS[number]['value'];
+export const INLINE_PLACEMENTS = new Set<SponsorPlacementType>(['inline_top', 'inline_footer', 'inline_mid_feed', 'inline_mid_story']);
+
+export const SPONSOR_BANNER_SIZES = [
+  { value: 'wide', label: 'Wide Banner', dims: '1600x250px', guidance: "Leave room in the image itself for the sponsor's own message or logo; this box does not add any text unless the credit line is on." },
+  { value: 'rectangle', label: 'Rectangle', dims: '1200x1000px', guidance: "Sits like a card between content blocks. Leave room in the image itself for the sponsor's own message or logo." },
+] as const;
+export type SponsorBannerSize = typeof SPONSOR_BANNER_SIZES[number]['value'];
+
+export function placementLabel(placement: string): string {
+  return SPONSOR_PLACEMENTS.find(p => p.value === placement)?.label ?? placement;
+}
+
 export type SponsorTargetKind = 'region' | 'city' | 'zip';
 export type SponsorState = 'live' | 'scheduled' | 'ended' | 'paused' | 'feature_off';
 
-// GET /sponsor-drawer/resolve winning-placement shape (what the drawer itself renders).
+// GET /sponsor-drawer/resolve winning-placement shape (what the drawer/banner itself renders).
 export interface SponsorPlacement {
   id: number;
   sponsor_name: string;
   message: string;
   link_url: string | null;
   image_url: string | null;
+  banner_size: SponsorBannerSize | null;
+  show_credit_line: boolean;
 }
 
 // Admin CRUD row shape (serializeSponsor in src/handlers/sponsors.ts) plus
@@ -69,6 +94,9 @@ export interface AdminSponsor {
   id: number;
   app: string;
   route: string;
+  placement: SponsorPlacementType;
+  banner_size: SponsorBannerSize | null;
+  show_credit_line: boolean;
   target_kind: SponsorTargetKind;
   target_value: string | null;
   sponsor_name: string;
@@ -95,6 +123,9 @@ export interface SponsorInput {
   message?: string;
   app?: string;
   route?: string;
+  placement?: SponsorPlacementType;
+  banner_size?: SponsorBannerSize | null;
+  show_credit_line?: boolean;
   target_kind?: SponsorTargetKind;
   target_value?: string | null;
   link_url?: string | null;
@@ -107,8 +138,8 @@ export interface SponsorInput {
 // Public — resolve + beacon (optional auth; frictionless-reads standing order)
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function resolveSponsorDrawer(tenant: string, app: string, route: string) {
-  return api.get<ApiResponse<SponsorPlacement | null>>(`/t/${tenant}/sponsor-drawer/resolve?app=${encodeURIComponent(app)}&route=${encodeURIComponent(route)}`);
+export function resolveSponsorDrawer(tenant: string, app: string, route: string, placement: SponsorPlacementType = 'route_drawer') {
+  return api.get<ApiResponse<SponsorPlacement | null>>(`/t/${tenant}/sponsor-drawer/resolve?app=${encodeURIComponent(app)}&route=${encodeURIComponent(route)}&placement=${encodeURIComponent(placement)}`);
 }
 
 export function sponsorBeacon(tenant: string, placementId: number, kind: 'show' | 'dismiss' | 'tap') {
@@ -145,6 +176,14 @@ export function adminGetSponsorFeature(tenant: string) {
 
 export function adminSetSponsorFeature(tenant: string, on: boolean) {
   return api.post<ApiResponse<{ on: boolean }>>(`/t/${tenant}/admin/sponsors/feature`, { on });
+}
+
+export function adminGetInlineSponsorsFeature(tenant: string) {
+  return api.get<ApiResponse<{ on: boolean }>>(`/t/${tenant}/admin/sponsors/inline-feature`);
+}
+
+export function adminSetInlineSponsorsFeature(tenant: string, on: boolean) {
+  return api.post<ApiResponse<{ on: boolean }>>(`/t/${tenant}/admin/sponsors/inline-feature`, { on });
 }
 
 /**

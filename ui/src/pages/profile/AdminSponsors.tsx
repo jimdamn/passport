@@ -6,8 +6,11 @@ import { useTenant } from '../../context/TenantContext';
 import {
   adminListSponsors, adminCreateSponsor, adminUpdateSponsor, adminSetSponsorActive,
   adminEndSponsor, adminDeleteSponsor, adminGetSponsorFeature, adminSetSponsorFeature,
-  uploadSponsorPhoto, routeLabel, appLabel, SPONSOR_APPS, SPONSOR_ROUTES_BY_APP,
+  adminGetInlineSponsorsFeature, adminSetInlineSponsorsFeature,
+  uploadSponsorPhoto, routeLabel, appLabel, placementLabel, SPONSOR_APPS, SPONSOR_ROUTES_BY_APP,
+  SPONSOR_PLACEMENTS, SPONSOR_BANNER_SIZES, INLINE_PLACEMENTS,
   type AdminSponsor, type SponsorInput, type SponsorTargetKind, type SponsorApp,
+  type SponsorPlacementType, type SponsorBannerSize,
 } from '../../api/sponsors';
 import {
   ArrowLeft, Handshake, Plus, Pencil, Trash2, PauseCircle, CheckCircle, RefreshCw,
@@ -34,6 +37,9 @@ interface FormState {
   message: string;
   app: SponsorApp;
   route: string;
+  placement: SponsorPlacementType;
+  banner_size: SponsorBannerSize | null;
+  show_credit_line: boolean;
   target_kind: SponsorTargetKind;
   target_value: string;
   link_url: string;
@@ -44,6 +50,7 @@ interface FormState {
 
 const EMPTY_FORM: FormState = {
   sponsor_name: '', message: '', app: SPONSOR_APPS[0].value, route: SPONSOR_ROUTES_BY_APP[SPONSOR_APPS[0].value][0].value,
+  placement: 'route_drawer', banner_size: null, show_credit_line: true,
   target_kind: 'region', target_value: '', link_url: '', image_url: '',
   starts_at: '', ends_at: '',
 };
@@ -69,6 +76,7 @@ export default function AdminSponsors() {
 
   const [sponsors, setSponsors] = useState<AdminSponsor[]>([]);
   const [featureOn, setFeatureOn] = useState<boolean | null>(null);
+  const [inlineFeatureOn, setInlineFeatureOn] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -96,12 +104,14 @@ export default function AdminSponsors() {
     setLoading(true);
     setError('');
     try {
-      const [listRes, featureRes] = await Promise.all([
+      const [listRes, featureRes, inlineFeatureRes] = await Promise.all([
         adminListSponsors(tenant.id),
         adminGetSponsorFeature(tenant.id),
+        adminGetInlineSponsorsFeature(tenant.id),
       ]);
       setSponsors(listRes.data || []);
       setFeatureOn(featureRes.data.on);
+      setInlineFeatureOn(inlineFeatureRes.data.on);
     } catch (err: any) {
       setError(err.message || 'Failed to load sponsor placements.');
     } finally {
@@ -126,6 +136,23 @@ export default function AdminSponsors() {
     }
   };
 
+  const toggleInlineFeature = async () => {
+    if (!tenant || working || inlineFeatureOn === null) return;
+    setWorking(true);
+    setError('');
+    setNotice('');
+    try {
+      const res = await adminSetInlineSponsorsFeature(tenant.id, !inlineFeatureOn);
+      setInlineFeatureOn(res.data.on);
+      setNotice(res.data.on ? 'Inline banners are now ON across the Hub.' : 'Inline banners are now OFF everywhere.');
+      await fetchAll();
+    } catch (err: any) {
+      setError(err.message || 'Failed to update the feature toggle.');
+    } finally {
+      setWorking(false);
+    }
+  };
+
   const openCreate = () => {
     setForm(EMPTY_FORM);
     setEditingId(null);
@@ -141,6 +168,9 @@ export default function AdminSponsors() {
       message: s.message,
       app: s.app as SponsorApp,
       route: s.route,
+      placement: s.placement,
+      banner_size: s.banner_size,
+      show_credit_line: s.show_credit_line,
       target_kind: s.target_kind,
       target_value: s.target_value ?? '',
       link_url: s.link_url ?? '',
@@ -181,11 +211,15 @@ export default function AdminSponsors() {
     setError('');
     setNotice('');
     try {
+      const isInline = INLINE_PLACEMENTS.has(form.placement);
       const input: SponsorInput = {
         sponsor_name: form.sponsor_name,
         message: form.message,
         app: form.app,
         route: form.route,
+        placement: form.placement,
+        banner_size: isInline ? form.banner_size : null,
+        show_credit_line: form.show_credit_line,
         target_kind: form.target_kind,
         target_value: form.target_kind === 'region' ? null : form.target_value,
         link_url: form.link_url || null,
@@ -308,6 +342,31 @@ export default function AdminSponsors() {
         </div>
       </div>
 
+      {/* Independent toggle - piloting inline banners must not require touching whether the Drawer is live anywhere */}
+      <div className="card" style={{
+        marginBottom: 20, padding: 16, background: 'var(--white)',
+        borderLeft: `4px solid ${inlineFeatureOn ? 'var(--green)' : 'var(--muted)'}`,
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+          <div>
+            <p style={{ margin: 0, fontWeight: 700, fontFamily: 'var(--font-serif)', color: 'var(--green)' }}>
+              Inline banners are {inlineFeatureOn ? 'ON' : 'OFF'}
+            </p>
+            <p style={{ margin: '2px 0 0', fontSize: '0.8rem', color: 'var(--muted)' }}>
+              Static image placements (Top/Footer/Feed/Story banners). Independent of the drawer toggle above.
+            </p>
+          </div>
+          <button
+            className={inlineFeatureOn ? 'btn btn-secondary btn-sm' : 'btn btn-amber btn-sm'}
+            onClick={toggleInlineFeature}
+            disabled={working}
+            style={{ minHeight: 36 }}
+          >
+            {inlineFeatureOn ? 'Turn Off' : 'Turn On'}
+          </button>
+        </div>
+      </div>
+
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <h2 style={{ margin: 0, fontSize: '1.05rem', fontFamily: 'var(--font-serif)', color: 'var(--green)' }}>
           Placements ({sponsors.length})
@@ -331,16 +390,50 @@ export default function AdminSponsors() {
             {editingId ? 'Edit Placement' : 'New Placement'}
           </h3>
 
-          <div style={{ marginBottom: 12 }}>
-            <label style={labelStyle}>App</label>
-            <select className="form-select" style={inputStyle} value={form.app}
-              onChange={e => {
-                const app = e.target.value as SponsorApp;
-                setForm(f => ({ ...f, app, route: SPONSOR_ROUTES_BY_APP[app][0].value }));
-              }}>
-              {SPONSOR_APPS.map(a => <option key={a.value} value={a.value}>{a.label}</option>)}
-            </select>
+          <div className="form-grid-2" style={{ marginBottom: 12 }}>
+            <div>
+              <label style={labelStyle}>App</label>
+              <select className="form-select" style={inputStyle} value={form.app}
+                onChange={e => {
+                  const app = e.target.value as SponsorApp;
+                  setForm(f => ({ ...f, app, route: SPONSOR_ROUTES_BY_APP[app][0].value }));
+                }}>
+                {SPONSOR_APPS.map(a => <option key={a.value} value={a.value}>{a.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>Where does it appear?</label>
+              <select className="form-select" style={inputStyle} value={form.placement}
+                onChange={e => {
+                  const placement = e.target.value as SponsorPlacementType;
+                  const isInline = INLINE_PLACEMENTS.has(placement);
+                  setForm(f => ({ ...f, placement, banner_size: isInline ? (f.banner_size ?? SPONSOR_BANNER_SIZES[0].value) : null }));
+                }}>
+                {SPONSOR_PLACEMENTS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+              </select>
+            </div>
           </div>
+
+          {INLINE_PLACEMENTS.has(form.placement) && (
+            <div style={{ marginBottom: 12 }}>
+              <label style={labelStyle}>Banner size</label>
+              <select className="form-select" style={inputStyle} value={form.banner_size ?? SPONSOR_BANNER_SIZES[0].value}
+                onChange={e => setForm(f => ({ ...f, banner_size: e.target.value as any }))}>
+                {SPONSOR_BANNER_SIZES.map(s => <option key={s.value} value={s.value}>{s.label} - {s.dims}</option>)}
+              </select>
+              <p style={{ margin: '6px 0 0', fontSize: '0.74rem', color: 'var(--muted)' }}>
+                {SPONSOR_BANNER_SIZES.find(s => s.value === (form.banner_size ?? SPONSOR_BANNER_SIZES[0].value))?.guidance}
+              </p>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.85rem', cursor: 'pointer', marginTop: 10 }}>
+                <input type="checkbox" checked={form.show_credit_line}
+                  onChange={e => setForm(f => ({ ...f, show_credit_line: e.target.checked }))} />
+                Show "Brought to you by" credit line
+              </label>
+              <p style={{ margin: '4px 0 0', fontSize: '0.74rem', color: 'var(--muted)' }}>
+                Turn this off if the sponsor's image already makes the sponsorship obvious - leave it on otherwise.
+              </p>
+            </div>
+          )}
 
           <div className="form-grid-2">
             <div>
@@ -415,9 +508,9 @@ export default function AdminSponsors() {
           <div style={{ marginBottom: 20 }}>
             <label style={labelStyle}>Photo (optional)</label>
             <p style={{ margin: '0 0 8px', fontSize: '0.78rem', color: 'var(--muted)' }}>
-              Square works best, logo or subject centered - it renders small (about
-              130px) and gets cropped to fit, so a wide banner photo will lose its edges.
-              Around 600x600px is plenty; no need to send anything larger.
+              {INLINE_PLACEMENTS.has(form.placement)
+                ? `${SPONSOR_BANNER_SIZES.find(s => s.value === (form.banner_size ?? SPONSOR_BANNER_SIZES[0].value))?.dims} works best. ${SPONSOR_BANNER_SIZES.find(s => s.value === (form.banner_size ?? SPONSOR_BANNER_SIZES[0].value))?.guidance}`
+                : 'Square works best, logo or subject centered - it renders small (about 130px) and gets cropped to fit, so a wide banner photo will lose its edges. Around 600x600px is plenty; no need to send anything larger.'}
             </p>
             <input type="file" accept="image/*" disabled={uploading}
               onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(f); }} />
@@ -440,26 +533,35 @@ export default function AdminSponsors() {
 
           <div style={{ paddingTop: 16, borderTop: '1px solid var(--border)' }}>
             <label style={labelStyle}>Preview</label>
-            <p style={{ margin: '0 0 8px', fontSize: '0.78rem', color: 'var(--muted)' }}>
-              The real card - it will appear pinned to the bottom of your screen.
-            </p>
-            {previewDismissed ? (
-              <button type="button" className="btn btn-secondary btn-sm" onClick={() => setPreviewDismissed(false)}
-                style={{ minHeight: 32, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                <Eye size={13} /> Show preview
-              </button>
+            {INLINE_PLACEMENTS.has(form.placement) ? (
+              <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--muted)' }}>
+                Live preview for inline banners ships with the banner component itself
+                (next increment) - not available yet on this page.
+              </p>
             ) : (
-              <SponsorDrawer
-                placement={{
-                  id: 0,
-                  sponsor_name: form.sponsor_name || 'Sponsor name',
-                  message: form.message || 'Sponsor message goes here.',
-                  link_url: form.link_url || null,
-                  image_url: form.image_url || null,
-                }}
-                onDismiss={() => setPreviewDismissed(true)}
-                onTap={() => {}}
-              />
+              <>
+                <p style={{ margin: '0 0 8px', fontSize: '0.78rem', color: 'var(--muted)' }}>
+                  The real card - it will appear pinned to the bottom of your screen.
+                </p>
+                {previewDismissed ? (
+                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => setPreviewDismissed(false)}
+                    style={{ minHeight: 32, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <Eye size={13} /> Show preview
+                  </button>
+                ) : (
+                  <SponsorDrawer
+                    placement={{
+                      id: 0,
+                      sponsor_name: form.sponsor_name || 'Sponsor name',
+                      message: form.message || 'Sponsor message goes here.',
+                      link_url: form.link_url || null,
+                      image_url: form.image_url || null,
+                    }}
+                    onDismiss={() => setPreviewDismissed(true)}
+                    onTap={() => {}}
+                  />
+                )}
+              </>
             )}
           </div>
         </div>
@@ -482,6 +584,9 @@ export default function AdminSponsors() {
                     </span>
                     <span style={{ fontSize: '0.66rem', textTransform: 'uppercase', padding: '2px 6px', borderRadius: 'var(--r-sm)', background: 'rgba(80,120,80,0.12)', color: 'var(--green)' }}>
                       {routeLabel(s.app, s.route)}
+                    </span>
+                    <span style={{ fontSize: '0.66rem', textTransform: 'uppercase', padding: '2px 6px', borderRadius: 'var(--r-sm)', background: 'rgba(30,51,32,0.08)', color: 'var(--green)' }}>
+                      {placementLabel(s.placement)}
                     </span>
                     <span style={{ fontSize: '0.66rem', textTransform: 'uppercase', padding: '2px 6px', borderRadius: 'var(--r-sm)', background: 'rgba(200,134,10,0.12)', color: 'var(--amber)' }}>
                       {targetChip(s)}

@@ -84,6 +84,7 @@ export interface TenantConfig {
   active_niches: string[];
   bd_signing_secret?: string;
   sponsor_drawer?: 'on' | 'off';
+  inline_sponsors?: 'on' | 'off';
 }
 
 export interface Niche {

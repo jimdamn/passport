@@ -70,6 +70,25 @@ function knownRoutesFor(app: string): readonly string[] {
   return (SPONSOR_ROUTES_BY_APP[app] || []).map(r => r.value);
 }
 
+// Inline Sponsor Banner (INLINE-SPONSOR-BANNER-BUILD-PLAN.md) - a static,
+// always-visible image sitting in normal page flow, same sponsorship table,
+// a different `placement` value from the Drawer's 'route_drawer' default.
+export const SPONSOR_PLACEMENTS = [
+  { value: 'route_drawer', label: 'Sponsor Drawer' },
+  { value: 'inline_top', label: 'Top Banner' },
+  { value: 'inline_footer', label: 'Footer Banner' },
+  { value: 'inline_mid_feed', label: 'Feed Mid-Banner' },
+  { value: 'inline_mid_story', label: 'Story Mid-Banner' },
+] as const;
+const KNOWN_PLACEMENT_VALUES = SPONSOR_PLACEMENTS.map(p => p.value) as readonly string[];
+const INLINE_PLACEMENTS = new Set(['inline_top', 'inline_footer', 'inline_mid_feed', 'inline_mid_story']);
+
+export const SPONSOR_BANNER_SIZES = [
+  { value: 'wide', label: 'Wide Banner', dims: '1600x250px', guidance: 'Leave room in the image itself for the sponsor\'s own message or logo; this box does not add any text unless the credit line is on.' },
+  { value: 'rectangle', label: 'Rectangle', dims: '1200x1000px', guidance: 'Sits like a card between content blocks. Leave room in the image itself for the sponsor\'s own message or logo.' },
+] as const;
+const KNOWN_BANNER_SIZE_VALUES = SPONSOR_BANNER_SIZES.map(s => s.value) as readonly string[];
+
 const SPONSOR_NAME_MIN = 2;
 const SPONSOR_NAME_MAX = 60;
 const MESSAGE_MIN = 5;
@@ -185,6 +204,9 @@ interface SponsorInput {
   message: string;
   app: string;
   route: string;
+  placement: string;
+  banner_size: string | null;
+  show_credit_line: boolean;
   target_kind: 'region' | 'city' | 'zip';
   target_value: string | null;
   link_url: string | null;
@@ -215,6 +237,21 @@ function parseSponsorInput(body: any, existing?: any): Omit<SponsorInput, 'targe
   if (!route || (route !== '*' && !knownRoutesFor(app).includes(route))) {
     throw new HTTPException(400, { message: 'Choose a route from the list, or "All routes".' });
   }
+
+  // Defaults to 'route_drawer' - every placement created before this field
+  // existed was, in fact, a Drawer placement (INLINE-SPONSOR-BANNER-BUILD-PLAN.md §1).
+  const placement = body.placement === undefined ? (existing?.placement ?? 'route_drawer') : (typeof body.placement === 'string' ? body.placement.trim() : '');
+  if (!placement || !KNOWN_PLACEMENT_VALUES.includes(placement)) {
+    throw new HTTPException(400, { message: 'Choose where this sponsor message appears.' });
+  }
+  const isInline = INLINE_PLACEMENTS.has(placement);
+
+  const banner_size = body.banner_size === undefined ? (existing?.banner_size ?? null) : (typeof body.banner_size === 'string' ? body.banner_size.trim() : null);
+  if (isInline && (!banner_size || !KNOWN_BANNER_SIZE_VALUES.includes(banner_size))) {
+    throw new HTTPException(400, { message: 'Choose a banner size.' });
+  }
+
+  const show_credit_line = body.show_credit_line === undefined ? (existing ? !!existing.show_credit_line : true) : !!body.show_credit_line;
 
   const target_kind = body.target_kind === undefined ? existing?.target_kind : body.target_kind;
   if (!['region', 'city', 'zip'].includes(target_kind)) {
@@ -255,7 +292,7 @@ function parseSponsorInput(body: any, existing?: any): Omit<SponsorInput, 'targe
     : (typeof body.ends_at === 'number' ? toSqlDatetime(body.ends_at) : null);
 
   return {
-    sponsor_name, message, app, route,
+    sponsor_name, message, app, route, placement, banner_size, show_credit_line,
     target_kind: target_kind as 'region' | 'city' | 'zip',
     link_url, image_url, sponsor_kkauth_uid, starts_at, ends_at,
     rawCity, zipValue,
@@ -272,12 +309,12 @@ function windowsOverlap(aStart: string | null, aEnd: string | null, bStart: stri
   return startsBeforeOtherEnds && otherStartsBeforeThisEnds;
 }
 
-async function checkCollision(c: AppContext, tenantId: string, app: string, route: string, targetKind: string, targetValue: string | null, startsAt: string | null, endsAt: string | null, excludeId?: number) {
+async function checkCollision(c: AppContext, tenantId: string, app: string, route: string, placement: string, targetKind: string, targetValue: string | null, startsAt: string | null, endsAt: string | null, excludeId?: number) {
   const { results } = await c.env.DB.prepare(`
     SELECT id, starts_at, ends_at FROM sponsorship
     WHERE tenant_id = ? AND deleted_at IS NULL AND is_active = 1
-      AND app = ? AND route = ? AND target_kind = ? AND ${targetValue === null ? 'target_value IS NULL' : 'target_value = ?'}
-  `).bind(...(targetValue === null ? [tenantId, app, route, targetKind] : [tenantId, app, route, targetKind, targetValue])).all<any>();
+      AND app = ? AND route = ? AND placement = ? AND target_kind = ? AND ${targetValue === null ? 'target_value IS NULL' : 'target_value = ?'}
+  `).bind(...(targetValue === null ? [tenantId, app, route, placement, targetKind] : [tenantId, app, route, placement, targetKind, targetValue])).all<any>();
 
   for (const row of results || []) {
     if (excludeId !== undefined && row.id === excludeId) continue;
@@ -311,6 +348,9 @@ function serializeSponsor(row: any) {
     id: row.id,
     app: row.app,
     route: row.route,
+    placement: row.placement,
+    banner_size: row.banner_size,
+    show_credit_line: !!row.show_credit_line,
     target_kind: row.target_kind,
     target_value: row.target_value,
     sponsor_name: row.sponsor_name,
@@ -361,16 +401,27 @@ async function tryGetProfile(c: AppContext): Promise<{ zip: string | null; lat: 
 }
 
 /**
- * GET /sponsor-drawer/resolve?app=<slug>&route=<path> — the single winning
- * placement for this app + route + caller, or null. Returns null immediately
- * (before any query) when the tenant feature flag is off. `app` is required
- * (not just `route`) since a bare route string collides across sibling apps.
+ * GET /sponsor-drawer/resolve?app=<slug>&route=<path>&placement=<slug> — the
+ * single winning placement for this app + route + placement + caller, or
+ * null. Returns null immediately (before any query) when the relevant
+ * tenant feature flag is off - `route_drawer` reads `sponsor_drawer`, every
+ * `inline_*` placement reads the independent `inline_sponsors` toggle
+ * (INLINE-SPONSOR-BANNER-BUILD-PLAN.md §5). `app` is required (not just
+ * `route`) since a bare route string collides across sibling apps.
+ * `placement` defaults to `route_drawer` when absent so every caller that
+ * predates this field (every Drawer trigger-wiring across the Hub) keeps
+ * working unchanged - a page needing more than one slot (top/footer/mid)
+ * calls this endpoint once per slot with its own `placement` value.
  */
 export async function resolveSponsorDrawer(c: AppContext) {
   c.header('Cache-Control', 'no-store');
   const tenant = c.get('tenant');
   const config = tenant.config as TenantConfig;
-  if (config.sponsor_drawer !== 'on') return c.json({ data: null });
+
+  const placement = c.req.query('placement') || 'route_drawer';
+  if (!KNOWN_PLACEMENT_VALUES.includes(placement)) throw new HTTPException(400, { message: 'Unknown placement.' });
+  const featureOn = INLINE_PLACEMENTS.has(placement) ? config.inline_sponsors === 'on' : config.sponsor_drawer === 'on';
+  if (!featureOn) return c.json({ data: null });
 
   const app = c.req.query('app');
   if (!app || !KNOWN_APP_VALUES.includes(app)) throw new HTTPException(400, { message: 'app is required.' });
@@ -381,11 +432,11 @@ export async function resolveSponsorDrawer(c: AppContext) {
   const { results } = await c.env.DB.prepare(`
     SELECT * FROM sponsorship
     WHERE tenant_id = ? AND deleted_at IS NULL AND is_active = 1
-      AND app = ?
+      AND app = ? AND placement = ?
       AND route IN (?, '*')
       AND (starts_at IS NULL OR starts_at <= ?)
       AND (ends_at IS NULL OR ends_at > ?)
-  `).bind(tenant.id, app, route, now, now).all<any>();
+  `).bind(tenant.id, app, placement, route, now, now).all<any>();
 
   const candidates = results || [];
   if (candidates.length === 0) return c.json({ data: null });
@@ -433,6 +484,8 @@ export async function resolveSponsorDrawer(c: AppContext) {
       message: winner.message,
       link_url: winner.link_url,
       image_url: winner.image_url,
+      banner_size: winner.banner_size,
+      show_credit_line: !!winner.show_credit_line,
     },
   });
 }
@@ -517,7 +570,9 @@ export async function adminListSponsors(c: AppContext) {
   requireAdmin(c);
   const tenant = c.get('tenant');
   const config = tenant.config as TenantConfig;
-  const featureOn = config.sponsor_drawer === 'on';
+  // Two independent feature toggles (INLINE-SPONSOR-BANNER-BUILD-PLAN.md §5) -
+  // which one gates a given row depends on its placement.
+  const featureOnFor = (placement: string) => (INLINE_PLACEMENTS.has(placement) ? config.inline_sponsors === 'on' : config.sponsor_drawer === 'on');
   const now = nowSql();
 
   const { results } = await c.env.DB.prepare(
@@ -541,16 +596,17 @@ export async function adminListSponsors(c: AppContext) {
   // ANY active/live exact-route placement on that same route, regardless of
   // target_kind (the resolve precedence puts every exact-route level ahead
   // of every wildcard level) - see resolveSponsorDrawer's `levels` array.
-  // Scoped per app - a Field Notes wildcard is never "superseded" by an
-  // Exchange placement, they never compete for the same resolve call.
+  // Scoped per app+placement - a Field Notes wildcard is never "superseded" by
+  // an Exchange placement, and a Top Banner is never "superseded" by a Drawer
+  // placement on the same route - they never compete for the same resolve call.
   const appsWithLiveSpecificRoutes = new Set(
     rows.filter((r: any) => r.route !== '*' && r.is_active && (!r.starts_at || r.starts_at <= now) && (!r.ends_at || r.ends_at > now))
-      .map((r: any) => r.app)
+      .map((r: any) => `${r.app}::${r.placement}`)
   );
 
   const data = rows.map((row: any) => {
-    const { state, note } = computeState(row, featureOn, now);
-    const superseded = state === 'live' && row.route === '*' && appsWithLiveSpecificRoutes.has(row.app);
+    const { state, note } = computeState(row, featureOnFor(row.placement), now);
+    const superseded = state === 'live' && row.route === '*' && appsWithLiveSpecificRoutes.has(`${row.app}::${row.placement}`);
     const imp = impByPlacement.get(row.id);
     return {
       ...serializeSponsor(row),
@@ -579,15 +635,16 @@ export async function adminCreateSponsor(c: AppContext) {
   if (parsed.target_kind === 'zip') target_value = parsed.zipValue;
   else if (parsed.target_kind === 'city') target_value = parsed.rawCity ? await resolveCityTarget(c, parsed.rawCity) : parsed.zipValue;
 
-  await checkCollision(c, tenant.id, parsed.app, parsed.route, parsed.target_kind, target_value, parsed.starts_at, parsed.ends_at);
+  await checkCollision(c, tenant.id, parsed.app, parsed.route, parsed.placement, parsed.target_kind, target_value, parsed.starts_at, parsed.ends_at);
 
   const row = await c.env.DB.prepare(`
     INSERT INTO sponsorship
-      (tenant_id, app, route, target_kind, target_value, sponsor_name, message, link_url, image_url, sponsor_kkauth_uid, starts_at, ends_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (tenant_id, app, route, placement, banner_size, show_credit_line, target_kind, target_value, sponsor_name, message, link_url, image_url, sponsor_kkauth_uid, starts_at, ends_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     RETURNING *
   `).bind(
-    tenant.id, parsed.app, parsed.route, parsed.target_kind, target_value, parsed.sponsor_name, parsed.message,
+    tenant.id, parsed.app, parsed.route, parsed.placement, parsed.banner_size, parsed.show_credit_line ? 1 : 0,
+    parsed.target_kind, target_value, parsed.sponsor_name, parsed.message,
     parsed.link_url, parsed.image_url, parsed.sponsor_kkauth_uid, parsed.starts_at, parsed.ends_at
   ).first<any>();
 
@@ -611,15 +668,16 @@ export async function adminUpdateSponsor(c: AppContext) {
   if (parsed.target_kind === 'zip') target_value = parsed.zipValue;
   else if (parsed.target_kind === 'city') target_value = parsed.rawCity ? await resolveCityTarget(c, parsed.rawCity) : (parsed.zipValue ?? existing.target_value);
 
-  await checkCollision(c, tenant.id, parsed.app, parsed.route, parsed.target_kind, target_value, parsed.starts_at, parsed.ends_at, id);
+  await checkCollision(c, tenant.id, parsed.app, parsed.route, parsed.placement, parsed.target_kind, target_value, parsed.starts_at, parsed.ends_at, id);
 
   await c.env.DB.prepare(`
     UPDATE sponsorship
-    SET app = ?, route = ?, target_kind = ?, target_value = ?, sponsor_name = ?, message = ?, link_url = ?, image_url = ?,
+    SET app = ?, route = ?, placement = ?, banner_size = ?, show_credit_line = ?, target_kind = ?, target_value = ?, sponsor_name = ?, message = ?, link_url = ?, image_url = ?,
         sponsor_kkauth_uid = ?, starts_at = ?, ends_at = ?, updated_at = datetime('now')
     WHERE id = ? AND tenant_id = ?
   `).bind(
-    parsed.app, parsed.route, parsed.target_kind, target_value, parsed.sponsor_name, parsed.message,
+    parsed.app, parsed.route, parsed.placement, parsed.banner_size, parsed.show_credit_line ? 1 : 0,
+    parsed.target_kind, target_value, parsed.sponsor_name, parsed.message,
     parsed.link_url, parsed.image_url, parsed.sponsor_kkauth_uid, parsed.starts_at, parsed.ends_at, id, tenant.id
   ).run();
 
@@ -699,6 +757,43 @@ export async function adminSetSponsorFeature(c: AppContext) {
 
   const config = JSON.parse(row.config || '{}');
   config.sponsor_drawer = on ? 'on' : 'off';
+
+  await c.env.DB.prepare('UPDATE tenants SET config = ? WHERE id = ?').bind(JSON.stringify(config), tenant.id).run();
+  await Promise.all([
+    c.env.PASSPORT_CONFIG.delete(`tenant:slug:${tenant.id}`),
+    c.env.PASSPORT_CONFIG.delete(`tenant:host:${row.hostname}`),
+  ]);
+
+  return c.json({ data: { on } });
+}
+
+/**
+ * GET/POST /admin/sponsors/inline-feature — the Inline Sponsor Banner's own
+ * kill switch, independent of the Drawer's `sponsor_drawer` toggle above
+ * (INLINE-SPONSOR-BANNER-BUILD-PLAN.md §5) - piloting inline banners must not
+ * require touching whether the Drawer is live anywhere, and vice versa. Same
+ * shape and cache-invalidation pattern as adminGetSponsorFeature/
+ * adminSetSponsorFeature, deliberately duplicated rather than parameterized
+ * (board-module "copy, never share code" convention).
+ */
+export async function adminGetInlineSponsorsFeature(c: AppContext) {
+  requireAdmin(c);
+  const tenant = c.get('tenant');
+  const config = tenant.config as TenantConfig;
+  return c.json({ data: { on: config.inline_sponsors === 'on' } });
+}
+
+export async function adminSetInlineSponsorsFeature(c: AppContext) {
+  requireAdmin(c);
+  const tenant = c.get('tenant');
+  const body = await c.req.json<any>().catch(() => ({}));
+  const on = !!body.on;
+
+  const row = await c.env.DB.prepare('SELECT config, hostname FROM tenants WHERE id = ?').bind(tenant.id).first<any>();
+  if (!row) throw new HTTPException(404, { message: 'Tenant not found.' });
+
+  const config = JSON.parse(row.config || '{}');
+  config.inline_sponsors = on ? 'on' : 'off';
 
   await c.env.DB.prepare('UPDATE tenants SET config = ? WHERE id = ?').bind(JSON.stringify(config), tenant.id).run();
   await Promise.all([
