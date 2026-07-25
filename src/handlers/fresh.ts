@@ -78,6 +78,33 @@ function asBool(value: unknown, fallback: boolean): boolean {
 }
 
 /**
+ * Parse the optional ?lat=&lon=&radius= "near me" params. Returns null unless a
+ * valid coordinate is supplied. radius is in miles; 0 (or absent) means "compute
+ * distance but don't filter by it" so the board can still label each post.
+ * Copied from happenings.ts's parseNearby - board-module "copy, never share
+ * code" convention (ARCHITECTURE.md §13).
+ */
+function parseNearby(c: AppContext): { lat: number; lon: number; radius: number } | null {
+  const lat = Number(c.req.query('lat'));
+  const lon = Number(c.req.query('lon'));
+  if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
+    return null;
+  }
+  const radius = Math.max(0, Math.min(500, Number(c.req.query('radius')) || 0));
+  return { lat, lon, radius };
+}
+
+// Great-circle distance (miles) as a SQL expression over a stand's stored
+// coords. Copied from happenings.ts's DISTANCE_SQL, column names swapped for
+// fresh_stands' own s.lat/s.lon.
+const DISTANCE_SQL = `
+  3958.8 * acos(MIN(1.0, MAX(-1.0,
+    sin(radians(s.lat)) * sin(radians(?)) +
+    cos(radians(s.lat)) * cos(radians(?)) * cos(radians(s.lon) - radians(?))
+  )))
+`;
+
+/**
  * Unix seconds for the next local midnight in BOARD_TZ. Copied verbatim
  * (in behavior) from happenings.ts endOfBoardDay() - computes seconds
  * elapsed since local midnight from the wall clock and adds the remainder.
@@ -286,6 +313,7 @@ function postStateNote(state: PostState, row: any): string {
 export async function listFresh(c: AppContext) {
   const tenant = c.get('tenant');
   const category = c.req.query('category');
+  const near = parseNearby(c);
 
   const filters = [
     'p.tenant_id = ?', 'p.is_active = 1', 'p.admin_hidden = 0', 'p.expires_at > unixepoch()',
@@ -297,11 +325,25 @@ export async function listFresh(c: AppContext) {
     binds.push(`"${category}"`);
   }
 
+  // "Near me": compute distance server-side on precise coords and, when a radius
+  // is set, filter to within it *before* the 200-cap - so the closest posts can
+  // never be dropped by the limit. Copied from happenings.ts's listHappenings.
+  let distanceSelect = 'NULL AS distance_mi';
+  if (near) {
+    distanceSelect = `(${DISTANCE_SQL}) AS distance_mi`;
+    binds.unshift(near.lat, near.lat, near.lon); // bound to the leading SELECT expr
+    if (near.radius > 0) {
+      filters.push(`(${DISTANCE_SQL}) <= ?`);
+      binds.push(near.lat, near.lat, near.lon, near.radius);
+    }
+  }
+
   const { results } = await c.env.DB.prepare(`
     SELECT p.id, p.body, p.photo_url, p.sold_out, p.created_at, p.expires_at,
            s.id AS stand_id, s.name AS stand_name, s.lat AS stand_lat, s.lon AS stand_lon,
            s.address_hint AS stand_address_hint, s.phone AS stand_phone, s.categories AS stand_categories,
-           s.nearest_city AS stand_nearest_city, s.nearest_state AS stand_nearest_state
+           s.nearest_city AS stand_nearest_city, s.nearest_state AS stand_nearest_state,
+           ${distanceSelect}
     FROM fresh_posts p
     JOIN fresh_stands s ON s.id = p.stand_id
     WHERE ${filters.join(' AND ')}
@@ -326,6 +368,7 @@ export async function listFresh(c: AppContext) {
       categories: JSON.parse(r.stand_categories || '[]'),
       nearest_city: r.stand_nearest_city ?? null,
       nearest_state: r.stand_nearest_state ?? null,
+      distance_mi: r.distance_mi == null ? null : Math.round(r.distance_mi * 10) / 10,
     },
   }));
 
@@ -339,10 +382,25 @@ export async function listFresh(c: AppContext) {
  */
 export async function listFreshStands(c: AppContext) {
   const tenant = c.get('tenant');
+  const near = parseNearby(c);
+
+  const filters = ['s.tenant_id = ?', 's.deleted_at IS NULL', 's.is_hidden = 0', 's.admin_hidden = 0'];
+  const binds: any[] = [tenant.id];
+
+  let distanceSelect = 'NULL AS distance_mi';
+  if (near) {
+    distanceSelect = `(${DISTANCE_SQL}) AS distance_mi`;
+    binds.unshift(near.lat, near.lat, near.lon);
+    if (near.radius > 0) {
+      filters.push(`(${DISTANCE_SQL}) <= ?`);
+      binds.push(near.lat, near.lat, near.lon, near.radius);
+    }
+  }
 
   const { results } = await c.env.DB.prepare(`
     SELECT s.id, s.name, s.lat, s.lon, s.address_hint, s.phone, s.categories,
       s.nearest_city, s.nearest_state,
+      ${distanceSelect},
       EXISTS (
         SELECT 1 FROM fresh_posts p
         WHERE p.stand_id = s.id AND p.is_active = 1 AND p.admin_hidden = 0 AND p.expires_at > unixepoch()
@@ -353,10 +411,10 @@ export async function listFreshStands(c: AppContext) {
         ORDER BY p.created_at DESC LIMIT 1
       ) AS latest_body
     FROM fresh_stands s
-    WHERE s.tenant_id = ? AND s.deleted_at IS NULL AND s.is_hidden = 0 AND s.admin_hidden = 0
+    WHERE ${filters.join(' AND ')}
     ORDER BY s.created_at DESC
     LIMIT 300
-  `).bind(tenant.id).all<any>();
+  `).bind(...binds).all<any>();
 
   const data = (results || []).map((r: any) => ({
     id: r.id, name: r.name, lat: r.lat, lon: r.lon,
@@ -364,6 +422,7 @@ export async function listFreshStands(c: AppContext) {
     categories: JSON.parse(r.categories || '[]'),
     nearest_city: r.nearest_city ?? null,
     nearest_state: r.nearest_state ?? null,
+    distance_mi: r.distance_mi == null ? null : Math.round(r.distance_mi * 10) / 10,
     has_live_post: r.has_live_post ? 1 : 0,
     latest_body: r.latest_body ?? null,
   }));

@@ -81,6 +81,9 @@ export interface FreshFeedStand {
   // lookup either hasn't run yet or found nothing within 50 miles.
   nearest_city: string | null;
   nearest_state: string | null;
+  // Distance from the visitor when "near me" is active - a number only; the
+  // underlying coords stay server-side. Null when no lat/lon was sent.
+  distance_mi: number | null;
 }
 
 // GET /api/t/:tenant/fresh row shape.
@@ -106,6 +109,7 @@ export interface FreshStandPin {
   categories: string[];
   nearest_city: string | null;
   nearest_state: string | null;
+  distance_mi: number | null;
   has_live_post: 0 | 1;
   latest_body: string | null;
 }
@@ -153,13 +157,27 @@ export interface FreshSeason {
   in_season_now: boolean;
 }
 
-export function listFresh(tenant: string, category?: string) {
-  const q = category ? `?category=${encodeURIComponent(category)}` : '';
-  return api.get<ApiResponse<FreshFeedPost[]>>(`/t/${tenant}/fresh${q}`);
+export function listFresh(tenant: string, category?: string, nearby?: { lat: number; lon: number; radius: number }) {
+  const params = new URLSearchParams();
+  if (category) params.set('category', category);
+  if (nearby) {
+    params.set('lat', String(nearby.lat));
+    params.set('lon', String(nearby.lon));
+    params.set('radius', String(nearby.radius));
+  }
+  const q = params.toString();
+  return api.get<ApiResponse<FreshFeedPost[]>>(`/t/${tenant}/fresh${q ? `?${q}` : ''}`);
 }
 
-export function listFreshStands(tenant: string) {
-  return api.get<ApiResponse<FreshStandPin[]>>(`/t/${tenant}/fresh/stands`);
+export function listFreshStands(tenant: string, nearby?: { lat: number; lon: number; radius: number }) {
+  const params = new URLSearchParams();
+  if (nearby) {
+    params.set('lat', String(nearby.lat));
+    params.set('lon', String(nearby.lon));
+    params.set('radius', String(nearby.radius));
+  }
+  const q = params.toString();
+  return api.get<ApiResponse<FreshStandPin[]>>(`/t/${tenant}/fresh/stands${q ? `?${q}` : ''}`);
 }
 
 export function getFreshStand(tenant: string, id: string) {

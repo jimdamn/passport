@@ -65,8 +65,8 @@ export default function PublicProfile() {
     return (
       <div className="main-content" style={{ paddingTop: 24 }}>
         <div style={{ marginBottom: 8 }}>
-          <Link to="/explore" style={{ fontFamily: 'var(--font-sans)', fontSize: '0.85rem', color: 'var(--muted)' }}>
-            &larr; Back to Explore
+          <Link to="/" style={{ fontFamily: 'var(--font-sans)', fontSize: '0.85rem', color: 'var(--muted)' }}>
+            &larr; Back to Passport
           </Link>
         </div>
         <Alert type="error">Member not found.</Alert>
@@ -83,8 +83,8 @@ export default function PublicProfile() {
     <div className="main-content" style={{ paddingTop: 24, paddingBottom: 80 }}>
 
       <div style={{ marginBottom: 8 }}>
-        <Link to="/explore" style={{ fontFamily: 'var(--font-sans)', fontSize: '0.85rem', color: 'var(--muted)' }}>
-          &larr; Back to Explore
+        <Link to="/" style={{ fontFamily: 'var(--font-sans)', fontSize: '0.85rem', color: 'var(--muted)' }}>
+          &larr; Back to Passport
         </Link>
       </div>
 
