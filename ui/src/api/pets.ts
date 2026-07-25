@@ -66,6 +66,7 @@ export interface PetFeedRow {
   active_until: number;
   resolved_at: number | null;
   status: PetStatus;
+  distance_mi: number | null;
   phone?: string;
   email?: string | null;
   has_phone?: boolean;
@@ -83,18 +84,31 @@ export interface PetPin {
   nearest_city: string | null;
   status: PetStatus;
   kind: 'amber' | 'green';
+  distance_mi: number | null;
 }
 
-export function listPetPosts(tenant: string, type?: string, species?: string) {
+export function listPetPosts(tenant: string, type?: string, species?: string, nearby?: { lat: number; lon: number; radius: number }) {
   const params = new URLSearchParams();
   if (type) params.set('type', type);
   if (species) params.set('species', species);
+  if (nearby) {
+    params.set('lat', String(nearby.lat));
+    params.set('lon', String(nearby.lon));
+    params.set('radius', String(nearby.radius));
+  }
   const q = params.toString();
   return api.get<ApiResponse<PetFeedRow[]>>(`/t/${tenant}/pets${q ? `?${q}` : ''}`);
 }
 
-export function listPetPins(tenant: string) {
-  return api.get<ApiResponse<PetPin[]>>(`/t/${tenant}/pets/pins`);
+export function listPetPins(tenant: string, nearby?: { lat: number; lon: number; radius: number }) {
+  const params = new URLSearchParams();
+  if (nearby) {
+    params.set('lat', String(nearby.lat));
+    params.set('lon', String(nearby.lon));
+    params.set('radius', String(nearby.radius));
+  }
+  const q = params.toString();
+  return api.get<ApiResponse<PetPin[]>>(`/t/${tenant}/pets/pins${q ? `?${q}` : ''}`);
 }
 
 export function getPetPost(tenant: string, id: string) {

@@ -1,22 +1,33 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { useTenant } from '../context/TenantContext';
 import {
   listPetPosts, listPetPins, speciesLabel, PET_TYPES, PET_SPECIES, REGION_CENTER, REGION_BOUNDS,
   type PetFeedRow, type PetPin,
 } from '../api/pets';
-import { PawPrint, List, Map as MapIcon, Phone, Mail } from 'lucide-react';
+import { PawPrint, List, Map as MapIcon, Phone, Mail, MapPin, Navigation } from 'lucide-react';
 import { Spinner } from '../components/ui/Spinner';
 import { Badge } from '../components/ui/Badge';
 import { RegionMap } from 'kk-shared-ui';
 
-// Home Safe's public browse board. Follows Sale Day's design language
-// exactly (SaleDay.tsx is the visual donor) - serif header, calm chip rows,
-// white cards with a green left accent, centered spinner, calm empty state,
-// 800px column. Diff vs Sale Day: two chip rows (type, then species) instead
-// of one, and contact is masked by default - list cards show a "Get in
-// touch" link instead of a bare phone number unless the poster opted into
-// inline display.
+// Home Safe's public browse board. Follows Happenings/Sale Day's design
+// language exactly (SaleDay.tsx is the visual donor) - serif header, calm
+// chip rows, white cards with a green left accent, centered spinner, calm
+// empty state, 800px column, and the platform's one location control set
+// (DESIGN-LANGUAGE.md §4). Diff vs Sale Day: two chip rows (type, then
+// species) instead of one, and contact is masked by default - list cards
+// show a "Get in touch" link instead of a bare phone number unless the
+// poster opted into inline display. No credits, no KKGame calls, no
+// notifications, ever (standing constraint, HOME-SAFE-BUILD-PLAN.md) - this
+// change touches none of that.
+
+const RADIUS_OPTIONS = [
+  { mi: 5, label: '5 mi' },
+  { mi: 15, label: '15 mi' },
+  { mi: 30, label: '30 mi' },
+  { mi: 0, label: 'Any' },
+];
 
 function truncate(text: string, max: number): string {
   if (text.length <= max) return text;
@@ -31,6 +42,7 @@ function lastSeenLine(p: PetFeedRow): string {
 }
 
 export default function PetsBoard() {
+  const { user } = useAuth();
   const { tenant } = useTenant();
   const navigate = useNavigate();
 
@@ -42,10 +54,70 @@ export default function PetsBoard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  // Location filtering - copied from Happenings.tsx verbatim, see
+  // FreshToday.tsx/SaleDay.tsx/PopupsBoard.tsx/MealsBoard.tsx for the
+  // identical adaptation.
+  const [coords, setCoords] = useState<{ lat: number; lon: number } | null>(null);
+  const [source, setSource] = useState<'home' | 'live' | null>(null);
+  const [radius, setRadius] = useState(15);
+  const [locating, setLocating] = useState(false);
+  const [geoError, setGeoError] = useState('');
+  const [touched, setTouched] = useState(false);
+
+  useEffect(() => {
+    if (touched || coords) return;
+    if (user?.home_zip_lat != null && user?.home_zip_lon != null) {
+      setCoords({ lat: user.home_zip_lat, lon: user.home_zip_lon });
+      setRadius(30);
+      setSource('home');
+    }
+  }, [user, touched, coords]);
+
+  const useMyLocation = () => {
+    setGeoError('');
+    setTouched(true);
+    if (!('geolocation' in navigator)) {
+      setGeoError("Location isn't available on this device.");
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        setCoords({ lat: pos.coords.latitude, lon: pos.coords.longitude });
+        setSource('live');
+        setLocating(false);
+      },
+      () => {
+        setLocating(false);
+        if (user?.home_zip_lat != null && user?.home_zip_lon != null) {
+          setCoords({ lat: user.home_zip_lat, lon: user.home_zip_lon });
+          setSource('home');
+          setGeoError('Using your home area - allow location to use where you are now.');
+        } else {
+          setGeoError("Couldn't get your location. Check your browser's location permission.");
+        }
+      },
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 },
+    );
+  };
+
+  const clearLocation = () => {
+    setTouched(true);
+    setCoords(null);
+    setSource(null);
+    setGeoError('');
+  };
+
+  const originLat = coords?.lat ?? REGION_CENTER.lat;
+  const originLon = coords?.lon ?? REGION_CENTER.lon;
+  const origin = useMemo(() => ({ lat: originLat, lon: originLon }), [originLat, originLon]);
+
   useEffect(() => {
     if (!tenant) return;
-    listPetPins(tenant.id).then(res => setPins(res.data || [])).catch(() => setPins([]));
-  }, [tenant]);
+    listPetPins(tenant.id, coords ? { lat: coords.lat, lon: coords.lon, radius } : undefined)
+      .then(res => setPins(res.data || []))
+      .catch(() => setPins([]));
+  }, [tenant, coords, radius]);
 
   useEffect(() => {
     if (!tenant) return;
@@ -53,7 +125,12 @@ export default function PetsBoard() {
       setLoading(true);
       setError('');
       try {
-        const res = await listPetPosts(tenant.id, type === 'all' ? undefined : type, species === 'all' ? undefined : species);
+        const res = await listPetPosts(
+          tenant.id,
+          type === 'all' ? undefined : type,
+          species === 'all' ? undefined : species,
+          coords ? { lat: coords.lat, lon: coords.lon, radius } : undefined,
+        );
         setPosts(res.data || []);
       } catch (err: any) {
         setError(err.message || 'Failed to load Home Safe.');
@@ -61,7 +138,7 @@ export default function PetsBoard() {
         setLoading(false);
       }
     })();
-  }, [tenant, type, species]);
+  }, [tenant, type, species, coords, radius]);
 
   const mapPins = useMemo(() => pins.map(p => ({
     id: p.id,
@@ -116,6 +193,49 @@ export default function PetsBoard() {
         ))}
       </div>
 
+      {/* Location filter - copied from Happenings.tsx verbatim (the one
+          platform location control set, DESIGN-LANGUAGE.md §4). */}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: source === 'home' ? 6 : 12 }}>
+        {!coords ? (
+          <button onClick={useMyLocation} disabled={locating}
+            className="btn btn-sm btn-secondary"
+            style={{ minHeight: 32, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <Navigation size={13} /> {locating ? 'Locating…' : 'Near me'}
+          </button>
+        ) : (
+          <>
+            {RADIUS_OPTIONS.map(r => (
+              <button key={r.mi} onClick={() => setRadius(r.mi)}
+                className={`btn btn-sm ${radius === r.mi ? 'btn-amber' : 'btn-secondary'}`}
+                style={{ minHeight: 32, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                {r.label}
+              </button>
+            ))}
+            {source === 'home' && (
+              <button onClick={useMyLocation} disabled={locating}
+                className="btn btn-sm btn-secondary"
+                style={{ minHeight: 32, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                <Navigation size={13} /> {locating ? 'Locating…' : 'Use my location'}
+              </button>
+            )}
+            <button onClick={clearLocation}
+              className="btn btn-sm btn-secondary"
+              style={{ minHeight: 32, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              Clear
+            </button>
+          </>
+        )}
+      </div>
+      {source === 'home' && !geoError && (
+        <p style={{ margin: '0 0 12px', fontSize: '0.78rem', color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 5 }}>
+          <MapPin size={12} style={{ color: 'var(--amber)' }} />
+          Showing your home area{user?.home_zip_location ? ` (${user.home_zip_location})` : ''} - tap "Use my location" if you're out and about.
+        </p>
+      )}
+      {geoError && (
+        <p style={{ margin: '0 0 12px', fontSize: '0.78rem', color: 'var(--muted)' }}>{geoError}</p>
+      )}
+
       {/* View toggle */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 16 }}>
         <button onClick={() => setView('list')}
@@ -136,11 +256,21 @@ export default function PetsBoard() {
         </div>
       ) : view === 'map' ? (
         <>
-          <RegionMap pins={mapPins} center={REGION_CENTER} maxBounds={REGION_BOUNDS} height="60vh" />
+          <RegionMap pins={mapPins} center={origin} maxBounds={REGION_BOUNDS} height="60vh" />
           <p style={{ margin: '8px 0 0', fontSize: '0.78rem', color: 'var(--muted)' }}>
             Amber is missing - keep your eyes open. Green means found or home safe.
           </p>
         </>
+      ) : posts.length === 0 && coords && radius > 0 ? (
+        <div className="card" style={{ padding: 24, textAlign: 'center', background: 'var(--white)' }}>
+          <PawPrint size={28} style={{ color: 'var(--amber)', marginBottom: 8 }} />
+          <p style={{ margin: '0 0 4px', color: 'var(--text)', fontSize: '0.9rem' }}>
+            Nothing within {radius} miles right now.
+          </p>
+          <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.85rem' }}>
+            Try a wider range, or clear the location filter to see the whole board.
+          </p>
+        </div>
       ) : posts.length === 0 ? (
         <div className="card" style={{ padding: 24, textAlign: 'center', background: 'var(--white)' }}>
           <PawPrint size={28} style={{ color: 'var(--amber)', marginBottom: 8 }} />

@@ -99,6 +99,31 @@ function asBool(value: unknown, fallback: boolean): boolean {
   return !!value;
 }
 
+/**
+ * Parse the optional ?lat=&lon=&radius= "near me" params. Copied from
+ * happenings.ts's parseNearby - board-module "copy, never share code"
+ * convention (ARCHITECTURE.md §13).
+ */
+function parseNearby(c: AppContext): { lat: number; lon: number; radius: number } | null {
+  const lat = Number(c.req.query('lat'));
+  const lon = Number(c.req.query('lon'));
+  if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
+    return null;
+  }
+  const radius = Math.max(0, Math.min(500, Number(c.req.query('radius')) || 0));
+  return { lat, lon, radius };
+}
+
+// Great-circle distance (miles) as a SQL expression over a post's own
+// lat/lon (single-table board - no join needed). Copied from happenings.ts's
+// DISTANCE_SQL.
+const DISTANCE_SQL = `
+  3958.8 * acos(MIN(1.0, MAX(-1.0,
+    sin(radians(lat)) * sin(radians(?)) +
+    cos(radians(lat)) * cos(radians(?)) * cos(radians(lon) - radians(?))
+  )))
+`;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Board-TZ date helpers - copied from sales.ts's boardDateStr/addDaysToDateStr
 // (this file's own per-source independence, same reasoning fresh.ts/sales.ts
@@ -293,6 +318,7 @@ function publicPetShape(row: any, status: PetStatus) {
     active_until: row.active_until,
     resolved_at: row.resolved_at,
     status,
+    distance_mi: row.distance_mi == null ? null : Math.round(row.distance_mi * 10) / 10,
   };
   if (row.contact_public) {
     return { ...base, phone: row.phone, email: row.email };
@@ -379,6 +405,7 @@ export async function listPetPosts(c: AppContext) {
   const type = c.req.query('type');
   const species = c.req.query('species');
   const now = Math.floor(Date.now() / 1000);
+  const near = parseNearby(c);
 
   const filters = ['tenant_id = ?', 'deleted_at IS NULL', 'admin_hidden = 0', `(${PUBLIC_FILTER})`];
   const binds: any[] = [tenant.id, GLOW_WINDOW_SECONDS];
@@ -391,8 +418,20 @@ export async function listPetPosts(c: AppContext) {
     binds.push(species);
   }
 
+  // "Near me": filter to the radius *before* the 200-cap, same reasoning as
+  // happenings.ts/fresh.ts/sales.ts/popups.ts/meals.ts.
+  let distanceSelect = 'NULL AS distance_mi';
+  if (near) {
+    distanceSelect = `(${DISTANCE_SQL}) AS distance_mi`;
+    binds.unshift(near.lat, near.lat, near.lon);
+    if (near.radius > 0) {
+      filters.push(`(${DISTANCE_SQL}) <= ?`);
+      binds.push(near.lat, near.lat, near.lon, near.radius);
+    }
+  }
+
   const { results } = await c.env.DB.prepare(`
-    SELECT * FROM pet_posts WHERE ${filters.join(' AND ')} ORDER BY created_at DESC LIMIT 200
+    SELECT *, ${distanceSelect} FROM pet_posts WHERE ${filters.join(' AND ')} ORDER BY created_at DESC LIMIT 200
   `).bind(...binds).all<any>();
 
   const unresolved: any[] = [];
@@ -410,13 +449,28 @@ export async function listPetPosts(c: AppContext) {
 export async function listPetPins(c: AppContext) {
   const tenant = c.get('tenant');
   const now = Math.floor(Date.now() / 1000);
+  const near = parseNearby(c);
+
+  const filters = ['tenant_id = ?', 'deleted_at IS NULL', 'admin_hidden = 0', `(${PUBLIC_FILTER})`];
+  const binds: any[] = [tenant.id, GLOW_WINDOW_SECONDS];
+
+  let distanceSelect = 'NULL AS distance_mi';
+  if (near) {
+    distanceSelect = `(${DISTANCE_SQL}) AS distance_mi`;
+    binds.unshift(near.lat, near.lat, near.lon);
+    if (near.radius > 0) {
+      filters.push(`(${DISTANCE_SQL}) <= ?`);
+      binds.push(near.lat, near.lat, near.lon, near.radius);
+    }
+  }
 
   const { results } = await c.env.DB.prepare(`
-    SELECT id, lat, lon, type, species, pet_name, location_hint, nearest_city, active_until, resolved_at
+    SELECT id, lat, lon, type, species, pet_name, location_hint, nearest_city, active_until, resolved_at,
+      ${distanceSelect}
     FROM pet_posts
-    WHERE tenant_id = ? AND deleted_at IS NULL AND admin_hidden = 0 AND (${PUBLIC_FILTER})
+    WHERE ${filters.join(' AND ')}
     ORDER BY created_at DESC LIMIT 300
-  `).bind(tenant.id, GLOW_WINDOW_SECONDS).all<any>();
+  `).bind(...binds).all<any>();
 
   const data = (results || []).map((r: any) => {
     const status = petStatus(r.active_until, r.resolved_at, now);
@@ -431,6 +485,7 @@ export async function listPetPins(c: AppContext) {
       nearest_city: r.nearest_city ?? null,
       status,
       kind: pinKind(r.type, status),
+      distance_mi: r.distance_mi == null ? null : Math.round(r.distance_mi * 10) / 10,
     };
   });
 
