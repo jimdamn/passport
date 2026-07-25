@@ -6,8 +6,8 @@ import { useTenant } from '../../context/TenantContext';
 import {
   adminListSponsors, adminCreateSponsor, adminUpdateSponsor, adminSetSponsorActive,
   adminEndSponsor, adminDeleteSponsor, adminGetSponsorFeature, adminSetSponsorFeature,
-  uploadSponsorPhoto, routeLabel, SPONSOR_KNOWN_ROUTES,
-  type AdminSponsor, type SponsorInput, type SponsorTargetKind,
+  uploadSponsorPhoto, routeLabel, appLabel, SPONSOR_APPS, SPONSOR_ROUTES_BY_APP,
+  type AdminSponsor, type SponsorInput, type SponsorTargetKind, type SponsorApp,
 } from '../../api/sponsors';
 import {
   ArrowLeft, Handshake, Plus, Pencil, Trash2, PauseCircle, CheckCircle, RefreshCw,
@@ -32,6 +32,7 @@ function fromLocalInput(s: string): number | null {
 interface FormState {
   sponsor_name: string;
   message: string;
+  app: SponsorApp;
   route: string;
   target_kind: SponsorTargetKind;
   target_value: string;
@@ -42,7 +43,7 @@ interface FormState {
 }
 
 const EMPTY_FORM: FormState = {
-  sponsor_name: '', message: '', route: SPONSOR_KNOWN_ROUTES[0].value,
+  sponsor_name: '', message: '', app: SPONSOR_APPS[0].value, route: SPONSOR_ROUTES_BY_APP[SPONSOR_APPS[0].value][0].value,
   target_kind: 'region', target_value: '', link_url: '', image_url: '',
   starts_at: '', ends_at: '',
 };
@@ -138,6 +139,7 @@ export default function AdminSponsors() {
     setForm({
       sponsor_name: s.sponsor_name,
       message: s.message,
+      app: s.app as SponsorApp,
       route: s.route,
       target_kind: s.target_kind,
       target_value: s.target_value ?? '',
@@ -181,6 +183,7 @@ export default function AdminSponsors() {
       const input: SponsorInput = {
         sponsor_name: form.sponsor_name,
         message: form.message,
+        app: form.app,
         route: form.route,
         target_kind: form.target_kind,
         target_value: form.target_kind === 'region' ? null : form.target_value,
@@ -327,6 +330,17 @@ export default function AdminSponsors() {
             {editingId ? 'Edit Placement' : 'New Placement'}
           </h3>
 
+          <div style={{ marginBottom: 12 }}>
+            <label style={labelStyle}>App</label>
+            <select className="form-select" style={inputStyle} value={form.app}
+              onChange={e => {
+                const app = e.target.value as SponsorApp;
+                setForm(f => ({ ...f, app, route: SPONSOR_ROUTES_BY_APP[app][0].value }));
+              }}>
+              {SPONSOR_APPS.map(a => <option key={a.value} value={a.value}>{a.label}</option>)}
+            </select>
+          </div>
+
           <div className="form-grid-2">
             <div>
               <label style={labelStyle}>Sponsor name ({form.sponsor_name.length}/60)</label>
@@ -339,7 +353,7 @@ export default function AdminSponsors() {
               <select className="form-select" style={inputStyle} value={form.route}
                 onChange={e => setForm(f => ({ ...f, route: e.target.value }))}>
                 <option value="*">All routes</option>
-                {SPONSOR_KNOWN_ROUTES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                {SPONSOR_ROUTES_BY_APP[form.app].map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
               </select>
             </div>
           </div>
@@ -457,8 +471,11 @@ export default function AdminSponsors() {
                 <div>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4, flexWrap: 'wrap' }}>
                     <h3 style={{ margin: 0, fontSize: '1rem', color: 'var(--green)', fontWeight: 600 }}>{s.sponsor_name}</h3>
+                    <span style={{ fontSize: '0.66rem', textTransform: 'uppercase', padding: '2px 6px', borderRadius: 'var(--r-sm)', background: 'rgba(30,51,32,0.12)', color: 'var(--green)', fontWeight: 700 }}>
+                      {appLabel(s.app)}
+                    </span>
                     <span style={{ fontSize: '0.66rem', textTransform: 'uppercase', padding: '2px 6px', borderRadius: 'var(--r-sm)', background: 'rgba(80,120,80,0.12)', color: 'var(--green)' }}>
-                      {routeLabel(s.route)}
+                      {routeLabel(s.app, s.route)}
                     </span>
                     <span style={{ fontSize: '0.66rem', textTransform: 'uppercase', padding: '2px 6px', borderRadius: 'var(--r-sm)', background: 'rgba(200,134,10,0.12)', color: 'var(--amber)' }}>
                       {targetChip(s)}

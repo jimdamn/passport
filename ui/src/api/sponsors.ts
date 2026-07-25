@@ -2,25 +2,53 @@ import { api, getToken } from './client';
 import type { ApiResponse } from '../types';
 
 // Sponsor Drawer — admin-created "Brought to you by X" route sponsorships.
-// Passport-only known routes for Increment 1+2; Increment 3 extends this
-// list when siblings mount the drawer. Mirrors src/handlers/sponsors.ts's
-// SPONSOR_KNOWN_ROUTES exactly - kept in sync by hand (UI build can't import
-// from the Worker's src tree).
-export const SPONSOR_KNOWN_ROUTES = [
-  { value: '/explore', label: 'Around Town' },
-  { value: '/happenings', label: 'Happenings' },
-  { value: '/deals', label: 'Deals' },
-  { value: '/fresh', label: 'Fresh Today' },
-  { value: '/sales', label: 'Sale Day' },
-  { value: '/pets', label: 'Home Safe' },
-  { value: '/popups', label: 'Pop-Ups' },
-  { value: '/meals', label: 'Community Table' },
-  { value: '/kwest', label: 'KrowdKwest' },
+// Mirrors src/handlers/sponsors.ts's SPONSOR_APPS / SPONSOR_ROUTES_BY_APP
+// exactly - kept in sync by hand (UI build can't import from the Worker's
+// src tree). A bare route string collides across apps ('/' and '/help'
+// exist in nearly every sibling), so every placement names both an app and
+// a route within it.
+export const SPONSOR_APPS = [
+  { value: 'passport', label: 'Passport' },
+  { value: 'exchange', label: 'Exchange' },
+  { value: 'field-notes', label: 'Field Notes' },
+  { value: 'apps-hub', label: 'Apps Hub' },
 ] as const;
+export type SponsorApp = typeof SPONSOR_APPS[number]['value'];
 
-export function routeLabel(route: string): string {
+export const SPONSOR_ROUTES_BY_APP: Record<SponsorApp, { value: string; label: string }[]> = {
+  passport: [
+    { value: '/explore', label: 'Around Town' },
+    { value: '/happenings', label: 'Happenings' },
+    { value: '/deals', label: 'Deals' },
+    { value: '/fresh', label: 'Fresh Today' },
+    { value: '/sales', label: 'Sale Day' },
+    { value: '/pets', label: 'Home Safe' },
+    { value: '/popups', label: 'Pop-Ups' },
+    { value: '/meals', label: 'Community Table' },
+    { value: '/kwest', label: 'KrowdKwest' },
+  ],
+  exchange: [
+    { value: '/', label: 'Browse' },
+    { value: '/trades', label: 'My Trades' },
+    { value: '/me/posts', label: 'My Posts' },
+  ],
+  'field-notes': [
+    { value: '/', label: 'Stories Feed' },
+    { value: '/submit', label: 'Share a Story' },
+    { value: '/my-stories', label: 'My Stories' },
+  ],
+  'apps-hub': [
+    { value: '/', label: 'Hub Home' },
+  ],
+};
+
+export function appLabel(app: string): string {
+  return SPONSOR_APPS.find(a => a.value === app)?.label ?? app;
+}
+
+export function routeLabel(app: string, route: string): string {
   if (route === '*') return 'All routes';
-  return SPONSOR_KNOWN_ROUTES.find(r => r.value === route)?.label ?? route;
+  return SPONSOR_ROUTES_BY_APP[app as SponsorApp]?.find(r => r.value === route)?.label ?? route;
 }
 
 export type SponsorTargetKind = 'region' | 'city' | 'zip';
@@ -39,6 +67,7 @@ export interface SponsorPlacement {
 // the computed state/state_note/impressions adminListSponsors adds.
 export interface AdminSponsor {
   id: number;
+  app: string;
   route: string;
   target_kind: SponsorTargetKind;
   target_value: string | null;
@@ -64,6 +93,7 @@ export interface AdminSponsor {
 export interface SponsorInput {
   sponsor_name?: string;
   message?: string;
+  app?: string;
   route?: string;
   target_kind?: SponsorTargetKind;
   target_value?: string | null;
@@ -77,8 +107,8 @@ export interface SponsorInput {
 // Public — resolve + beacon (optional auth; frictionless-reads standing order)
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function resolveSponsorDrawer(tenant: string, route: string) {
-  return api.get<ApiResponse<SponsorPlacement | null>>(`/t/${tenant}/sponsor-drawer/resolve?route=${encodeURIComponent(route)}`);
+export function resolveSponsorDrawer(tenant: string, app: string, route: string) {
+  return api.get<ApiResponse<SponsorPlacement | null>>(`/t/${tenant}/sponsor-drawer/resolve?app=${encodeURIComponent(app)}&route=${encodeURIComponent(route)}`);
 }
 
 export function sponsorBeacon(tenant: string, placementId: number, kind: 'show' | 'dismiss' | 'tap') {

@@ -23,22 +23,52 @@ type AppContext = Context<{ Bindings: Env }>;
 
 const BOARD_TZ = 'America/New_York';
 
-// The backend is the source of truth so a crafted request can't invent a
-// route the filter/admin dropdown doesn't know about. Passport-only for
-// Increment 1+2; Increment 3 extends this when siblings mount the drawer -
-// verify each addition against the sibling's live App.tsx/router first.
-export const SPONSOR_KNOWN_ROUTES = [
-  { value: '/explore', label: 'Around Town' },
-  { value: '/happenings', label: 'Happenings' },
-  { value: '/deals', label: 'Deals' },
-  { value: '/fresh', label: 'Fresh Today' },
-  { value: '/sales', label: 'Sale Day' },
-  { value: '/pets', label: 'Home Safe' },
-  { value: '/popups', label: 'Pop-Ups' },
-  { value: '/meals', label: 'Community Table' },
-  { value: '/kwest', label: 'KrowdKwest' },
+// The backend is the source of truth so a crafted request can't invent an
+// app or route the admin dropdown doesn't know about. Route sponsorship is a
+// curated inventory, not an open field - verify each addition against the
+// live App.tsx/router of the app in question before hardcoding.
+//
+// A bare route string collides across apps ('/' and '/help' exist in nearly
+// every sibling), so every placement names both an app and a route within
+// it (0017-sponsor-drawer-siblings.sql). Increment 1+2 shipped Passport-only;
+// Increment 3 adds the three sibling mounts.
+export const SPONSOR_APPS = [
+  { value: 'passport', label: 'Passport' },
+  { value: 'exchange', label: 'Exchange' },
+  { value: 'field-notes', label: 'Field Notes' },
+  { value: 'apps-hub', label: 'Apps Hub' },
 ] as const;
-const KNOWN_ROUTE_VALUES = SPONSOR_KNOWN_ROUTES.map(r => r.value) as readonly string[];
+const KNOWN_APP_VALUES = SPONSOR_APPS.map(a => a.value) as readonly string[];
+
+export const SPONSOR_ROUTES_BY_APP: Record<string, { value: string; label: string }[]> = {
+  passport: [
+    { value: '/explore', label: 'Around Town' },
+    { value: '/happenings', label: 'Happenings' },
+    { value: '/deals', label: 'Deals' },
+    { value: '/fresh', label: 'Fresh Today' },
+    { value: '/sales', label: 'Sale Day' },
+    { value: '/pets', label: 'Home Safe' },
+    { value: '/popups', label: 'Pop-Ups' },
+    { value: '/meals', label: 'Community Table' },
+    { value: '/kwest', label: 'KrowdKwest' },
+  ],
+  exchange: [
+    { value: '/', label: 'Browse' },
+    { value: '/trades', label: 'My Trades' },
+    { value: '/me/posts', label: 'My Posts' },
+  ],
+  'field-notes': [
+    { value: '/', label: 'Stories Feed' },
+    { value: '/submit', label: 'Share a Story' },
+    { value: '/my-stories', label: 'My Stories' },
+  ],
+  'apps-hub': [
+    { value: '/', label: 'Hub Home' },
+  ],
+};
+function knownRoutesFor(app: string): readonly string[] {
+  return (SPONSOR_ROUTES_BY_APP[app] || []).map(r => r.value);
+}
 
 const SPONSOR_NAME_MIN = 2;
 const SPONSOR_NAME_MAX = 60;
@@ -153,6 +183,7 @@ async function resolveCityTarget(c: AppContext, cityText: string): Promise<strin
 interface SponsorInput {
   sponsor_name: string;
   message: string;
+  app: string;
   route: string;
   target_kind: 'region' | 'city' | 'zip';
   target_value: string | null;
@@ -175,8 +206,13 @@ function parseSponsorInput(body: any, existing?: any): Omit<SponsorInput, 'targe
     throw new HTTPException(400, { message: `Write a short message (${MESSAGE_MIN}-${MESSAGE_MAX} characters).` });
   }
 
+  const app = body.app === undefined ? existing?.app : (typeof body.app === 'string' ? body.app.trim() : '');
+  if (!app || !KNOWN_APP_VALUES.includes(app)) {
+    throw new HTTPException(400, { message: 'Choose which app this sponsor message appears in.' });
+  }
+
   const route = body.route === undefined ? existing?.route : (typeof body.route === 'string' ? body.route.trim() : '');
-  if (!route || (route !== '*' && !KNOWN_ROUTE_VALUES.includes(route))) {
+  if (!route || (route !== '*' && !knownRoutesFor(app).includes(route))) {
     throw new HTTPException(400, { message: 'Choose a route from the list, or "All routes".' });
   }
 
@@ -219,7 +255,7 @@ function parseSponsorInput(body: any, existing?: any): Omit<SponsorInput, 'targe
     : (typeof body.ends_at === 'number' ? toSqlDatetime(body.ends_at) : null);
 
   return {
-    sponsor_name, message, route,
+    sponsor_name, message, app, route,
     target_kind: target_kind as 'region' | 'city' | 'zip',
     link_url, image_url, sponsor_kkauth_uid, starts_at, ends_at,
     rawCity, zipValue,
@@ -236,12 +272,12 @@ function windowsOverlap(aStart: string | null, aEnd: string | null, bStart: stri
   return startsBeforeOtherEnds && otherStartsBeforeThisEnds;
 }
 
-async function checkCollision(c: AppContext, tenantId: string, route: string, targetKind: string, targetValue: string | null, startsAt: string | null, endsAt: string | null, excludeId?: number) {
+async function checkCollision(c: AppContext, tenantId: string, app: string, route: string, targetKind: string, targetValue: string | null, startsAt: string | null, endsAt: string | null, excludeId?: number) {
   const { results } = await c.env.DB.prepare(`
     SELECT id, starts_at, ends_at FROM sponsorship
     WHERE tenant_id = ? AND deleted_at IS NULL AND is_active = 1
-      AND route = ? AND target_kind = ? AND ${targetValue === null ? 'target_value IS NULL' : 'target_value = ?'}
-  `).bind(...(targetValue === null ? [tenantId, route, targetKind] : [tenantId, route, targetKind, targetValue])).all<any>();
+      AND app = ? AND route = ? AND target_kind = ? AND ${targetValue === null ? 'target_value IS NULL' : 'target_value = ?'}
+  `).bind(...(targetValue === null ? [tenantId, app, route, targetKind] : [tenantId, app, route, targetKind, targetValue])).all<any>();
 
   for (const row of results || []) {
     if (excludeId !== undefined && row.id === excludeId) continue;
@@ -273,6 +309,7 @@ function computeState(row: any, featureOn: boolean, now: string): { state: Spons
 function serializeSponsor(row: any) {
   return {
     id: row.id,
+    app: row.app,
     route: row.route,
     target_kind: row.target_kind,
     target_value: row.target_value,
@@ -324,9 +361,10 @@ async function tryGetProfile(c: AppContext): Promise<{ zip: string | null; lat: 
 }
 
 /**
- * GET /sponsor-drawer/resolve?route=<path> — the single winning placement
- * for this route + caller, or null. Returns null immediately (before any
- * query) when the tenant feature flag is off.
+ * GET /sponsor-drawer/resolve?app=<slug>&route=<path> — the single winning
+ * placement for this app + route + caller, or null. Returns null immediately
+ * (before any query) when the tenant feature flag is off. `app` is required
+ * (not just `route`) since a bare route string collides across sibling apps.
  */
 export async function resolveSponsorDrawer(c: AppContext) {
   c.header('Cache-Control', 'no-store');
@@ -334,6 +372,8 @@ export async function resolveSponsorDrawer(c: AppContext) {
   const config = tenant.config as TenantConfig;
   if (config.sponsor_drawer !== 'on') return c.json({ data: null });
 
+  const app = c.req.query('app');
+  if (!app || !KNOWN_APP_VALUES.includes(app)) throw new HTTPException(400, { message: 'app is required.' });
   const route = c.req.query('route');
   if (!route) throw new HTTPException(400, { message: 'route is required.' });
 
@@ -341,10 +381,11 @@ export async function resolveSponsorDrawer(c: AppContext) {
   const { results } = await c.env.DB.prepare(`
     SELECT * FROM sponsorship
     WHERE tenant_id = ? AND deleted_at IS NULL AND is_active = 1
+      AND app = ?
       AND route IN (?, '*')
       AND (starts_at IS NULL OR starts_at <= ?)
       AND (ends_at IS NULL OR ends_at > ?)
-  `).bind(tenant.id, route, now, now).all<any>();
+  `).bind(tenant.id, app, route, now, now).all<any>();
 
   const candidates = results || [];
   if (candidates.length === 0) return c.json({ data: null });
@@ -493,14 +534,16 @@ export async function adminListSponsors(c: AppContext) {
   // ANY active/live exact-route placement on that same route, regardless of
   // target_kind (the resolve precedence puts every exact-route level ahead
   // of every wildcard level) - see resolveSponsorDrawer's `levels` array.
-  const liveSpecificRoutes = new Set(
+  // Scoped per app - a Field Notes wildcard is never "superseded" by an
+  // Exchange placement, they never compete for the same resolve call.
+  const appsWithLiveSpecificRoutes = new Set(
     rows.filter((r: any) => r.route !== '*' && r.is_active && (!r.starts_at || r.starts_at <= now) && (!r.ends_at || r.ends_at > now))
-      .map((r: any) => r.route)
+      .map((r: any) => r.app)
   );
 
   const data = rows.map((row: any) => {
     const { state, note } = computeState(row, featureOn, now);
-    const superseded = state === 'live' && row.route === '*' && liveSpecificRoutes.size > 0;
+    const superseded = state === 'live' && row.route === '*' && appsWithLiveSpecificRoutes.has(row.app);
     const imp = impByPlacement.get(row.id);
     return {
       ...serializeSponsor(row),
@@ -529,15 +572,15 @@ export async function adminCreateSponsor(c: AppContext) {
   if (parsed.target_kind === 'zip') target_value = parsed.zipValue;
   else if (parsed.target_kind === 'city') target_value = parsed.rawCity ? await resolveCityTarget(c, parsed.rawCity) : parsed.zipValue;
 
-  await checkCollision(c, tenant.id, parsed.route, parsed.target_kind, target_value, parsed.starts_at, parsed.ends_at);
+  await checkCollision(c, tenant.id, parsed.app, parsed.route, parsed.target_kind, target_value, parsed.starts_at, parsed.ends_at);
 
   const row = await c.env.DB.prepare(`
     INSERT INTO sponsorship
-      (tenant_id, route, target_kind, target_value, sponsor_name, message, link_url, image_url, sponsor_kkauth_uid, starts_at, ends_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (tenant_id, app, route, target_kind, target_value, sponsor_name, message, link_url, image_url, sponsor_kkauth_uid, starts_at, ends_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     RETURNING *
   `).bind(
-    tenant.id, parsed.route, parsed.target_kind, target_value, parsed.sponsor_name, parsed.message,
+    tenant.id, parsed.app, parsed.route, parsed.target_kind, target_value, parsed.sponsor_name, parsed.message,
     parsed.link_url, parsed.image_url, parsed.sponsor_kkauth_uid, parsed.starts_at, parsed.ends_at
   ).first<any>();
 
@@ -561,15 +604,15 @@ export async function adminUpdateSponsor(c: AppContext) {
   if (parsed.target_kind === 'zip') target_value = parsed.zipValue;
   else if (parsed.target_kind === 'city') target_value = parsed.rawCity ? await resolveCityTarget(c, parsed.rawCity) : (parsed.zipValue ?? existing.target_value);
 
-  await checkCollision(c, tenant.id, parsed.route, parsed.target_kind, target_value, parsed.starts_at, parsed.ends_at, id);
+  await checkCollision(c, tenant.id, parsed.app, parsed.route, parsed.target_kind, target_value, parsed.starts_at, parsed.ends_at, id);
 
   await c.env.DB.prepare(`
     UPDATE sponsorship
-    SET route = ?, target_kind = ?, target_value = ?, sponsor_name = ?, message = ?, link_url = ?, image_url = ?,
+    SET app = ?, route = ?, target_kind = ?, target_value = ?, sponsor_name = ?, message = ?, link_url = ?, image_url = ?,
         sponsor_kkauth_uid = ?, starts_at = ?, ends_at = ?, updated_at = datetime('now')
     WHERE id = ? AND tenant_id = ?
   `).bind(
-    parsed.route, parsed.target_kind, target_value, parsed.sponsor_name, parsed.message,
+    parsed.app, parsed.route, parsed.target_kind, target_value, parsed.sponsor_name, parsed.message,
     parsed.link_url, parsed.image_url, parsed.sponsor_kkauth_uid, parsed.starts_at, parsed.ends_at, id, tenant.id
   ).run();
 

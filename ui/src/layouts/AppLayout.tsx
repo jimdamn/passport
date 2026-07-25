@@ -55,7 +55,7 @@ export default function AppLayout() {
       if (timer) { clearTimeout(timer); timer = null; }
       if (!shouldAttempt(route) || otherOverlayOpen()) return;
       try {
-        const res = await resolveSponsorDrawer(tenant.id, route);
+        const res = await resolveSponsorDrawer(tenant.id, 'passport', route);
         if (res.data) {
           setSponsor(res.data);
           markShown(route);
