@@ -475,7 +475,14 @@ export async function sponsorBeacon(c: AppContext) {
 // Admin
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** POST /sponsors/upload — admin uploads a sponsor image. Mirrors uploadFreshPhoto. */
+/**
+ * POST /sponsors/upload — admin uploads a sponsor image. Mirrors uploadFreshPhoto,
+ * except for the variant: the drawer renders this photo in a ~104-130px near-square
+ * box with object-fit:cover (SponsorDrawer.tsx), so 'small-square' (image-api's
+ * 512px-long-edge preset, already used by avatars) is a far better fit than the
+ * 'mobile' variant every board photo uses - that 1600px cap is sized for a
+ * full-width board photo, not a thumbnail that never renders past 130px.
+ */
 export async function uploadSponsorPhoto(c: AppContext) {
   requireAdmin(c);
   const user = c.get('user');
@@ -489,7 +496,7 @@ export async function uploadSponsorPhoto(c: AppContext) {
   const uploadForm = new FormData();
   uploadForm.append('file', file as File);
   uploadForm.append('user_id', String(Number(user.sub)));
-  uploadForm.append('variant', 'mobile');
+  uploadForm.append('variant', 'small-square');
 
   const res = await c.env.KKAUTH.fetch(
     new Request('https://kkauth/internal/uploads', {

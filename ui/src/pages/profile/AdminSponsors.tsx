@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { SponsorDrawer } from 'kk-shared-ui';
+import { SponsorDrawer, resizeForUpload } from 'kk-shared-ui';
 import { useAuth } from '../../context/AuthContext';
 import { useTenant } from '../../context/TenantContext';
 import {
@@ -165,7 +165,8 @@ export default function AdminSponsors() {
     setUploading(true);
     setError('');
     try {
-      const res = await uploadSponsorPhoto(tenant.id, file);
+      const optimized = await resizeForUpload(file);
+      const res = await uploadSponsorPhoto(tenant.id, optimized);
       if (res.data.url) setForm(f => ({ ...f, image_url: res.data.url! }));
     } catch (err: any) {
       setError(err.message || 'Photo upload failed - you can still save without one.');
@@ -413,6 +414,11 @@ export default function AdminSponsors() {
 
           <div style={{ marginBottom: 20 }}>
             <label style={labelStyle}>Photo (optional)</label>
+            <p style={{ margin: '0 0 8px', fontSize: '0.78rem', color: 'var(--muted)' }}>
+              Square works best, logo or subject centered - it renders small (about
+              130px) and gets cropped to fit, so a wide banner photo will lose its edges.
+              Around 600x600px is plenty; no need to send anything larger.
+            </p>
             <input type="file" accept="image/*" disabled={uploading}
               onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(f); }} />
             {uploading && <span style={{ marginLeft: 8, fontSize: '0.78rem', color: 'var(--muted)' }}>Uploading...</span>}
