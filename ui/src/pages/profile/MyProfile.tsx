@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { LogOut, Award, ChevronRight, QrCode, Shield, ShieldCheck, Gift, Inbox, MapPin, Compass } from 'lucide-react';
+import { LogOut, Award, ChevronRight, QrCode, Shield, ShieldCheck, Gift, Inbox, MapPin, Compass, Handshake } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTenant } from '../../context/TenantContext';
 import { useProfilePanel } from '../../context/ProfilePanelContext';
@@ -395,6 +395,9 @@ export default function MyProfile() {
             </Link>
             <Link to="/profile/admin/popups" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
               Pop-Ups
+            </Link>
+            <Link to="/profile/admin/sponsors" className="btn btn-secondary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, textDecoration: 'none' }}>
+              <Handshake size={13} /> Sponsor Messages
             </Link>
             <Link to="/redeem" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
               Redeem a Claim

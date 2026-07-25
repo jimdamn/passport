@@ -62,6 +62,7 @@ import AdminKwest from './pages/profile/AdminKwest';
 import AdminKwestEdit from './pages/profile/AdminKwestEdit';
 import AdminKwestFieldTest from './pages/profile/AdminKwestFieldTest';
 import AdminKwestDashboard from './pages/profile/AdminKwestDashboard';
+import AdminSponsors from './pages/profile/AdminSponsors';
 
 export default function App() {
   const { isLoading } = useAuth();
@@ -124,6 +125,7 @@ export default function App() {
         <Route path="/profile/admin/sales" element={<AdminSales />} />
         <Route path="/profile/admin/pets" element={<AdminPets />} />
         <Route path="/profile/admin/popups" element={<AdminPopups />} />
+        <Route path="/profile/admin/sponsors" element={<AdminSponsors />} />
         <Route path="/profile/admin/meals" element={<AdminMeals />} />
         <Route path="/profile/admin/kwest" element={<AdminKwest />} />
         <Route path="/profile/admin/kwest/:id" element={<AdminKwestEdit />} />

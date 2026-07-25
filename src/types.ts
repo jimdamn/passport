@@ -83,6 +83,7 @@ export interface TenantConfig {
   boost_cost_credits: number;
   active_niches: string[];
   bd_signing_secret?: string;
+  sponsor_drawer?: 'on' | 'off';
 }
 
 export interface Niche {

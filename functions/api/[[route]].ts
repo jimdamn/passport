@@ -80,6 +80,11 @@ import {
   submitSupport, getMySupport, adminListSupport, adminSupportCount, adminUpdateSupport,
   internalSubmitSupport, internalSupportRetention,
 } from '../../src/handlers/support';
+import {
+  resolveSponsorDrawer, sponsorBeacon, uploadSponsorPhoto,
+  adminListSponsors, adminCreateSponsor, adminUpdateSponsor, adminSetSponsorActive,
+  adminEndSponsor, adminDeleteSponsor, adminGetSponsorFeature, adminSetSponsorFeature,
+} from '../../src/handlers/sponsors';
 
 import { logger } from '../../src/lib/logger';
 
@@ -300,6 +305,19 @@ tenantApp.get('/admin/support', adminListSupport);
 tenantApp.get('/admin/support/count', adminSupportCount);
 tenantApp.patch('/admin/support/:id', adminUpdateSupport);
 
+// Sponsor Drawer - admin-created "Brought to you by X" route sponsorships.
+// Public resolve + beacon are registered on the root app below (optional
+// auth, frictionless-reads standing order - see resolveSponsorDrawer).
+tenantApp.post('/sponsors/upload', uploadSponsorPhoto);
+tenantApp.get('/admin/sponsors', adminListSponsors);
+tenantApp.post('/admin/sponsors', adminCreateSponsor);
+tenantApp.put('/admin/sponsors/:id', adminUpdateSponsor);
+tenantApp.post('/admin/sponsors/:id/active', adminSetSponsorActive);
+tenantApp.post('/admin/sponsors/:id/end', adminEndSponsor);
+tenantApp.delete('/admin/sponsors/:id', adminDeleteSponsor);
+tenantApp.get('/admin/sponsors/feature', adminGetSponsorFeature);
+tenantApp.post('/admin/sponsors/feature', adminSetSponsorFeature);
+
 // KrowdKwest - guest progress migrates onto the account on sign-in.
 tenantApp.post('/kwest/attach', attachKwestGuest);
 tenantApp.post('/kwest/:slug/display-choice', setKwestDisplayChoice);
@@ -417,6 +435,10 @@ app.get('/api/t/:tenant/pets/pins', resolveTenant, listPetPins);
 app.get('/api/t/:tenant/pets/mine', resolveTenant, requireAuth, listMyPetPosts);
 app.get('/api/t/:tenant/pets/:id', resolveTenant, getPetPost);
 app.post('/api/t/:tenant/support', resolveTenant, submitSupport);
+// Sponsor Drawer public reads - optional auth (frictionless-reads standing
+// order), read inline inside the handlers rather than via requireAuth.
+app.get('/api/t/:tenant/sponsor-drawer/resolve', resolveTenant, resolveSponsorDrawer);
+app.post('/api/t/:tenant/sponsor-drawer/beacon', resolveTenant, sponsorBeacon);
 app.post('/api/t/:tenant/passport/claims/register', resolveTenant, registerClaim);
 app.get('/api/t/:tenant/network-members', resolveTenant, getNetworkMembers);
 app.get('/api/t/:tenant/members/:id', resolveTenant, getMember);
