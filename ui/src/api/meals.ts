@@ -67,6 +67,7 @@ export interface MealFeedRow {
   lon: number;
   status: MealStatus;
   status_note: string;
+  distance_mi: number | null;
   kitchen: MealFeedKitchen;
 }
 
@@ -78,6 +79,7 @@ export interface MealPin {
   kitchen_name: string;
   status: MealStatus;
   status_note: string;
+  distance_mi: number | null;
 }
 
 export interface KitchenDetail {
@@ -95,14 +97,28 @@ export interface KitchenDetail {
   meals: MealFeedRow[];
 }
 
-export function listMeals(tenant: string, category?: string) {
-  const q = category ? `?category=${encodeURIComponent(category)}` : '';
-  return api.get<ApiResponse<MealFeedRow[]>>(`/t/${tenant}/meals${q}`);
+export function listMeals(tenant: string, category?: string, nearby?: { lat: number; lon: number; radius: number }) {
+  const params = new URLSearchParams();
+  if (category) params.set('category', category);
+  if (nearby) {
+    params.set('lat', String(nearby.lat));
+    params.set('lon', String(nearby.lon));
+    params.set('radius', String(nearby.radius));
+  }
+  const q = params.toString();
+  return api.get<ApiResponse<MealFeedRow[]>>(`/t/${tenant}/meals${q ? `?${q}` : ''}`);
 }
 
-export function listMealPins(tenant: string, category?: string) {
-  const q = category ? `?category=${encodeURIComponent(category)}` : '';
-  return api.get<ApiResponse<MealPin[]>>(`/t/${tenant}/meals/pins${q}`);
+export function listMealPins(tenant: string, category?: string, nearby?: { lat: number; lon: number; radius: number }) {
+  const params = new URLSearchParams();
+  if (category) params.set('category', category);
+  if (nearby) {
+    params.set('lat', String(nearby.lat));
+    params.set('lon', String(nearby.lon));
+    params.set('radius', String(nearby.radius));
+  }
+  const q = params.toString();
+  return api.get<ApiResponse<MealPin[]>>(`/t/${tenant}/meals/pins${q ? `?${q}` : ''}`);
 }
 
 export function getKitchen(tenant: string, id: string) {

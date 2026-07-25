@@ -83,6 +83,31 @@ function asBool(value: unknown, fallback: boolean): boolean {
   return !!value;
 }
 
+/**
+ * Parse the optional ?lat=&lon=&radius= "near me" params. Copied from
+ * happenings.ts's parseNearby - board-module "copy, never share code"
+ * convention (ARCHITECTURE.md §13).
+ */
+function parseNearby(c: AppContext): { lat: number; lon: number; radius: number } | null {
+  const lat = Number(c.req.query('lat'));
+  const lon = Number(c.req.query('lon'));
+  if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
+    return null;
+  }
+  const radius = Math.max(0, Math.min(500, Number(c.req.query('radius')) || 0));
+  return { lat, lon, radius };
+}
+
+// Great-circle distance (miles) as a SQL expression over the resolved venue
+// - COALESCE(meal override, kitchen) - matching resolvedVenue()'s own
+// fallback exactly. Copied from happenings.ts's DISTANCE_SQL.
+const DISTANCE_SQL = `
+  3958.8 * acos(MIN(1.0, MAX(-1.0,
+    sin(radians(COALESCE(m.lat, k.lat))) * sin(radians(?)) +
+    cos(radians(COALESCE(m.lat, k.lat))) * cos(radians(?)) * cos(radians(COALESCE(m.lon, k.lon)) - radians(?))
+  )))
+`;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Board-TZ date/time helpers - copied from sales.ts/popups.ts (same reasoning
 // fresh.ts itself documents for not sharing these across board modules).
@@ -419,6 +444,7 @@ export async function listMeals(c: AppContext) {
   const category = c.req.query('category');
   const today = boardDateStr();
   const now = Math.floor(Date.now() / 1000);
+  const near = parseNearby(c);
 
   const filters = [
     'm.tenant_id = ?', 'm.deleted_at IS NULL', 'm.admin_hidden = 0', 'm.date >= ?',
@@ -430,10 +456,23 @@ export async function listMeals(c: AppContext) {
     binds.push(category);
   }
 
+  // "Near me": filter to the radius *before* the 200-cap, same reasoning as
+  // happenings.ts/fresh.ts/sales.ts/popups.ts.
+  let distanceSelect = 'NULL AS distance_mi';
+  if (near) {
+    distanceSelect = `(${DISTANCE_SQL}) AS distance_mi`;
+    binds.unshift(near.lat, near.lat, near.lon);
+    if (near.radius > 0) {
+      filters.push(`(${DISTANCE_SQL}) <= ?`);
+      binds.push(near.lat, near.lat, near.lon, near.radius);
+    }
+  }
+
   const { results } = await c.env.DB.prepare(`
     SELECT m.*, k.id AS kitchen_id_join, k.name AS kitchen_name, k.phone AS kitchen_phone,
            k.lat AS kitchen_lat, k.lon AS kitchen_lon, k.address_hint AS kitchen_address_hint,
-           k.nearest_city AS kitchen_nearest_city, k.nearest_state AS kitchen_nearest_state
+           k.nearest_city AS kitchen_nearest_city, k.nearest_state AS kitchen_nearest_state,
+           ${distanceSelect}
     FROM meals m
     JOIN meal_kitchens k ON k.id = m.kitchen_id
     WHERE ${filters.join(' AND ')}
@@ -453,6 +492,7 @@ export async function listMeals(c: AppContext) {
         sold_out: !!r.sold_out, cancelled_at: r.cancelled_at, created_at: r.created_at,
         lat: venue.lat, lon: venue.lon,
         status, status_note: publicMealStatusNote(status, r),
+        distance_mi: r.distance_mi == null ? null : Math.round(r.distance_mi * 10) / 10,
         kitchen: {
           id: r.kitchen_id_join, name: r.kitchen_name, phone: r.kitchen_phone,
           nearest_city: r.kitchen_nearest_city ?? null, nearest_state: r.kitchen_nearest_state ?? null,
@@ -474,6 +514,7 @@ export async function listMealPins(c: AppContext) {
   const category = c.req.query('category');
   const today = boardDateStr();
   const now = Math.floor(Date.now() / 1000);
+  const near = parseNearby(c);
 
   const filters = [
     'm.tenant_id = ?', 'm.deleted_at IS NULL', 'm.admin_hidden = 0', 'm.date >= ?',
@@ -485,9 +526,20 @@ export async function listMealPins(c: AppContext) {
     binds.push(category);
   }
 
+  let distanceSelect = 'NULL AS distance_mi';
+  if (near) {
+    distanceSelect = `(${DISTANCE_SQL}) AS distance_mi`;
+    binds.unshift(near.lat, near.lat, near.lon);
+    if (near.radius > 0) {
+      filters.push(`(${DISTANCE_SQL}) <= ?`);
+      binds.push(near.lat, near.lat, near.lon, near.radius);
+    }
+  }
+
   const { results } = await c.env.DB.prepare(`
     SELECT m.id, m.title, m.date, m.open, m.close, m.sold_out, m.cancelled_at, m.lat, m.lon,
-           k.lat AS kitchen_lat, k.lon AS kitchen_lon, k.name AS kitchen_name
+           k.lat AS kitchen_lat, k.lon AS kitchen_lon, k.name AS kitchen_name,
+           ${distanceSelect}
     FROM meals m
     JOIN meal_kitchens k ON k.id = m.kitchen_id
     WHERE ${filters.join(' AND ')}
@@ -504,6 +556,7 @@ export async function listMealPins(c: AppContext) {
         id: r.id, lat: venue.lat, lon: venue.lon, title: r.title,
         kitchen_name: r.kitchen_name,
         status, status_note: publicMealStatusNote(status, r),
+        distance_mi: r.distance_mi == null ? null : Math.round(r.distance_mi * 10) / 10,
       };
     })
     .filter((r: any) => r !== null);
