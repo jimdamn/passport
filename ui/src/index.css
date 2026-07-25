@@ -478,6 +478,19 @@ img { max-width: 100%; display: block; }
 /* ─── Forms ─────────────────────────────────────────────────────────── */
 .form-group { margin-bottom: 16px; }
 
+/* Two fields side by side on desktop, stacked on mobile - single source
+   for admin form rows so no page has to hand-roll a grid that forgets
+   to collapse on narrow screens. */
+.form-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+@media (min-width: 641px) {
+  .form-grid-2 { grid-template-columns: 1fr 1fr; }
+}
+
 .form-label {
   display: block;
   font-family: var(--font-sans);

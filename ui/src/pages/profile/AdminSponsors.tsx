@@ -322,12 +322,12 @@ export default function AdminSponsors() {
       {notice && <Alert type="success" style={{ marginBottom: 16 }}>{notice}</Alert>}
 
       {showForm && (
-        <div className="card" style={{ padding: 20, background: 'var(--white)', marginBottom: 20 }}>
+        <div className="card" style={{ marginBottom: 20 }}>
           <h3 style={{ margin: '0 0 16px', fontSize: '1.05rem', color: 'var(--green)' }}>
             {editingId ? 'Edit Placement' : 'New Placement'}
           </h3>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+          <div className="form-grid-2">
             <div>
               <label style={labelStyle}>Sponsor name ({form.sponsor_name.length}/60)</label>
               <input className="form-input" style={inputStyle} value={form.sponsor_name} maxLength={60}
@@ -377,7 +377,7 @@ export default function AdminSponsors() {
             </p>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+          <div className="form-grid-2">
             <div>
               <label style={labelStyle}>Starts (optional - default now)</label>
               <input type="datetime-local" className="form-input" style={inputStyle} value={form.starts_at}
@@ -404,7 +404,21 @@ export default function AdminSponsors() {
             {uploading && <span style={{ marginLeft: 8, fontSize: '0.78rem', color: 'var(--muted)' }}>Uploading...</span>}
           </div>
 
-          <div style={{ marginBottom: 20 }}>
+          {/* Save/Cancel come before the preview, not after - the preview
+              below renders the REAL SponsorDrawer at position:fixed, which
+              on mobile pins over the bottom of the screen and would
+              otherwise sit on top of these buttons, making them unreachable
+              without dismissing it first. */}
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginBottom: 20 }}>
+            <button className="btn btn-secondary btn-sm" onClick={() => setShowForm(false)} disabled={working} style={{ minHeight: 34 }}>
+              Cancel
+            </button>
+            <button className="btn btn-amber btn-sm" onClick={handleSubmit} disabled={working} style={{ minHeight: 34 }}>
+              {working ? 'Saving...' : editingId ? 'Save Changes' : 'Create Placement'}
+            </button>
+          </div>
+
+          <div style={{ paddingTop: 16, borderTop: '1px solid var(--border)' }}>
             <label style={labelStyle}>Preview</label>
             <p style={{ margin: '0 0 8px', fontSize: '0.78rem', color: 'var(--muted)' }}>
               The real card - it will appear pinned to the bottom of your screen.
@@ -427,15 +441,6 @@ export default function AdminSponsors() {
                 onTap={() => {}}
               />
             )}
-          </div>
-
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-            <button className="btn btn-secondary btn-sm" onClick={() => setShowForm(false)} disabled={working} style={{ minHeight: 34 }}>
-              Cancel
-            </button>
-            <button className="btn btn-amber btn-sm" onClick={handleSubmit} disabled={working} style={{ minHeight: 34 }}>
-              {working ? 'Saving...' : editingId ? 'Save Changes' : 'Create Placement'}
-            </button>
           </div>
         </div>
       )}
