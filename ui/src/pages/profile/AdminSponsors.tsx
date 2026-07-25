@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { SponsorDrawer } from 'kk-shared-ui';
 import { useAuth } from '../../context/AuthContext';
 import { useTenant } from '../../context/TenantContext';
 import {
@@ -10,7 +11,7 @@ import {
 } from '../../api/sponsors';
 import {
   ArrowLeft, Handshake, Plus, Pencil, Trash2, PauseCircle, CheckCircle, RefreshCw,
-  Square, X,
+  Square, Eye,
 } from 'lucide-react';
 import { Alert } from '../../components/ui/Alert';
 import { Spinner } from '../../components/ui/Spinner';
@@ -60,46 +61,6 @@ function targetChip(s: AdminSponsor): string {
   return s.target_value ?? 'City';
 }
 
-/**
- * Local visual preview matching the SponsorDrawer spec (BUILD-PLAN §4)
- * exactly - eyebrow, serif green name, muted message, amber X, 4px green top
- * border, ~110px card. This is intentionally NOT an import of the real
- * kk-shared-ui SponsorDrawer: that component is Increment 2's deliverable
- * and does not exist yet at Increment 1 build time. When Increment 2 ships
- * it, swap this block for `<SponsorDrawer placement={...} />` from
- * kk-shared-ui so the preview is pixel-true to what visitors see - tracked
- * as an explicit Increment 2 follow-through, not a scope cut.
- */
-function SponsorPreview({ form, imagePreviewUrl }: { form: FormState; imagePreviewUrl: string | null }) {
-  return (
-    <div style={{
-      maxWidth: 420, margin: '0 auto', background: 'var(--white, #fff)',
-      borderTop: '4px solid var(--green)', borderRadius: 'var(--r-md, 8px)',
-      boxShadow: '0 -2px 12px rgba(0,0,0,0.12)', padding: '14px 16px',
-      display: 'flex', alignItems: 'flex-start', gap: 12, position: 'relative',
-    }}>
-      {imagePreviewUrl && (
-        <img src={imagePreviewUrl} alt="" width={48} height={48} style={{ borderRadius: 'var(--r-sm)', objectFit: 'cover', flexShrink: 0 }} />
-      )}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--sage, #507850)' }}>Brought to you by</p>
-        <p style={{ margin: '2px 0 4px', fontFamily: 'var(--font-serif)', fontSize: '1.05rem', color: 'var(--green)' }}>
-          {form.sponsor_name || 'Sponsor name'}
-        </p>
-        <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--muted)', lineHeight: 1.4 }}>
-          {form.message || 'Sponsor message goes here.'}
-        </p>
-      </div>
-      <button type="button" aria-label="Dismiss sponsor message" style={{
-        background: 'none', border: 'none', color: 'var(--amber)', cursor: 'default',
-        width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-      }}>
-        <X size={18} />
-      </button>
-    </div>
-  );
-}
-
 export default function AdminSponsors() {
   const { user } = useAuth();
   const { tenant } = useTenant();
@@ -116,6 +77,12 @@ export default function AdminSponsors() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [uploading, setUploading] = useState(false);
+  // Live preview renders the REAL kk-shared-ui SponsorDrawer (fixed to the
+  // real screen edge, exactly as a visitor would see it) rather than a
+  // boxed facsimile - id 0 is never a real placement, so a stray tap's
+  // beacon call is silently dropped server-side. previewDismissed lets Jim
+  // also try the X and bring the preview back, same as the real UX.
+  const [previewDismissed, setPreviewDismissed] = useState(false);
 
   useEffect(() => {
     if (!user) { navigate('/auth/login'); return; }
@@ -162,6 +129,7 @@ export default function AdminSponsors() {
     setForm(EMPTY_FORM);
     setEditingId(null);
     setShowForm(true);
+    setPreviewDismissed(false);
     setNotice('');
     setError('');
   };
@@ -180,6 +148,7 @@ export default function AdminSponsors() {
     });
     setEditingId(s.id);
     setShowForm(true);
+    setPreviewDismissed(false);
     setNotice('');
     setError('');
   };
@@ -435,9 +404,29 @@ export default function AdminSponsors() {
             {uploading && <span style={{ marginLeft: 8, fontSize: '0.78rem', color: 'var(--muted)' }}>Uploading...</span>}
           </div>
 
-          <p style={{ ...labelStyle, marginBottom: 8 }}>Preview</p>
-          <div style={{ background: 'var(--cream, #f4f1ea)', padding: '20px 12px', borderRadius: 'var(--r-md)', marginBottom: 20 }}>
-            <SponsorPreview form={form} imagePreviewUrl={form.image_url || null} />
+          <div style={{ marginBottom: 20 }}>
+            <label style={labelStyle}>Preview</label>
+            <p style={{ margin: '0 0 8px', fontSize: '0.78rem', color: 'var(--muted)' }}>
+              The real card - it will appear pinned to the bottom of your screen.
+            </p>
+            {previewDismissed ? (
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => setPreviewDismissed(false)}
+                style={{ minHeight: 32, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <Eye size={13} /> Show preview
+              </button>
+            ) : (
+              <SponsorDrawer
+                placement={{
+                  id: 0,
+                  sponsor_name: form.sponsor_name || 'Sponsor name',
+                  message: form.message || 'Sponsor message goes here.',
+                  link_url: form.link_url || null,
+                  image_url: form.image_url || null,
+                }}
+                onDismiss={() => setPreviewDismissed(true)}
+                onTap={() => {}}
+              />
+            )}
           </div>
 
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>

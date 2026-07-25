@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useTenant } from '../context/TenantContext';
 import { useAuth } from '../context/AuthContext';
-import { MapPin, Trees, Trophy, Gem, Sparkles, Sprout, Pause, Compass, Signpost, Truck, UtensilsCrossed, PawPrint, type LucideIcon } from 'lucide-react';
+import { MapPin, Trees, Trophy, Gem, Sparkles, Sprout, Pause, Compass, Signpost, Truck, UtensilsCrossed, PawPrint, Handshake, type LucideIcon } from 'lucide-react';
 import { Alert } from '../components/ui/Alert';
 import {
   SUPPORT_CATEGORIES, SUPPORT_STATUS_LABEL, submitSupport, getMySupport,
@@ -673,6 +673,18 @@ export default function Help() {
             </p>
           </div>
         </div>
+      </Section>
+
+      {/* ── About sponsor messages ── */}
+      <Section title="About sponsor messages">
+        <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.92rem', lineHeight: 1.6, marginBottom: 16 }}>
+          Now and then you may see a small card at the bottom of a page that says Brought to you by, with the name of a local member business. That business helps keep this part of the Hub running. The card appears once per visit at most, and the X puts it away for the rest of your visit.
+        </p>
+        <Tip
+          icon={Handshake}
+          title="One dismiss, quiet for the whole visit"
+          body="Tapping the X puts away every sponsor card for the rest of your visit, not just the one you closed."
+        />
       </Section>
 
       {/* ── Tips ── */}

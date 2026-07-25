@@ -95,6 +95,7 @@ export function AnonymousPersonaDrawer({
       <aside
         aria-label="Anonymous Persona Settings"
         aria-hidden={!open}
+        data-kk-drawer-open={open || undefined}
         {...(!open ? { inert: '' } : {})}
         style={{
           position: 'fixed',

@@ -73,6 +73,18 @@ export interface SponsorInput {
   ends_at?: number | null;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Public — resolve + beacon (optional auth; frictionless-reads standing order)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function resolveSponsorDrawer(tenant: string, route: string) {
+  return api.get<ApiResponse<SponsorPlacement | null>>(`/t/${tenant}/sponsor-drawer/resolve?route=${encodeURIComponent(route)}`);
+}
+
+export function sponsorBeacon(tenant: string, placementId: number, kind: 'show' | 'dismiss' | 'tap') {
+  return api.post<ApiResponse<boolean>>(`/t/${tenant}/sponsor-drawer/beacon`, { placement_id: placementId, kind });
+}
+
 export function adminListSponsors(tenant: string) {
   return api.get<ApiResponse<AdminSponsor[]>>(`/t/${tenant}/admin/sponsors`);
 }

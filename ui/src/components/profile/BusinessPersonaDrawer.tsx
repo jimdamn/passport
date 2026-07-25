@@ -65,6 +65,7 @@ export function BusinessPersonaDrawer({
       <aside
         aria-label="Business Persona Settings"
         aria-hidden={!open}
+        data-kk-drawer-open={open || undefined}
         {...(!open ? { inert: '' } : {})}
         style={{
           position: 'fixed',
