@@ -62,6 +62,7 @@ export interface SaleFeedRow {
   created_at: number;
   status: SaleStatus;
   status_note: string;
+  distance_mi: number | null;
 }
 
 export interface SalePin {
@@ -71,6 +72,7 @@ export interface SalePin {
   title: string;
   status: SaleStatus;
   status_note: string;
+  distance_mi: number | null;
 }
 
 export interface SaleEventChip {
@@ -78,16 +80,28 @@ export interface SaleEventChip {
   count: number;
 }
 
-export function listSales(tenant: string, category?: string, event?: string) {
+export function listSales(tenant: string, category?: string, event?: string, nearby?: { lat: number; lon: number; radius: number }) {
   const params = new URLSearchParams();
   if (category) params.set('category', category);
   if (event) params.set('event', event);
+  if (nearby) {
+    params.set('lat', String(nearby.lat));
+    params.set('lon', String(nearby.lon));
+    params.set('radius', String(nearby.radius));
+  }
   const q = params.toString();
   return api.get<ApiResponse<SaleFeedRow[]>>(`/t/${tenant}/sales${q ? `?${q}` : ''}`);
 }
 
-export function listSalePins(tenant: string) {
-  return api.get<ApiResponse<SalePin[]>>(`/t/${tenant}/sales/pins`);
+export function listSalePins(tenant: string, nearby?: { lat: number; lon: number; radius: number }) {
+  const params = new URLSearchParams();
+  if (nearby) {
+    params.set('lat', String(nearby.lat));
+    params.set('lon', String(nearby.lon));
+    params.set('radius', String(nearby.radius));
+  }
+  const q = params.toString();
+  return api.get<ApiResponse<SalePin[]>>(`/t/${tenant}/sales/pins${q ? `?${q}` : ''}`);
 }
 
 export function listSaleEvents(tenant: string) {

@@ -1,21 +1,32 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { useTenant } from '../context/TenantContext';
 import {
   listPopups, listPopupPins, listPopupEvents, categoryLabel, POPUP_CATEGORIES, REGION_CENTER, REGION_BOUNDS,
   type PopupFeedStop, type PopupStopPin, type PopupWhen, type PopupEventChip,
 } from '../api/popups';
-import { Truck, List, Map as MapIcon, Phone } from 'lucide-react';
+import { Truck, List, Map as MapIcon, Phone, MapPin, Navigation } from 'lucide-react';
 import { Spinner } from '../components/ui/Spinner';
 import { Badge } from '../components/ui/Badge';
 import { RegionMap, type RegionPin } from 'kk-shared-ui';
 
-// Pop-Ups' public browse board. Follows Fresh Today/Sale Day's design
-// language exactly (serif header, calm chip rows, white cards with a green
-// left accent, centered spinner, calm empty state, 800px column). The
+// Pop-Ups' public browse board. Follows Happenings/Fresh Today/Sale Day's
+// design language exactly (serif header, calm chip rows, white cards with a
+// green left accent, centered spinner, calm empty state, 800px column, and
+// the platform's one location control set, DESIGN-LANGUAGE.md §4). The
 // differentiator (POP-UPS-BUILD-PLAN.md §0/§1): a When row (Today/Coming up/
 // All) sits above the category row, and both the list and the map carry two
 // layers - green (checked in, verified) vs amber (on the schedule, a plan).
+// The location control row sits below both, immediately above the List/Map
+// toggle - same relative position as every other board.
+
+const RADIUS_OPTIONS = [
+  { mi: 5, label: '5 mi' },
+  { mi: 15, label: '15 mi' },
+  { mi: 30, label: '30 mi' },
+  { mi: 0, label: 'Any' },
+];
 
 function clockLabel(hhmm: string): string {
   const [hStr, mStr] = hhmm.split(':');
@@ -50,6 +61,7 @@ function groupLabel(dateStr: string, today: string, tomorrow: string): string {
 }
 
 export default function PopupsBoard() {
+  const { user } = useAuth();
   const { tenant } = useTenant();
   const navigate = useNavigate();
 
@@ -63,8 +75,65 @@ export default function PopupsBoard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Event chips don't depend on the when/category/event filter - load once
-  // per tenant (same pattern as SaleDay.tsx's listSaleEvents effect).
+  // Location filtering - copied from Happenings.tsx verbatim, see
+  // FreshToday.tsx/SaleDay.tsx for the identical adaptation.
+  const [coords, setCoords] = useState<{ lat: number; lon: number } | null>(null);
+  const [source, setSource] = useState<'home' | 'live' | null>(null);
+  const [radius, setRadius] = useState(15);
+  const [locating, setLocating] = useState(false);
+  const [geoError, setGeoError] = useState('');
+  const [touched, setTouched] = useState(false);
+
+  useEffect(() => {
+    if (touched || coords) return;
+    if (user?.home_zip_lat != null && user?.home_zip_lon != null) {
+      setCoords({ lat: user.home_zip_lat, lon: user.home_zip_lon });
+      setRadius(30);
+      setSource('home');
+    }
+  }, [user, touched, coords]);
+
+  const useMyLocation = () => {
+    setGeoError('');
+    setTouched(true);
+    if (!('geolocation' in navigator)) {
+      setGeoError("Location isn't available on this device.");
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        setCoords({ lat: pos.coords.latitude, lon: pos.coords.longitude });
+        setSource('live');
+        setLocating(false);
+      },
+      () => {
+        setLocating(false);
+        if (user?.home_zip_lat != null && user?.home_zip_lon != null) {
+          setCoords({ lat: user.home_zip_lat, lon: user.home_zip_lon });
+          setSource('home');
+          setGeoError('Using your home area - allow location to use where you are now.');
+        } else {
+          setGeoError("Couldn't get your location. Check your browser's location permission.");
+        }
+      },
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 },
+    );
+  };
+
+  const clearLocation = () => {
+    setTouched(true);
+    setCoords(null);
+    setSource(null);
+    setGeoError('');
+  };
+
+  const originLat = coords?.lat ?? REGION_CENTER.lat;
+  const originLon = coords?.lon ?? REGION_CENTER.lon;
+  const origin = useMemo(() => ({ lat: originLat, lon: originLon }), [originLat, originLon]);
+
+  // Event chips don't depend on the when/category/event/location filter -
+  // load once per tenant (same pattern as SaleDay.tsx's listSaleEvents effect).
   useEffect(() => {
     if (!tenant) return;
     listPopupEvents(tenant.id).then(res => setEvents(res.data || [])).catch(() => setEvents([]));
@@ -78,9 +147,10 @@ export default function PopupsBoard() {
       try {
         const whenParam = when === 'all' ? undefined : when;
         const categoryParam = category === 'all' ? undefined : category;
+        const nearby = coords ? { lat: coords.lat, lon: coords.lon, radius } : undefined;
         const [feedRes, pinsRes] = await Promise.all([
-          listPopups(tenant.id, categoryParam, whenParam, eventFilter ?? undefined),
-          listPopupPins(tenant.id, categoryParam, whenParam, eventFilter ?? undefined),
+          listPopups(tenant.id, categoryParam, whenParam, eventFilter ?? undefined, nearby),
+          listPopupPins(tenant.id, categoryParam, whenParam, eventFilter ?? undefined, nearby),
         ]);
         setStops(feedRes.data || []);
         setPins(pinsRes.data || []);
@@ -90,7 +160,7 @@ export default function PopupsBoard() {
         setLoading(false);
       }
     })();
-  }, [tenant, when, category, eventFilter]);
+  }, [tenant, when, category, eventFilter, coords, radius]);
 
   const today = todayBoardDateStr();
   const tomorrow = tomorrowBoardDateStr();
@@ -172,6 +242,49 @@ export default function PopupsBoard() {
         ))}
       </div>
 
+      {/* Location filter - copied from Happenings.tsx verbatim (the one
+          platform location control set, DESIGN-LANGUAGE.md §4). */}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: source === 'home' ? 6 : 12 }}>
+        {!coords ? (
+          <button onClick={useMyLocation} disabled={locating}
+            className="btn btn-sm btn-secondary"
+            style={{ minHeight: 32, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <Navigation size={13} /> {locating ? 'Locating…' : 'Near me'}
+          </button>
+        ) : (
+          <>
+            {RADIUS_OPTIONS.map(r => (
+              <button key={r.mi} onClick={() => setRadius(r.mi)}
+                className={`btn btn-sm ${radius === r.mi ? 'btn-amber' : 'btn-secondary'}`}
+                style={{ minHeight: 32, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                {r.label}
+              </button>
+            ))}
+            {source === 'home' && (
+              <button onClick={useMyLocation} disabled={locating}
+                className="btn btn-sm btn-secondary"
+                style={{ minHeight: 32, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                <Navigation size={13} /> {locating ? 'Locating…' : 'Use my location'}
+              </button>
+            )}
+            <button onClick={clearLocation}
+              className="btn btn-sm btn-secondary"
+              style={{ minHeight: 32, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              Clear
+            </button>
+          </>
+        )}
+      </div>
+      {source === 'home' && !geoError && (
+        <p style={{ margin: '0 0 12px', fontSize: '0.78rem', color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 5 }}>
+          <MapPin size={12} style={{ color: 'var(--amber)' }} />
+          Showing your home area{user?.home_zip_location ? ` (${user.home_zip_location})` : ''} - tap "Use my location" if you're out and about.
+        </p>
+      )}
+      {geoError && (
+        <p style={{ margin: '0 0 12px', fontSize: '0.78rem', color: 'var(--muted)' }}>{geoError}</p>
+      )}
+
       {/* View toggle */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 16 }}>
         <button onClick={() => setView('list')}
@@ -192,11 +305,21 @@ export default function PopupsBoard() {
         </div>
       ) : view === 'map' ? (
         <>
-          <RegionMap pins={mapPins} center={REGION_CENTER} maxBounds={REGION_BOUNDS} height="60vh" />
+          <RegionMap pins={mapPins} center={origin} maxBounds={REGION_BOUNDS} height="60vh" />
           <p style={{ margin: '10px 0 0', fontSize: '0.78rem', color: 'var(--muted)', textAlign: 'center' }}>
             Green means they've checked in - they're there. Amber is their schedule - plans change.
           </p>
         </>
+      ) : stops.length === 0 && coords && radius > 0 ? (
+        <div className="card" style={{ padding: 24, textAlign: 'center', background: 'var(--white)' }}>
+          <Truck size={28} style={{ color: 'var(--amber)', marginBottom: 8 }} />
+          <p style={{ margin: '0 0 4px', color: 'var(--text)', fontSize: '0.9rem' }}>
+            Nothing within {radius} miles right now.
+          </p>
+          <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.85rem' }}>
+            Try a wider range, or clear the location filter to see the whole board.
+          </p>
+        </div>
       ) : stops.length === 0 ? (
         <div className="card" style={{ padding: 24, textAlign: 'center', background: 'var(--white)' }}>
           <Truck size={28} style={{ color: 'var(--amber)', marginBottom: 8 }} />

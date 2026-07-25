@@ -72,6 +72,31 @@ function asBool(value: unknown, fallback: boolean): boolean {
   return !!value;
 }
 
+/**
+ * Parse the optional ?lat=&lon=&radius= "near me" params. Copied from
+ * happenings.ts's parseNearby - board-module "copy, never share code"
+ * convention (ARCHITECTURE.md §13).
+ */
+function parseNearby(c: AppContext): { lat: number; lon: number; radius: number } | null {
+  const lat = Number(c.req.query('lat'));
+  const lon = Number(c.req.query('lon'));
+  if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
+    return null;
+  }
+  const radius = Math.max(0, Math.min(500, Number(c.req.query('radius')) || 0));
+  return { lat, lon, radius };
+}
+
+// Great-circle distance (miles) as a SQL expression over a sale's own lat/lon
+// (a single-table board - no join needed). Copied from happenings.ts's
+// DISTANCE_SQL.
+const DISTANCE_SQL = `
+  3958.8 * acos(MIN(1.0, MAX(-1.0,
+    sin(radians(lat)) * sin(radians(?)) +
+    cos(radians(lat)) * cos(radians(?)) * cos(radians(lon) - radians(?))
+  )))
+`;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Board-TZ date/time helpers. fresh.ts's endOfBoardDay() only ever computes
 // "end of today" - Sale Day needs end-of-day for an arbitrary, possibly
@@ -429,6 +454,9 @@ function saleFeedShape(row: any, days: SaleDayEntry[]) {
     // the strikethrough without a second authenticated round-trip.
     wrapped_date: row.wrapped_date ?? null,
     created_at: row.created_at,
+    // Distance from the visitor when "near me" is active - null on any call
+    // site that didn't query it (row.distance_mi is simply absent there).
+    distance_mi: row.distance_mi == null ? null : Math.round(row.distance_mi * 10) / 10,
   };
 }
 
@@ -447,6 +475,7 @@ export async function listSales(c: AppContext) {
   const event = c.req.query('event');
   const today = boardDateStr();
   const now = Math.floor(Date.now() / 1000);
+  const near = parseNearby(c);
 
   const filters = ['tenant_id = ?', 'deleted_at IS NULL', 'is_hidden = 0', 'admin_hidden = 0', 'last_date >= ?'];
   const binds: any[] = [tenant.id, today];
@@ -459,8 +488,22 @@ export async function listSales(c: AppContext) {
     binds.push(event);
   }
 
+  // "Near me": filter to the radius *before* the 200-cap, same reasoning as
+  // happenings.ts/fresh.ts - the closest sales can never be dropped by the
+  // limit. Status/expiry logic below still runs on the resulting (smaller)
+  // candidate set, unchanged.
+  let distanceSelect = 'NULL AS distance_mi';
+  if (near) {
+    distanceSelect = `(${DISTANCE_SQL}) AS distance_mi`;
+    binds.unshift(near.lat, near.lat, near.lon);
+    if (near.radius > 0) {
+      filters.push(`(${DISTANCE_SQL}) <= ?`);
+      binds.push(near.lat, near.lat, near.lon, near.radius);
+    }
+  }
+
   const { results } = await c.env.DB.prepare(`
-    SELECT * FROM sales WHERE ${filters.join(' AND ')} ORDER BY created_at DESC LIMIT 200
+    SELECT *, ${distanceSelect} FROM sales WHERE ${filters.join(' AND ')} ORDER BY created_at DESC LIMIT 200
   `).bind(...binds).all<any>();
 
   const shaped = (results || [])
@@ -485,19 +528,36 @@ export async function listSalePins(c: AppContext) {
   const tenant = c.get('tenant');
   const today = boardDateStr();
   const now = Math.floor(Date.now() / 1000);
+  const near = parseNearby(c);
+
+  const filters = ['tenant_id = ?', 'deleted_at IS NULL', 'is_hidden = 0', 'admin_hidden = 0', 'last_date >= ?'];
+  const binds: any[] = [tenant.id, today];
+
+  let distanceSelect = 'NULL AS distance_mi';
+  if (near) {
+    distanceSelect = `(${DISTANCE_SQL}) AS distance_mi`;
+    binds.unshift(near.lat, near.lat, near.lon);
+    if (near.radius > 0) {
+      filters.push(`(${DISTANCE_SQL}) <= ?`);
+      binds.push(near.lat, near.lat, near.lon, near.radius);
+    }
+  }
 
   const { results } = await c.env.DB.prepare(`
-    SELECT * FROM sales
-    WHERE tenant_id = ? AND deleted_at IS NULL AND is_hidden = 0 AND admin_hidden = 0 AND last_date >= ?
+    SELECT *, ${distanceSelect} FROM sales
+    WHERE ${filters.join(' AND ')}
     ORDER BY created_at DESC LIMIT 300
-  `).bind(tenant.id, today).all<any>();
+  `).bind(...binds).all<any>();
 
   const data = (results || [])
     .map((r: any) => {
       const days: SaleDayEntry[] = JSON.parse(r.days || '[]');
       if (now >= endOfBoardDay(days[days.length - 1].date)) return null;
       const { status, note } = publicStatusNote(days, r.wrapped_date, now);
-      return { id: r.id, lat: r.lat, lon: r.lon, title: r.title, status, status_note: note };
+      return {
+        id: r.id, lat: r.lat, lon: r.lon, title: r.title, status, status_note: note,
+        distance_mi: r.distance_mi == null ? null : Math.round(r.distance_mi * 10) / 10,
+      };
     })
     .filter((r: any) => r !== null);
 

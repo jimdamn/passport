@@ -64,6 +64,7 @@ export interface PopupFeedStop {
   created_at: number;
   status: StopStatus;
   status_note: string;
+  distance_mi: number | null;
   vendor: PopupFeedVendor;
 }
 
@@ -76,6 +77,7 @@ export interface PopupStopPin {
   status: StopStatus;
   status_note: string;
   layer: StopLayer;
+  distance_mi: number | null;
 }
 
 export interface PopupVendorStop {
@@ -114,20 +116,30 @@ export interface PopupVendorDetail {
 
 export type PopupWhen = 'today' | 'coming';
 
-export function listPopups(tenant: string, category?: string, when?: PopupWhen, event?: string) {
+export function listPopups(tenant: string, category?: string, when?: PopupWhen, event?: string, nearby?: { lat: number; lon: number; radius: number }) {
   const params = new URLSearchParams();
   if (category) params.set('category', category);
   if (when) params.set('when', when);
   if (event) params.set('event', event);
+  if (nearby) {
+    params.set('lat', String(nearby.lat));
+    params.set('lon', String(nearby.lon));
+    params.set('radius', String(nearby.radius));
+  }
   const q = params.toString();
   return api.get<ApiResponse<PopupFeedStop[]>>(`/t/${tenant}/popups${q ? `?${q}` : ''}`);
 }
 
-export function listPopupPins(tenant: string, category?: string, when?: PopupWhen, event?: string) {
+export function listPopupPins(tenant: string, category?: string, when?: PopupWhen, event?: string, nearby?: { lat: number; lon: number; radius: number }) {
   const params = new URLSearchParams();
   if (category) params.set('category', category);
   if (when) params.set('when', when);
   if (event) params.set('event', event);
+  if (nearby) {
+    params.set('lat', String(nearby.lat));
+    params.set('lon', String(nearby.lon));
+    params.set('radius', String(nearby.radius));
+  }
   const q = params.toString();
   return api.get<ApiResponse<PopupStopPin[]>>(`/t/${tenant}/popups/pins${q ? `?${q}` : ''}`);
 }

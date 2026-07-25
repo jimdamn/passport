@@ -71,6 +71,32 @@ function asBool(value: unknown, fallback: boolean): boolean {
   return !!value;
 }
 
+/**
+ * Parse the optional ?lat=&lon=&radius= "near me" params. Copied from
+ * happenings.ts's parseNearby - board-module "copy, never share code"
+ * convention (ARCHITECTURE.md §13).
+ */
+function parseNearby(c: AppContext): { lat: number; lon: number; radius: number } | null {
+  const lat = Number(c.req.query('lat'));
+  const lon = Number(c.req.query('lon'));
+  if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
+    return null;
+  }
+  const radius = Math.max(0, Math.min(500, Number(c.req.query('radius')) || 0));
+  return { lat, lon, radius };
+}
+
+// Great-circle distance (miles) as a SQL expression over a stop's pin
+// coordinates - COALESCE(checkin, scheduled), matching stopPinCoords()'s own
+// fallback exactly, so distance always reflects the same location the pin
+// itself renders at. Copied from happenings.ts's DISTANCE_SQL.
+const DISTANCE_SQL = `
+  3958.8 * acos(MIN(1.0, MAX(-1.0,
+    sin(radians(COALESCE(s.checkin_lat, s.lat))) * sin(radians(?)) +
+    cos(radians(COALESCE(s.checkin_lat, s.lat))) * cos(radians(?)) * cos(radians(COALESCE(s.checkin_lon, s.lon)) - radians(?))
+  )))
+`;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Board-TZ date/time helpers - copied from sales.ts (same reasoning fresh.ts
 // itself documents for not sharing these across board modules).
@@ -393,6 +419,7 @@ export async function listStops(c: AppContext) {
   const event = c.req.query('event');
   const today = boardDateStr();
   const now = Math.floor(Date.now() / 1000);
+  const near = parseNearby(c);
 
   const filters = [
     's.tenant_id = ?', 's.deleted_at IS NULL', 's.admin_hidden = 0', 's.date >= ?',
@@ -415,9 +442,22 @@ export async function listStops(c: AppContext) {
     binds.push(event);
   }
 
+  // "Near me": filter to the radius *before* the 200-cap, same reasoning as
+  // happenings.ts/fresh.ts/sales.ts.
+  let distanceSelect = 'NULL AS distance_mi';
+  if (near) {
+    distanceSelect = `(${DISTANCE_SQL}) AS distance_mi`;
+    binds.unshift(near.lat, near.lat, near.lon);
+    if (near.radius > 0) {
+      filters.push(`(${DISTANCE_SQL}) <= ?`);
+      binds.push(near.lat, near.lat, near.lon, near.radius);
+    }
+  }
+
   const { results } = await c.env.DB.prepare(`
     SELECT s.*, v.id AS vendor_id, v.name AS vendor_name, v.category AS vendor_category,
-           v.phone AS vendor_phone, v.photo_url AS vendor_photo_url
+           v.phone AS vendor_phone, v.photo_url AS vendor_photo_url,
+           ${distanceSelect}
     FROM popup_stops s
     JOIN popup_vendors v ON v.id = s.vendor_id
     WHERE ${filters.join(' AND ')}
@@ -435,6 +475,7 @@ export async function listStops(c: AppContext) {
       checked_in_at: r.checked_in_at, sold_out: !!r.sold_out, cancelled_at: r.cancelled_at,
       created_at: r.created_at,
       status, status_note: publicStopStatusNote(status, r),
+      distance_mi: r.distance_mi == null ? null : Math.round(r.distance_mi * 10) / 10,
       vendor: {
         id: r.vendor_id, name: r.vendor_name, category: r.vendor_category,
         phone: r.vendor_phone, photo_url: r.vendor_photo_url,
@@ -458,6 +499,7 @@ export async function listStopPins(c: AppContext) {
   const event = c.req.query('event');
   const today = boardDateStr();
   const now = Math.floor(Date.now() / 1000);
+  const near = parseNearby(c);
 
   const filters = [
     's.tenant_id = ?', 's.deleted_at IS NULL', 's.admin_hidden = 0', 's.date >= ?',
@@ -480,10 +522,21 @@ export async function listStopPins(c: AppContext) {
     binds.push(event);
   }
 
+  let distanceSelect = 'NULL AS distance_mi';
+  if (near) {
+    distanceSelect = `(${DISTANCE_SQL}) AS distance_mi`;
+    binds.unshift(near.lat, near.lat, near.lon);
+    if (near.radius > 0) {
+      filters.push(`(${DISTANCE_SQL}) <= ?`);
+      binds.push(near.lat, near.lat, near.lon, near.radius);
+    }
+  }
+
   const { results } = await c.env.DB.prepare(`
     SELECT s.id, s.date, s.open, s.close, s.lat, s.lon, s.checkin_lat, s.checkin_lon,
            s.sold_out, s.cancelled_at, s.checked_in_at,
-           v.id AS vendor_id, v.name AS vendor_name
+           v.id AS vendor_id, v.name AS vendor_name,
+           ${distanceSelect}
     FROM popup_stops s
     JOIN popup_vendors v ON v.id = s.vendor_id
     WHERE ${filters.join(' AND ')}
@@ -501,6 +554,7 @@ export async function listStopPins(c: AppContext) {
       lat: coords.lat, lon: coords.lon,
       status, status_note: publicStopStatusNote(status, r),
       layer: stopLayer(status, r.checked_in_at),
+      distance_mi: r.distance_mi == null ? null : Math.round(r.distance_mi * 10) / 10,
     };
   });
 
