@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { SponsorDrawer, SponsorBanner, resizeForUpload } from 'kk-shared-ui';
 import { useAuth } from '../../context/AuthContext';
@@ -86,6 +86,16 @@ export default function AdminSponsors() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [uploading, setUploading] = useState(false);
+  const formRef = useRef<HTMLDivElement>(null);
+
+  // Bring the Edit Placement card into view - the trigger button lives in a
+  // list row that can be far down the page, and the form renders above the
+  // list, so without this the admin edits a placement they can't see.
+  useEffect(() => {
+    if (showForm && editingId !== null) {
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [showForm, editingId]);
   // Live preview renders the REAL kk-shared-ui SponsorDrawer (fixed to the
   // real screen edge, exactly as a visitor would see it) rather than a
   // boxed facsimile - id 0 is never a real placement, so a stray tap's
@@ -385,7 +395,7 @@ export default function AdminSponsors() {
       {notice && <Alert type="success" style={{ marginBottom: 16 }}>{notice}</Alert>}
 
       {showForm && (
-        <div className="card" style={{ marginBottom: 20 }}>
+        <div ref={formRef} className="card" style={{ marginBottom: 20 }}>
           <h3 style={{ margin: '0 0 16px', fontSize: '1.05rem', color: 'var(--green)' }}>
             {editingId ? 'Edit Placement' : 'New Placement'}
           </h3>
