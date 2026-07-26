@@ -535,11 +535,18 @@ export async function sponsorBeacon(c: AppContext) {
 
 /**
  * POST /sponsors/upload — admin uploads a sponsor image. Mirrors uploadFreshPhoto,
- * except for the variant: the drawer renders this photo in a ~104-130px near-square
- * box with object-fit:cover (SponsorDrawer.tsx), so 'small-square' (image-api's
- * 512px-long-edge preset, already used by avatars) is a far better fit than the
- * 'mobile' variant every board photo uses - that 1600px cap is sized for a
- * full-width board photo, not a thumbnail that never renders past 130px.
+ * except the variant depends on what the photo is for:
+ * - Drawer (route_drawer): the photo renders in a ~104-130px near-square box
+ *   with object-fit:cover (SponsorDrawer.tsx), so 'small-square' (image-api's
+ *   512px-long-edge preset, already used by avatars) is the right fit.
+ * - Inline banner (inline_*): the photo renders full shell-width or as a large
+ *   card (SponsorBanner.tsx), so it needs 'mobile' (1600px-long-edge, no crop) -
+ *   the same variant every board photo uses. Bug fixed 2026-07-25: this
+ *   endpoint requested 'small-square' unconditionally through Increment 2,
+ *   silently compressing every inline banner photo down to ~512px before it
+ *   ever reached the browser - see INLINE-SPONSOR-BANNER-BUILD-PLAN.md.
+ * `placement` is validated against the known list (not trusted blindly) so a
+ * crafted request can't ask image-api for an arbitrary variant.
  */
 export async function uploadSponsorPhoto(c: AppContext) {
   requireAdmin(c);
@@ -550,11 +557,14 @@ export async function uploadSponsorPhoto(c: AppContext) {
   if (!file || typeof file === 'string') {
     throw new HTTPException(400, { message: 'Choose a photo to upload.' });
   }
+  const placementRaw = form?.get('placement');
+  const placement = typeof placementRaw === 'string' && KNOWN_PLACEMENT_VALUES.includes(placementRaw) ? placementRaw : 'route_drawer';
+  const variant = INLINE_PLACEMENTS.has(placement) ? 'mobile' : 'small-square';
 
   const uploadForm = new FormData();
   uploadForm.append('file', file as File);
   uploadForm.append('user_id', String(Number(user.sub)));
-  uploadForm.append('variant', 'small-square');
+  uploadForm.append('variant', variant);
 
   const res = await c.env.KKAUTH.fetch(
     new Request('https://kkauth/internal/uploads', {

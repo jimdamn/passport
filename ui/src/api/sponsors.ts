@@ -193,13 +193,14 @@ export function adminSetInlineSponsorsFeature(tenant: string, on: boolean) {
  * Content-Type: application/json, which would strip the multipart boundary
  * the browser needs to set itself for a FormData body.
  */
-export async function uploadSponsorPhoto(tenant: string, file: File): Promise<ApiResponse<{ url: string | null }>> {
+export async function uploadSponsorPhoto(tenant: string, file: File, placement: SponsorPlacementType = 'route_drawer'): Promise<ApiResponse<{ url: string | null }>> {
   const token = getToken();
   const headers: Record<string, string> = {};
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
   const form = new FormData();
   form.append('file', file);
+  form.append('placement', placement);
 
   const res = await fetch(`/api/t/${tenant}/sponsors/upload`, {
     method: 'POST',
