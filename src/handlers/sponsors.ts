@@ -123,23 +123,20 @@ function nowSql(): string {
 }
 
 /**
- * Same allowlist logic as the CORS check in functions/api/[[route]].ts -
- * duplicated rather than imported (board-module "copy, never share code"
- * convention) since link_url validation is a one-off string check, not a
- * shared module. A relative path is always allowed (same-origin by
- * construction); an absolute URL must resolve to a Hub origin.
+ * A relative path is always allowed (same-origin by construction, opens in
+ * the same tab). An absolute URL is allowed too - a sponsor's whole point is
+ * often driving traffic to their own site (Jim, 2026-07-25: "should be
+ * capable of delivering another website, in a new tab") - as long as it's
+ * http/https, blocking javascript:/data:/other schemes that could turn a
+ * sponsor-supplied string into script execution. Which tab it opens in is a
+ * client-side rendering decision (SponsorDrawer.tsx/SponsorBanner.tsx's own
+ * isExternalLink), not something this validator decides.
  */
-function isHubUrl(url: string): boolean {
+function isValidLinkUrl(url: string): boolean {
   if (url.startsWith('/')) return true;
   try {
-    const { hostname } = new URL(url);
-    return (
-      hostname === 'localhost' ||
-      hostname === '127.0.0.1' ||
-      hostname.endsWith('.pages.dev') ||
-      hostname === 'lakeandlocals.com' ||
-      hostname.endsWith('.lakeandlocals.com')
-    );
+    const { protocol } = new URL(url);
+    return protocol === 'http:' || protocol === 'https:';
   } catch {
     return false;
   }
@@ -282,8 +279,8 @@ function parseSponsorInput(body: any, existing?: any): Omit<SponsorInput, 'targe
   }
 
   const link_url = body.link_url === undefined ? (existing?.link_url ?? null) : cleanText(body.link_url, 500);
-  if (link_url && !isHubUrl(link_url)) {
-    throw new HTTPException(400, { message: 'Link must go to a page in the Hub, not an outside site.' });
+  if (link_url && !isValidLinkUrl(link_url)) {
+    throw new HTTPException(400, { message: 'Link must be a page in the Hub or a full https:// web address.' });
   }
 
   const image_url = body.image_url === undefined ? (existing?.image_url ?? null) : cleanText(body.image_url, 500);

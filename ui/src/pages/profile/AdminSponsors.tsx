@@ -509,10 +509,13 @@ export default function AdminSponsors() {
           </div>
 
           <div style={{ marginBottom: 12 }}>
-            <label style={labelStyle}>Link (optional - a page in the Hub)</label>
+            <label style={labelStyle}>Link (optional)</label>
             <input className="form-input" style={inputStyle} value={form.link_url}
-              placeholder="/deals or https://lakeandlocals.com/..."
+              placeholder="/deals, or the sponsor's own https://... website"
               onChange={e => setForm(f => ({ ...f, link_url: e.target.value }))} />
+            <p style={{ margin: '6px 0 0', fontSize: '0.74rem', color: 'var(--muted)' }}>
+              A page in the Hub opens in this tab. Any other https:// address opens in a new tab, so the visitor never loses their place here.
+            </p>
           </div>
 
           <div style={{ marginBottom: 20 }}>
