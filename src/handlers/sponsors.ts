@@ -61,6 +61,11 @@ export const SPONSOR_ROUTES_BY_APP: Record<string, { value: string; label: strin
     { value: '/', label: 'Stories Feed' },
     { value: '/submit', label: 'Share a Story' },
     { value: '/my-stories', label: 'My Stories' },
+    // Not a real browser path - a fixed slot label for "any story detail
+    // page", since a sponsor targets the page shape, not one specific
+    // story ID. StoryDetail.tsx's resolve call always passes this exact
+    // string (INLINE-SPONSOR-BANNER-BUILD-PLAN.md §4, inline_mid_story).
+    { value: '/story/:id', label: 'Story Detail' },
   ],
   'apps-hub': [
     { value: '/', label: 'Hub Home' },

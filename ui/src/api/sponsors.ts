@@ -36,6 +36,7 @@ export const SPONSOR_ROUTES_BY_APP: Record<SponsorApp, { value: string; label: s
     { value: '/', label: 'Stories Feed' },
     { value: '/submit', label: 'Share a Story' },
     { value: '/my-stories', label: 'My Stories' },
+    { value: '/story/:id', label: 'Story Detail' },
   ],
   'apps-hub': [
     { value: '/', label: 'Hub Home' },

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { SponsorDrawer, resizeForUpload } from 'kk-shared-ui';
+import { SponsorDrawer, SponsorBanner, resizeForUpload } from 'kk-shared-ui';
 import { useAuth } from '../../context/AuthContext';
 import { useTenant } from '../../context/TenantContext';
 import {
@@ -534,10 +534,23 @@ export default function AdminSponsors() {
           <div style={{ paddingTop: 16, borderTop: '1px solid var(--border)' }}>
             <label style={labelStyle}>Preview</label>
             {INLINE_PLACEMENTS.has(form.placement) ? (
-              <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--muted)' }}>
-                Live preview for inline banners ships with the banner component itself
-                (next increment) - not available yet on this page.
-              </p>
+              <>
+                <p style={{ margin: '0 0 8px', fontSize: '0.78rem', color: 'var(--muted)' }}>
+                  The real component, sized to its actual box - it sits in the page, not pinned to an edge.
+                </p>
+                <SponsorBanner
+                  placement={{
+                    id: 0,
+                    sponsor_name: form.sponsor_name || 'Sponsor name',
+                    message: form.message || 'Sponsor message goes here.',
+                    link_url: form.link_url || null,
+                    image_url: form.image_url || null,
+                    banner_size: form.banner_size ?? SPONSOR_BANNER_SIZES[0].value,
+                    show_credit_line: form.show_credit_line,
+                  }}
+                  onTap={() => {}}
+                />
+              </>
             ) : (
               <>
                 <p style={{ margin: '0 0 8px', fontSize: '0.78rem', color: 'var(--muted)' }}>
