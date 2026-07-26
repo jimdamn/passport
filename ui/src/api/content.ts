@@ -25,6 +25,7 @@ export interface ContentSummary {
   popups: ContentSummarySource;
   meals: ContentSummarySource;
   pets: ContentSummarySource;
+  splash: ContentSummarySource;
 }
 
 export async function getContentSummary(tenant: string) {

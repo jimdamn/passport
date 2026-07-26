@@ -57,6 +57,10 @@ import {
 } from '../../src/handlers/pets';
 import { geocodeAddress } from '../../src/handlers/geocode';
 import { getAroundInterests, putAroundInterests } from '../../src/handlers/around';
+import {
+  getSplashEligible, submitSplash, getMySplash, updateSplashCaption, withdrawSplash,
+  getSplashMediaView, getSplashMediaRaw,
+} from '../../src/handlers/splash';
 
 import { listExchangeOffers } from '../../src/handlers/exchange';
 import { getContentSummary } from '../../src/handlers/content';
@@ -206,6 +210,19 @@ tenantApp.get('/admin/fresh/stands', adminListFreshStands);
 tenantApp.get('/admin/fresh/posts', adminListFreshPosts);
 tenantApp.post('/admin/fresh/stands/:id/hide', adminHideFreshStand);
 tenantApp.post('/admin/fresh/posts/:id/hide', adminHideFreshPost);
+
+// Social Splash - private guest-content pipeline (Increment 2: guest submit +
+// My Splash, photos only). No bare GET /splash/:id route exists (every :id
+// route below has a trailing suffix), so /splash/mine has no "mine gotcha"
+// collision to work around - safe on tenantApp like /fresh/mine above. The
+// raw media-serving route is public (loaded via <img src>, no Bearer) and is
+// registered on the root app below, alongside the other public reads.
+tenantApp.get('/splash/eligible', getSplashEligible);
+tenantApp.post('/splash/submit', submitSplash);
+tenantApp.get('/splash/mine', getMySplash);
+tenantApp.patch('/splash/:id/caption', updateSplashCaption);
+tenantApp.post('/splash/:id/withdraw', withdrawSplash);
+tenantApp.get('/splash/media/:id/view', getSplashMediaView);
 
 // Sale Day - yard/barn/moving/estate sales and auctions (any signed-in user,
 // no merchant verification). Public reads are registered on the root app
@@ -474,6 +491,11 @@ app.get('/api/t/:tenant/passport/members', resolveTenant, async (c) => {
   `).bind(tenant.id).all<any>();
   return c.json({ data: members.results || [] });
 });
+
+// Social Splash's signed media-view raw route - public (no Bearer possible
+// from an <img src>), gated entirely by the HMAC token minted by the authed
+// GET .../splash/media/:id/view above.
+app.get('/api/t/:tenant/splash/media/:id/raw', resolveTenant, getSplashMediaRaw);
 
 app.route('/api/t/:tenant', tenantApp);
 

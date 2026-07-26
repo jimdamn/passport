@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Newspaper, ArrowLeftRight, Sprout, Signpost, Truck, UtensilsCrossed, PawPrint } from 'lucide-react';
+import { Newspaper, ArrowLeftRight, Sprout, Signpost, Truck, UtensilsCrossed, PawPrint, Camera } from 'lucide-react';
 import { getContentSummary } from '../../api/content';
 import type { ContentSummaryItem, ContentSummarySource } from '../../api/content';
 import { Badge } from '../ui/Badge';
@@ -71,6 +71,14 @@ const PETS_STATUS_LABEL: Record<string, string> = {
   archived: 'Archived',
   home_safe: 'Home safe',
   hidden_by_admin: 'Hidden by admin',
+};
+
+const SPLASH_STATUS_LABEL: Record<string, string> = {
+  submitted: 'Waiting for a response',
+  held: 'Deciding',
+  licensed: 'Licensed',
+  declined: 'Declined',
+  removed: 'Removed',
 };
 
 function RecentRow({ item, statusLabels }: { item: ContentSummaryItem; statusLabels: Record<string, string> }) {
@@ -300,6 +308,23 @@ export default function MyPostsCards({ tenantId }: { tenantId: string }) {
         emptyCtaLabel="Report a pet"
         emptyCtaUrl="/pets/mine"
         statusLabels={PETS_STATUS_LABEL}
+      />
+
+      <SummaryCard
+        icon={Camera}
+        title="My Splash"
+        source={summary?.splash}
+        countLine={s => {
+          const total = s.counts.submissions ?? 0;
+          const licensed = s.counts.licensed ?? 0;
+          return `${total} ${total === 1 ? 'photo' : 'photos'} shared - ${licensed} licensed`;
+        }}
+        manageLabel="Manage my splash"
+        manageUrl="/splash"
+        emptyLine="Scan a business's plaque, then share a photo with them."
+        emptyCtaLabel="Go to My Splash"
+        emptyCtaUrl="/splash"
+        statusLabels={SPLASH_STATUS_LABEL}
       />
     </>
   );

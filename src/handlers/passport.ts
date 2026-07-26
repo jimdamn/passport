@@ -328,6 +328,18 @@ export async function scanPlaque(c: AppContext) {
     const newBadges = gameResult?.new_badges ?? [];
     const xpAwarded = gameResult?.xp_awarded ?? {};
 
+    // Social Splash: whether this plaque's business has opted in, so
+    // ScanPortal can offer "Share a photo with them" right after the reward
+    // card. Only meaningful for a signed-in scan (submitting requires an
+    // account anyway) - the guest response branch below doesn't carry it.
+    let splashOptIn = false;
+    if (plaque.merchant_id) {
+      const splashSettings = await c.env.DB.prepare(
+        'SELECT opt_in FROM splash_settings WHERE tenant_id = ? AND business_id = ?'
+      ).bind(tenant.id, plaque.merchant_id).first<{ opt_in: number }>();
+      splashOptIn = !!splashSettings?.opt_in;
+    }
+
     // Community-rooted personalized response (Pillar 4: Rooted in Place)
     return c.json({
       data: {
@@ -337,6 +349,7 @@ export async function scanPlaque(c: AppContext) {
           name: plaque.name,
           location_name: plaque.location_name,
           category: plaque.category,
+          splash_opt_in: splashOptIn,
         },
         prize: {
           name: rolledPrize.name,

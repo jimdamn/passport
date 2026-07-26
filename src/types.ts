@@ -21,6 +21,7 @@ export interface Env {
   EXCHANGE_BASE_URL?: string; // Override for Exchange HTTPS origin (Pages project, not a service binding); defaults to prod
   FIELD_NOTES_BASE_URL?: string; // Override for Field Notes HTTPS origin (Pages project, not a service binding); defaults to prod
   KWEST_GUEST_SECRET: string; // HS256 signing secret for KrowdKwest's durable guest key (kwest_guest_keys)
+  SPLASH_MEDIA_SECRET: string; // HMAC secret for Social Splash's short-TTL signed media-view URLs
 }
 
 

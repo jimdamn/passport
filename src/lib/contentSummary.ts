@@ -483,3 +483,43 @@ export async function fetchFieldNotesSummary(env: Env, tenantId: string, authHea
     return emptySource();
   }
 }
+
+/**
+ * Social Splash's content-summary source - a LOCAL D1 query (this board
+ * lives in this same app, Increment 2). Counts total submissions plus how
+ * many are currently held or licensed; recent = last 5 by created_at;
+ * attention = admin-removed (admin_removed_reason set - a self-withdraw also
+ * lands in status 'removed' but leaves that column NULL, so it never counts
+ * as an attention item the way an actual admin action does).
+ */
+export async function fetchSplashSummary(env: Env, tenantId: string, kkauthUid: number | null): Promise<ContentSummarySource> {
+  if (!kkauthUid) return emptySource();
+  try {
+    const { results } = await env.DB.prepare(
+      'SELECT id, business_name, status, admin_removed_reason, created_at FROM splash_submissions WHERE tenant_id = ? AND kkauth_uid = ? ORDER BY created_at DESC'
+    ).bind(tenantId, kkauthUid).all<any>();
+    const rows = results || [];
+
+    const counts: Record<string, number> = {
+      submissions: rows.length,
+      held: rows.filter((r: any) => r.status === 'held').length,
+      licensed: rows.filter((r: any) => r.status === 'licensed').length,
+    };
+
+    const recent: ContentSummaryItem[] = rows.slice(0, 5).map((r: any) => ({
+      id: r.id,
+      title: r.business_name,
+      status: r.status,
+      hidden: false, // Social Splash content has no publish-visibility toggle - it's never public to begin with
+      attention: !!r.admin_removed_reason,
+      created_at: r.created_at,
+    }));
+
+    // Unsliced, same reasoning as every other local fetcher in this file.
+    const attentionTotal = rows.filter((r: any) => r.admin_removed_reason).length;
+
+    return { ok: true, counts, recent, attention_total: attentionTotal };
+  } catch {
+    return emptySource();
+  }
+}

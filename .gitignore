@@ -5,3 +5,4 @@ ui/dist/
 .dev.vars
 *.env
 .gstack/
+backups/

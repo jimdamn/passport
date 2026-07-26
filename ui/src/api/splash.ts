@@ -1,0 +1,101 @@
+import { api, getToken } from './client';
+import type { ApiResponse } from '../types';
+
+// Social Splash — private guest-content pipeline. Mirrors fresh.ts's client
+// style. There is no public board for this feature (content is never shown
+// on-platform), so unlike fresh.ts this file has only the owner-facing calls.
+
+export interface SplashEligibleBusiness {
+  business_id: string;
+  business_name: string;
+  blurb: string | null;
+}
+
+export interface SplashOffer {
+  id: number;
+  submission_id: number;
+  consideration_type: 'credits' | 'gift_certificate';
+  credits_amount: number | null;
+  cert_value_cents: number | null;
+  cert_description: string | null;
+  status: 'open' | 'agreed' | 'passed' | 'withdrawn' | 'expired';
+  expires_at: number;
+  agreed_at: number | null;
+  created_at: number;
+}
+
+export interface SplashSubmission {
+  id: number;
+  business_id: string;
+  business_name: string;
+  media_type: 'image' | 'video';
+  caption: string | null;
+  status: 'submitted' | 'held' | 'licensed' | 'declined' | 'removed';
+  held_at: number | null;
+  hold_expires_at: number | null;
+  licensed_at: number | null;
+  declined_at: number | null;
+  destroy_after: number | null;
+  original_unlocked: number;
+  admin_removed_reason: string | null;
+  created_at: number;
+  open_offer: SplashOffer | null;
+}
+
+export interface SplashTombstone {
+  id: number;
+  business_name: string;
+  final_status: string;
+  destroyed_at: number;
+}
+
+export function getSplashEligible(tenant: string) {
+  return api.get<ApiResponse<SplashEligibleBusiness[]>>(`/t/${tenant}/splash/eligible`);
+}
+
+export function getMySplash(tenant: string) {
+  return api.get<ApiResponse<{ submissions: SplashSubmission[]; tombstones: SplashTombstone[] }>>(`/t/${tenant}/splash/mine`);
+}
+
+export function updateSplashCaption(tenant: string, id: number, caption: string | null) {
+  return api.patch<ApiResponse<{ id: number; caption: string | null }>>(`/t/${tenant}/splash/${id}/caption`, { caption });
+}
+
+export function withdrawSplash(tenant: string, id: number) {
+  return api.post<ApiResponse<{ id: number; status: string; destroy_after: number }>>(`/t/${tenant}/splash/${id}/withdraw`);
+}
+
+export function getSplashMediaViewUrl(tenant: string, id: number) {
+  return api.get<ApiResponse<{ url: string }>>(`/t/${tenant}/splash/media/${id}/view`);
+}
+
+/**
+ * Submit a photo. Bypasses the JSON `api` client wrapper (same reason as
+ * uploadFreshPhoto) — a multipart FormData body needs the browser to set its
+ * own Content-Type boundary, which apiFetch would otherwise clobber.
+ */
+export async function submitSplash(
+  tenant: string, businessId: string, file: File, caption: string
+): Promise<ApiResponse<SplashSubmission>> {
+  const token = getToken();
+  const headers: Record<string, string> = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const form = new FormData();
+  form.append('business_id', businessId);
+  form.append('file', file);
+  if (caption.trim()) form.append('caption', caption.trim());
+
+  const res = await fetch(`/api/t/${tenant}/splash/submit`, {
+    method: 'POST',
+    headers,
+    body: form,
+    credentials: 'include',
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((body as any).error || `Upload failed: ${res.status}`);
+  }
+  return res.json();
+}

@@ -45,6 +45,7 @@ import MealDetail from './pages/MealDetail';
 import KitchenPage from './pages/KitchenPage';
 import MealsMine from './pages/MealsMine';
 import LendAHand from './pages/LendAHand';
+import Splash from './pages/Splash';
 import AdminDeals from './pages/profile/AdminDeals';
 import AdminSupport from './pages/profile/AdminSupport';
 import AdminVolunteer from './pages/profile/AdminVolunteer';
@@ -103,6 +104,7 @@ export default function App() {
         <Route path="/meals/kitchen/:id" element={<KitchenPage />} />
         <Route path="/meals/mine" element={<MealsMine />} />
         <Route path="/lend-a-hand" element={<LendAHand />} />
+        <Route path="/splash" element={<Splash />} />
         <Route path="/kwest" element={<KwestHome />} />
         <Route path="/kwest/help" element={<KwestHelp />} />
         <Route path="/kwest/:slug/retro" element={<KwestRetro />} />

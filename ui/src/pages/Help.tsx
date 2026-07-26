@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useTenant } from '../context/TenantContext';
 import { useAuth } from '../context/AuthContext';
-import { MapPin, Trees, Trophy, Gem, Sparkles, Sprout, Pause, Compass, Signpost, Truck, UtensilsCrossed, PawPrint, Handshake, type LucideIcon } from 'lucide-react';
+import { MapPin, Trees, Trophy, Gem, Sparkles, Sprout, Pause, Compass, Signpost, Truck, UtensilsCrossed, PawPrint, Handshake, Camera, type LucideIcon } from 'lucide-react';
 import { Alert } from '../components/ui/Alert';
 import {
   SUPPORT_CATEGORIES, SUPPORT_STATUS_LABEL, submitSupport, getMySupport,
@@ -673,6 +673,18 @@ export default function Help() {
             </p>
           </div>
         </div>
+      </Section>
+
+      {/* ── Social Splash ── */}
+      <Section title="Sharing photos with a business">
+        <Step n={1} label="Scan, then share" detail="Within 24 hours of scanning a participating business's plaque, open My Splash from your profile - they'll be listed there, ready to share a photo with." />
+        <Step n={2} label="They review it privately" detail="Your photo goes straight to that business's private inbox - it's never shown anywhere on the platform. If they accept it, KrowdKredits are yours right away." />
+        <Step n={3} label="You decide on anything bigger" detail="A business may later offer to license your photo for more credits or a gift certificate. Nothing is licensed without you agreeing - and you can always say no." />
+        <Tip
+          icon={Camera}
+          title="One share a day, per business"
+          body="You can share one photo with each participating business per day you visit them. Withdraw it any time before they respond."
+        />
       </Section>
 
       {/* ── About sponsor messages ── */}

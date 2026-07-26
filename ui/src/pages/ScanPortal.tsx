@@ -3,12 +3,13 @@ import { useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTenant } from '../context/TenantContext';
 import { Spinner } from '../components/ui/Spinner';
-import { MapPin } from 'lucide-react';
+import { MapPin, Camera } from 'lucide-react';
 
 interface PlaqueData {
   name: string;
   location_name: string;
   category: string;
+  splash_opt_in?: boolean;
 }
 
 interface PrizeData {
@@ -395,6 +396,29 @@ export default function ScanPortal() {
                 <strong style={{ display: 'block', fontSize: '0.9rem' }}>New Milestone Unlocked!</strong>
                 <span style={{ fontSize: '0.78rem' }}>You earned the {newBadges.join(', ')} explorer badge. Check your passport to view it!</span>
               </div>
+            </div>
+          )}
+
+          {/* Social Splash prompt - only when this business opted in. Content
+              is never shown on the platform; this is just the invitation. */}
+          {plaque.splash_opt_in && (
+            <div className="card" style={{
+              background: 'var(--cream)', border: '1px solid var(--border)', borderRadius: 'var(--r-md)',
+              padding: '14px 16px', margin: '0 0 24px 0', textAlign: 'left',
+              display: 'flex', alignItems: 'center', gap: 12,
+            }}>
+              <Camera size={22} style={{ color: 'var(--amber)', flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ margin: '0 0 2px', fontSize: '0.85rem', fontWeight: 600, color: 'var(--text)' }}>
+                  Got a photo from {plaque.name}?
+                </p>
+                <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--muted)' }}>
+                  Share it with them - you'll be rewarded if they accept it.
+                </p>
+              </div>
+              <Link to="/splash" className="btn btn-secondary btn-sm" style={{ minHeight: 34, flexShrink: 0 }}>
+                Share
+              </Link>
             </div>
           )}
 

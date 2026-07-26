@@ -46,5 +46,6 @@ DEALS_ESCROW_UID = "900000101"
 # KKGAME_APP_KEY   — API key registered in KKAuth apps table for this Worker (used as X-App-Key for KKGame)
 # QR_SIGNING_SECRET — HMAC-SHA256 signing secret for standardized QR payloads
 # RESEND_API_KEY   — Resend API key for guest claim-code emails (optional; claim emails skip if unset)
+# SPLASH_MEDIA_SECRET — HMAC secret for Social Splash's short-TTL signed media-view URLs (Pages secret - needs a redeploy to take effect)
 
 
