@@ -446,7 +446,7 @@ export async function getSplashMediaDownload(c: AppContext) {
     if (download.status !== 'ready') {
       return c.json({ data: { type: 'video', status: download.status, percent_complete: download.percentComplete } }, 202);
     }
-    const token = await mintSignedPlaybackToken(c.env, row.stream_uid, MEDIA_VIEW_TTL_SECONDS);
+    const token = await mintSignedPlaybackToken(c.env, row.stream_uid, MEDIA_VIEW_TTL_SECONDS, true);
     return c.json({ data: { type: 'video', status: 'ready', url: signedDownloadUrl(c.env, token) } });
   }
 

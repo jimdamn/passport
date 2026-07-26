@@ -68,8 +68,12 @@ function playbackDomain(env: Env): string {
  * Self-signs an RS256 JWT for a private (requireSignedURLs) video, per
  * Cloudflare's documented recipe. The key is created once via the
  * createSigningKey utility below and stored as STREAM_KEY_ID/STREAM_JWK.
+ * `downloadable` must be set for a token to authorize the MP4 download route
+ * specifically - a token minted without it plays back fine (iframe/HLS/DASH)
+ * but Stream rejects it with a 403 on `/downloads/*` (undocumented in the
+ * REST API reference; confirmed by testing - see SOCIAL-SPLASH-BUILD-LOG.md).
  */
-export async function mintSignedPlaybackToken(env: Env, uid: string, ttlSeconds: number): Promise<string> {
+export async function mintSignedPlaybackToken(env: Env, uid: string, ttlSeconds: number, downloadable = false): Promise<string> {
   const jwk = JSON.parse(atob(env.STREAM_JWK));
   const key = await crypto.subtle.importKey(
     'jwk', jwk, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']
@@ -77,7 +81,10 @@ export async function mintSignedPlaybackToken(env: Env, uid: string, ttlSeconds:
   const now = Math.floor(Date.now() / 1000);
   const b64url = (s: string) => s.replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
   const header = b64url(btoa(JSON.stringify({ alg: 'RS256', kid: env.STREAM_KEY_ID })));
-  const payload = b64url(btoa(JSON.stringify({ sub: uid, kid: env.STREAM_KEY_ID, exp: now + ttlSeconds, nbf: now })));
+  const payload = b64url(btoa(JSON.stringify({
+    sub: uid, kid: env.STREAM_KEY_ID, exp: now + ttlSeconds, nbf: now,
+    ...(downloadable ? { downloadable: true } : {}),
+  })));
   const message = `${header}.${payload}`;
   const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, new TextEncoder().encode(message));
   const sigB64 = b64url(btoa(String.fromCharCode(...new Uint8Array(sig))));
