@@ -399,6 +399,9 @@ export default function MyProfile() {
             <Link to="/profile/admin/sponsors" className="btn btn-secondary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, textDecoration: 'none' }}>
               <Handshake size={13} /> Sponsor Messages
             </Link>
+            <Link to="/profile/admin/splash" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
+              Social Splash
+            </Link>
             <Link to="/redeem" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
               Redeem a Claim
             </Link>

@@ -23,6 +23,8 @@ import { transferCredits, escrowUid } from '../lib/credits';
 import { sendSplashCertificateEmail } from '../lib/email';
 import { notifySplash } from '../lib/splash-notify';
 import { createDirectUpload, getVideoDetails, mintSignedPlaybackToken, signedIframeUrl } from '../lib/stream';
+import { getSplashConfig, setSplashConfig, type SplashConfig } from '../lib/splash-config';
+import { getCount, increment } from '../lib/throttle';
 
 type AppContext = Context<{ Bindings: Env }>;
 
@@ -36,19 +38,29 @@ const BOARD_TZ = 'America/New_York';
 const CAPTION_MAX = 280;
 const SCAN_WINDOW_SECONDS = 24 * 60 * 60;
 const MEDIA_VIEW_TTL_SECONDS = 5 * 60;
-const MAX_VIDEO_SECONDS = 60; // splash.max_video_seconds default (Part B.1)
-
-// Config defaults (SOCIAL-SPLASH-BUILD-PLAN.md Part B.1). Centralizing these
-// in Passport's KV-config pattern is Increment 6's job (alongside the fee/
-// sweep config it introduces); Increment 2 only needs destroy_delay_days, so
-// it's a plain constant here rather than a half-built config reader.
-const DESTROY_DELAY_DAYS = 7;
+const SUBMIT_RATE_LIMIT_PER_DAY = 20; // defense-in-depth above the per-business daily UNIQUE
+const SUBMIT_RATE_LIMIT_TTL_SECONDS = 24 * 60 * 60;
 
 function cleanText(value: unknown, maxLen: number): string | null {
   if (typeof value !== 'string') return null;
   const trimmed = value.trim();
   if (!trimmed) return null;
   return trimmed.slice(0, maxLen);
+}
+
+function requireAdmin(c: AppContext) {
+  const user = c.get('user');
+  if (!user?.is_admin) throw new HTTPException(403, { message: 'Admin access required.' });
+}
+
+/** Defense-in-depth above the per-(tenant,user,business,day) UNIQUE - caps total submit attempts per user per day across every business, so the UNIQUE isn't the only thing standing between a bad actor and a flood of upload/eligibility calls. */
+async function checkSubmitRateLimit(c: AppContext, kkauthUid: number): Promise<void> {
+  const key = `splash:submit:${kkauthUid}`;
+  const count = await getCount(c.env.PASSPORT_CONFIG, key);
+  if (count >= SUBMIT_RATE_LIMIT_PER_DAY) {
+    throw new HTTPException(429, { message: "You've shared quite a bit today - try again tomorrow." });
+  }
+  await increment(c.env.PASSPORT_CONFIG, key, SUBMIT_RATE_LIMIT_TTL_SECONDS);
 }
 
 /** Today's date as YYYY-MM-DD in BOARD_TZ, for the daily submission cap. */
@@ -156,6 +168,7 @@ async function submitSplashPhoto(c: AppContext) {
 
   const caption = cleanText(form.get('caption'), CAPTION_MAX);
 
+  await checkSubmitRateLimit(c, kkauthUid);
   const { scanId, businessName, createdDay } = await checkSplashEligibility(c, tenant, kkauthUid, businessId);
 
   // Forward to KKAuth's generic upload proxy (private + retained original -
@@ -213,7 +226,8 @@ export async function requestSplashVideoUpload(c: AppContext) {
   const user = c.get('user');
   const kkauthUid = Number(user.sub);
 
-  const { uid, uploadURL } = await createDirectUpload(c.env, MAX_VIDEO_SECONDS);
+  const config = await getSplashConfig(c.env, tenant.id);
+  const { uid, uploadURL } = await createDirectUpload(c.env, config.max_video_seconds);
   await c.env.DB.prepare(
     'INSERT INTO splash_video_uploads (stream_uid, tenant_id, kkauth_uid) VALUES (?, ?, ?)'
   ).bind(uid, tenant.id, kkauthUid).run();
@@ -234,6 +248,8 @@ async function submitSplashVideo(c: AppContext) {
   if (!streamUid) throw new HTTPException(400, { message: 'No video upload found - try recording again.' });
   const caption = cleanText(body.caption, CAPTION_MAX);
 
+  await checkSubmitRateLimit(c, kkauthUid);
+  const config = await getSplashConfig(c.env, tenant.id);
   const { scanId, businessName, createdDay } = await checkSplashEligibility(c, tenant, kkauthUid, businessId);
 
   // The pending row proves THIS caller minted THIS stream_uid through us -
@@ -250,8 +266,8 @@ async function submitSplashVideo(c: AppContext) {
   if (!details || !details.readyToStream) {
     throw new HTTPException(400, { message: "That video isn't ready yet - wait a moment and try again." });
   }
-  if (details.duration > MAX_VIDEO_SECONDS) {
-    throw new HTTPException(400, { message: `Videos can be up to ${MAX_VIDEO_SECONDS} seconds - this one is longer.` });
+  if (details.duration > config.max_video_seconds) {
+    throw new HTTPException(400, { message: `Videos can be up to ${config.max_video_seconds} seconds - this one is longer.` });
   }
 
   try {
@@ -360,7 +376,8 @@ export async function withdrawSplash(c: AppContext) {
   const id = Number(c.req.param('id'));
   if (!Number.isInteger(id)) throw new HTTPException(400, { message: 'Invalid submission id' });
 
-  const destroyAfter = Math.floor(Date.now() / 1000) + DESTROY_DELAY_DAYS * 86400;
+  const config = await getSplashConfig(c.env, tenant.id);
+  const destroyAfter = Math.floor(Date.now() / 1000) + config.destroy_delay_days * 86400;
   const res = await c.env.DB.prepare(
     "UPDATE splash_submissions SET status = 'removed', destroy_after = ?, declined_at = unixepoch() WHERE id = ? AND tenant_id = ? AND kkauth_uid = ? AND status = 'submitted'"
   ).bind(destroyAfter, id, tenant.id, Number(user.sub)).run();
@@ -571,4 +588,117 @@ export async function regenerateSplashCertificateCode(c: AppContext) {
   }
 
   return c.json({ data: { claim_code: rawCode } });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Admin — remove with a required, owner-visible reason; mirrors fresh.ts's
+// adminHideFreshStand contract. Removal is one-directional (no "unremove") -
+// a removed submission proceeds through the same destroy_after/tombstone
+// path as any decline or withdrawal; there is nothing to reverse once the
+// legal-delay countdown has started. Admin can already view a submission's
+// media via GET /splash/media/:id/view above (it allows an is_admin bypass
+// of the owner check), so no separate admin media route is needed.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** GET /admin/splash — every submission, every state, newest first. */
+export async function adminListSplash(c: AppContext) {
+  requireAdmin(c);
+  const tenant = c.get('tenant');
+
+  const { results } = await c.env.DB.prepare(`
+    SELECT s.*, u.email AS owner_email
+    FROM splash_submissions s
+    LEFT JOIN users u ON u.kkauth_uid = s.kkauth_uid AND u.tenant_id = s.tenant_id
+    WHERE s.tenant_id = ?
+    ORDER BY s.created_at DESC
+    LIMIT 200
+  `).bind(tenant.id).all<any>();
+
+  return c.json({ data: results ?? [] });
+}
+
+/**
+ * POST /admin/splash/:id/remove — { reason }. Reason is REQUIRED (400
+ * without). Licensed content is retained forever (A.7/economics invariant)
+ * so it cannot be removed this way - decline it through the normal merchant
+ * flow instead if that ever needs revisiting, which this endpoint deliberately
+ * does not touch.
+ */
+export async function adminRemoveSplash(c: AppContext) {
+  requireAdmin(c);
+  const user = c.get('user');
+  const tenant = c.get('tenant');
+  const id = Number(c.req.param('id'));
+  if (!Number.isInteger(id)) throw new HTTPException(400, { message: 'Invalid submission id' });
+  const body = await c.req.json<any>().catch(() => ({}));
+
+  const existing = await c.env.DB.prepare(
+    'SELECT id, status FROM splash_submissions WHERE id = ? AND tenant_id = ?'
+  ).bind(id, tenant.id).first<{ id: number; status: string }>();
+  if (!existing) throw new HTTPException(404, { message: 'Submission not found.' });
+  if (existing.status === 'licensed') {
+    throw new HTTPException(400, { message: 'Licensed content is retained and cannot be removed.' });
+  }
+
+  const reason = cleanText(body.reason, 500);
+  if (!reason) throw new HTTPException(400, { message: 'A reason is required when removing a submission.' });
+
+  const config = await getSplashConfig(c.env, tenant.id);
+  const destroyAfter = Math.floor(Date.now() / 1000) + config.destroy_delay_days * 86400;
+  await c.env.DB.prepare(`
+    UPDATE splash_submissions
+    SET status = 'removed', admin_removed_reason = ?, admin_removed_by = ?, destroy_after = ?, declined_at = unixepoch()
+    WHERE id = ? AND tenant_id = ?
+  `).bind(reason, Number(user.sub), destroyAfter, id, tenant.id).run();
+
+  const row = await c.env.DB.prepare('SELECT * FROM splash_submissions WHERE id = ?').bind(id).first<any>();
+  return c.json({ data: row });
+}
+
+/**
+ * GET /admin/splash/config — the tunable defaults from Part B.1 (Increment 6
+ * step 3a). Read-modify-write against tenants.config, same shape as
+ * adminGetSponsorFeature/adminSetSponsorFeature.
+ */
+export async function adminGetSplashConfig(c: AppContext) {
+  requireAdmin(c);
+  const tenant = c.get('tenant');
+  const config = await getSplashConfig(c.env, tenant.id);
+  return c.json({ data: config });
+}
+
+const CONFIG_BOUNDS: Record<keyof SplashConfig, [number, number]> = {
+  accept_award_k: [1, 1000],
+  hold_days: [1, 90],
+  offer_days: [1, 60],
+  destroy_delay_days: [1, 30],
+  max_video_seconds: [10, 300],
+  fee_original_cents: [0, 5000],
+};
+
+/**
+ * POST /admin/splash/config — any subset of SplashConfig's keys. Sane
+ * min/max validated server-side (not just client-side), matching every
+ * other admin write-path in this codebase. Fields not sent are left
+ * unchanged. No values are shipped changed by this increment - this makes
+ * them tunable without a redeploy, per the plan's step 3a note.
+ */
+export async function adminSetSplashConfig(c: AppContext) {
+  requireAdmin(c);
+  const tenant = c.get('tenant');
+  const body = await c.req.json<Record<string, unknown>>().catch(() => ({} as Record<string, unknown>));
+
+  const patch: Partial<SplashConfig> = {};
+  for (const key of Object.keys(CONFIG_BOUNDS) as Array<keyof SplashConfig>) {
+    if (body[key] === undefined || body[key] === null) continue;
+    const [min, max] = CONFIG_BOUNDS[key];
+    const n = Math.floor(Number(body[key]));
+    if (!Number.isFinite(n) || n < min || n > max) {
+      throw new HTTPException(400, { message: `${key} must be between ${min} and ${max}.` });
+    }
+    patch[key] = n;
+  }
+
+  const merged = await setSplashConfig(c.env, tenant.id, patch);
+  return c.json({ data: merged });
 }

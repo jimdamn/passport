@@ -60,11 +60,11 @@ import { getAroundInterests, putAroundInterests } from '../../src/handlers/aroun
 import {
   getSplashEligible, submitSplash, getMySplash, updateSplashCaption, withdrawSplash,
   getSplashMediaView, getSplashMediaRaw, respondToSplashOffer, regenerateSplashCertificateCode,
-  requestSplashVideoUpload,
+  requestSplashVideoUpload, adminListSplash, adminRemoveSplash, adminGetSplashConfig, adminSetSplashConfig,
 } from '../../src/handlers/splash';
 import {
   getSplashInbox, putSplashSettings, acceptSplash, declineSplash, getSplashInboxMediaView,
-  createSplashOffer, withdrawSplashOffer, getSplashMediaDownload,
+  createSplashOffer, withdrawSplashOffer, getSplashMediaDownload, markSplashOriginalUnlocked, internalSplashSweep,
 } from '../../src/handlers/splash-internal';
 
 import { listExchangeOffers } from '../../src/handlers/exchange';
@@ -215,6 +215,11 @@ tenantApp.get('/admin/fresh/stands', adminListFreshStands);
 tenantApp.get('/admin/fresh/posts', adminListFreshPosts);
 tenantApp.post('/admin/fresh/stands/:id/hide', adminHideFreshStand);
 tenantApp.post('/admin/fresh/posts/:id/hide', adminHideFreshPost);
+
+tenantApp.get('/admin/splash', adminListSplash);
+tenantApp.post('/admin/splash/:id/remove', adminRemoveSplash);
+tenantApp.get('/admin/splash/config', adminGetSplashConfig);
+tenantApp.post('/admin/splash/config', adminSetSplashConfig);
 
 // Social Splash - private guest-content pipeline (Increment 2: guest submit +
 // My Splash, photos only). No bare GET /splash/:id route exists (every :id
@@ -415,6 +420,9 @@ app.get('/api/internal/splash/:id/media/view', getSplashInboxMediaView);
 app.post('/api/internal/splash/:id/offer', createSplashOffer);
 app.post('/api/internal/splash/offers/:offerId/withdraw', withdrawSplashOffer);
 app.get('/api/internal/splash/:id/media/download', getSplashMediaDownload);
+app.post('/api/internal/splash/:id/original-unlocked', markSplashOriginalUnlocked);
+// Cron backstop for Social Splash lifecycle sweep (X-Internal-Secret protected)
+app.post('/api/internal/splash/sweep', internalSplashSweep);
 
 // Public Passport Scan & Claims APIs (Tenant-scoped, Guest-friendly)
 app.post('/api/t/:tenant/passport/scan', resolveTenant, scanPlaque);

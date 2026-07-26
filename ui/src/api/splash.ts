@@ -138,3 +138,39 @@ export function submitSplashVideo(tenant: string, businessId: string, streamUid:
     business_id: businessId, stream_uid: streamUid, caption: caption.trim() || undefined,
   });
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Admin (Increment 6) — mirrors api/fresh.ts's adminListFreshStands/
+// adminHideFreshStand client shape.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface AdminSplashRow extends SplashSubmission {
+  kkauth_uid: number;
+  owner_email: string | null;
+  admin_removed_by: string | null;
+}
+
+export interface SplashConfig {
+  accept_award_k: number;
+  hold_days: number;
+  offer_days: number;
+  destroy_delay_days: number;
+  max_video_seconds: number;
+  fee_original_cents: number;
+}
+
+export function adminListSplash(tenant: string) {
+  return api.get<ApiResponse<AdminSplashRow[]>>(`/t/${tenant}/admin/splash`);
+}
+
+export function adminRemoveSplash(tenant: string, id: number, reason: string) {
+  return api.post<ApiResponse<AdminSplashRow>>(`/t/${tenant}/admin/splash/${id}/remove`, { reason });
+}
+
+export function adminGetSplashConfig(tenant: string) {
+  return api.get<ApiResponse<SplashConfig>>(`/t/${tenant}/admin/splash/config`);
+}
+
+export function adminSetSplashConfig(tenant: string, patch: Partial<SplashConfig>) {
+  return api.post<ApiResponse<SplashConfig>>(`/t/${tenant}/admin/splash/config`, patch);
+}

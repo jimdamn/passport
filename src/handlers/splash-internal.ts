@@ -23,14 +23,11 @@ import { transferCredits, escrowUid } from '../lib/credits';
 import { notifySplash } from '../lib/splash-notify';
 import { sendSplashOfferEmail } from '../lib/email';
 import { logger } from '../lib/logger';
-import { mintSignedPlaybackToken, signedIframeUrl, signedDownloadUrl, enableMp4Download } from '../lib/stream';
+import { mintSignedPlaybackToken, signedIframeUrl, signedDownloadUrl, enableMp4Download, deleteStreamVideo } from '../lib/stream';
+import { getSplashConfig } from '../lib/splash-config';
 
 type AppContext = Context<{ Bindings: Env }>;
 
-const ACCEPT_AWARD_K = 25;       // splash.accept_award_k default (Part B.1)
-const HOLD_DAYS = 30;            // splash.hold_days default
-const OFFER_DAYS = 14;           // splash.offer_days default
-const DESTROY_DELAY_DAYS = 7;    // splash.destroy_delay_days default - matches splash.ts's own constant (copy, never share)
 const MEDIA_VIEW_TTL_SECONDS = 5 * 60;
 
 function cleanText(value: unknown, maxLen: number): string | null {
@@ -116,10 +113,19 @@ export async function getSplashInbox(c: AppContext) {
     'SELECT business_id, opt_in, blurb, updated_at FROM splash_settings WHERE tenant_id = ? AND business_id = ?'
   ).bind(tenantId, businessId).first<any>();
 
+  // fee_original_cents rides along on settings rather than a dedicated
+  // endpoint - kk-business's checkout route needs this one number and
+  // already fetches this payload for the settings card, so this avoids a
+  // second bridge call just to learn a config value (Increment 6 step 3a).
+  const config = await getSplashConfig(c.env, tenantId);
+
   return c.json({
     data: {
       submissions: submissionsWithOffers,
-      settings: settings ?? { business_id: businessId, opt_in: 0, blurb: null, updated_at: null },
+      settings: {
+        ...(settings ?? { business_id: businessId, opt_in: 0, blurb: null, updated_at: null }),
+        fee_original_cents: config.fee_original_cents,
+      },
     },
   });
 }
@@ -172,27 +178,29 @@ export async function acceptSplash(c: AppContext) {
     throw new HTTPException(400, { message: 'This submission can no longer be accepted.' });
   }
 
+  const config = await getSplashConfig(c.env, tenantId);
+
   try {
     await transferCredits(
-      c.env, merchantUid, row.kkauth_uid, ACCEPT_AWARD_K,
+      c.env, merchantUid, row.kkauth_uid, config.accept_award_k,
       `Accepted a Social Splash photo`, 'splash_accept', String(id), bearerToken
     );
   } catch (err) {
     const msg = (err as Error).message;
     if (msg.includes('Insufficient')) {
-      throw new HTTPException(402, { message: `You need at least ${ACCEPT_AWARD_K} KrowdKredits to accept a submission.` });
+      throw new HTTPException(402, { message: `You need at least ${config.accept_award_k} KrowdKredits to accept a submission.` });
     }
     throw new HTTPException(502, { message: 'Payment failed - you were not charged, and the photo was not accepted. Try again.' });
   }
 
-  const holdExpiresAt = Math.floor(Date.now() / 1000) + HOLD_DAYS * 86400;
+  const holdExpiresAt = Math.floor(Date.now() / 1000) + config.hold_days * 86400;
   await c.env.DB.prepare(
     "UPDATE splash_submissions SET status = 'held', held_at = unixepoch(), hold_expires_at = ? WHERE id = ? AND tenant_id = ? AND status = 'submitted'"
   ).bind(holdExpiresAt, id, tenantId).run();
 
   c.executionCtx.waitUntil(notifySplash(
     c.env, row.kkauth_uid, 'Photo accepted',
-    `${row.business_name} accepted your photo - ${ACCEPT_AWARD_K} KrowdKredits are yours.`
+    `${row.business_name} accepted your photo - ${config.accept_award_k} KrowdKredits are yours.`
   ));
 
   return c.json({ data: { id, status: 'held', hold_expires_at: holdExpiresAt } });
@@ -220,7 +228,8 @@ export async function declineSplash(c: AppContext) {
     throw new HTTPException(400, { message: 'This submission can no longer be declined.' });
   }
 
-  const destroyAfter = Math.floor(Date.now() / 1000) + DESTROY_DELAY_DAYS * 86400;
+  const config = await getSplashConfig(c.env, tenantId);
+  const destroyAfter = Math.floor(Date.now() / 1000) + config.destroy_delay_days * 86400;
   await c.env.DB.prepare(
     "UPDATE splash_submissions SET status = 'declined', declined_at = unixepoch(), destroy_after = ? WHERE id = ? AND tenant_id = ?"
   ).bind(destroyAfter, id, tenantId).run();
@@ -304,6 +313,7 @@ export async function createSplashOffer(c: AppContext) {
   if (row.business_id !== businessId) throw new HTTPException(403, { message: 'This submission does not belong to your business.' });
   if (row.status !== 'held') throw new HTTPException(400, { message: 'Only a held submission can receive an offer.' });
 
+  const config = await getSplashConfig(c.env, tenantId);
   const existingOpen = await c.env.DB.prepare(
     "SELECT id FROM splash_offers WHERE submission_id = ? AND status = 'open'"
   ).bind(id).first<{ id: number }>();
@@ -342,7 +352,7 @@ export async function createSplashOffer(c: AppContext) {
     }
   }
 
-  const expiresAt = Math.floor(Date.now() / 1000) + OFFER_DAYS * 86400;
+  const expiresAt = Math.floor(Date.now() / 1000) + config.offer_days * 86400;
   let offerId: number;
   try {
     const inserted = await c.env.DB.prepare(`
@@ -468,5 +478,195 @@ export async function getSplashMediaDownload(c: AppContext) {
       'Content-Type': upstream.headers.get('Content-Type') ?? 'application/octet-stream',
       'Content-Disposition': 'attachment',
     },
+  });
+}
+
+/**
+ * POST /internal/splash/:id/original-unlocked — body { tenant_id }. Called
+ * ONLY by kk-business's Stripe webhook handler, server-to-server, after a
+ * real $1.99 payment succeeded - there is no merchant Bearer to forward at
+ * that point (a webhook has no logged-in browser session), so this route is
+ * gated by X-Internal-Secret alone, same auth shape as internalSweep below.
+ * The ownership check already happened once, earlier, at checkout-creation
+ * time (an authenticated kk-business request) - this step only ever fires
+ * for a submission_id kk-business already verified belongs to its own
+ * business_id. Idempotent: a replayed webhook just re-sets the same 1.
+ */
+export async function markSplashOriginalUnlocked(c: AppContext) {
+  if (!matchesInternalSecret(c.req.header('X-Internal-Secret'), c.env)) {
+    throw new HTTPException(401, { message: 'Unauthorized internal call' });
+  }
+  const id = Number(c.req.param('id'));
+  if (!Number.isInteger(id)) throw new HTTPException(400, { message: 'Invalid submission id' });
+  const body = await c.req.json<{ tenant_id?: string }>().catch(() => ({} as { tenant_id?: string }));
+  const tenantId = body.tenant_id ?? '';
+  if (!tenantId) throw new HTTPException(400, { message: 'tenant_id is required' });
+
+  const res = await c.env.DB.prepare(
+    'UPDATE splash_submissions SET original_unlocked = 1 WHERE id = ? AND tenant_id = ?'
+  ).bind(id, tenantId).run();
+  if (res.meta.changes !== 1) {
+    // Already 1, or the row doesn't exist. A replay of an already-applied
+    // webhook is not an error - report it as done either way, so kk-business
+    // never retries a webhook that has nothing left to do.
+    const existing = await c.env.DB.prepare(
+      'SELECT id FROM splash_submissions WHERE id = ? AND tenant_id = ? AND original_unlocked = 1'
+    ).bind(id, tenantId).first<{ id: number }>();
+    if (!existing) throw new HTTPException(404, { message: 'Submission not found' });
+  }
+
+  return c.json({ data: { id, original_unlocked: true } });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sweep — cron backstop (Increment 6). Order matters: offers expire first (an
+// offer can only be open on a HELD submission, but its own offer_days window
+// can outlast the submission's hold_days window, so a lingering open offer
+// must always be closed - and its escrow refunded - before the submission
+// underneath it is allowed to move to 'declined'), then holds expire, then
+// destruction runs last and only for rows with no open offer left (the
+// Lifecycle matrix's child-order rule: offers must be terminal before a
+// submission is destroyed). Each phase is its own bounded batch (LIMIT 20,
+// matching sweepExpiredDealClaims's shape) so one sweep call never runs
+// unboundedly long; kk-business-cron's job calls this repeatedly until a
+// batch comes back empty (passport-cron's runBatchedSweep pattern).
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function refundOpenOffer(env: Env, offer: { id: number; merchant_uid: number; consideration_type: string; credits_amount: number | null }, note: string): Promise<void> {
+  if (offer.consideration_type === 'credits' && offer.credits_amount) {
+    await transferCredits(
+      env, escrowUid(env), offer.merchant_uid, offer.credits_amount, note, 'splash_offer_refund', String(offer.id)
+    ).catch(e => logger.error(`Splash offer refund failed for offer ${offer.id}: ${(e as Error).message}`));
+  }
+}
+
+async function sweepExpiredSplashOffers(env: Env): Promise<number> {
+  const { results } = await env.DB.prepare(`
+    SELECT id, merchant_uid, consideration_type, credits_amount
+    FROM splash_offers
+    WHERE status = 'open' AND expires_at <= unixepoch()
+    LIMIT 20
+  `).all<{ id: number; merchant_uid: number; consideration_type: string; credits_amount: number | null }>();
+
+  let processed = 0;
+  for (const offer of results ?? []) {
+    try {
+      const flip = await env.DB.prepare(
+        "UPDATE splash_offers SET status = 'expired' WHERE id = ? AND status = 'open'"
+      ).bind(offer.id).run();
+      if (flip.meta.changes !== 1) continue;
+      await refundOpenOffer(env, offer, 'Social Splash offer expired - refunded');
+      processed++;
+    } catch (err) {
+      logger.error(`Splash offer expiry sweep failed for offer ${offer.id}: ${(err as Error).message}`);
+    }
+  }
+  return processed;
+}
+
+async function sweepExpiredSplashHolds(env: Env): Promise<number> {
+  const { results } = await env.DB.prepare(`
+    SELECT id, tenant_id, kkauth_uid, business_name
+    FROM splash_submissions
+    WHERE status = 'held' AND hold_expires_at <= unixepoch()
+    LIMIT 20
+  `).all<{ id: number; tenant_id: string; kkauth_uid: number; business_name: string }>();
+
+  let processed = 0;
+  for (const sub of results ?? []) {
+    try {
+      // A lingering open offer on this submission (offer_days outlasting
+      // hold_days) must be closed and refunded before the hold can lapse -
+      // this is the one case sweepExpiredSplashOffers above can't catch on
+      // its own, since the offer's own expires_at may still be in the future.
+      const openOffer = await env.DB.prepare(
+        "SELECT id, merchant_uid, consideration_type, credits_amount FROM splash_offers WHERE submission_id = ? AND status = 'open'"
+      ).bind(sub.id).first<{ id: number; merchant_uid: number; consideration_type: string; credits_amount: number | null }>();
+      if (openOffer) {
+        const flip = await env.DB.prepare(
+          "UPDATE splash_offers SET status = 'expired' WHERE id = ? AND status = 'open'"
+        ).bind(openOffer.id).run();
+        if (flip.meta.changes === 1) {
+          await refundOpenOffer(env, openOffer, 'Social Splash offer expired - refunded');
+        }
+      }
+
+      const config = await getSplashConfig(env, sub.tenant_id);
+      const destroyAfter = Math.floor(Date.now() / 1000) + config.destroy_delay_days * 86400;
+      const flip = await env.DB.prepare(
+        "UPDATE splash_submissions SET status = 'declined', declined_at = unixepoch(), destroy_after = ? WHERE id = ? AND status = 'held'"
+      ).bind(destroyAfter, sub.id).run();
+      if (flip.meta.changes === 1) {
+        await notifySplash(env, sub.kkauth_uid, 'Hold expired', `${sub.business_name} didn't respond in time - your photo was not licensed.`).catch(() => {});
+        processed++;
+      }
+    } catch (err) {
+      logger.error(`Splash hold expiry sweep failed for submission ${sub.id}: ${(err as Error).message}`);
+    }
+  }
+  return processed;
+}
+
+function tombstoneFinalStatus(row: { status: string; admin_removed_by: string | null }): string {
+  if (row.status === 'removed') return row.admin_removed_by ? 'removed' : 'withdrawn';
+  return 'declined';
+}
+
+async function sweepSplashDestruction(env: Env): Promise<number> {
+  const { results } = await env.DB.prepare(`
+    SELECT id, tenant_id, kkauth_uid, business_name, media_type, image_key, image_original_key, stream_uid, status, admin_removed_by
+    FROM splash_submissions
+    WHERE status IN ('declined', 'removed') AND destroy_after <= unixepoch()
+      AND NOT EXISTS (SELECT 1 FROM splash_offers WHERE submission_id = splash_submissions.id AND status = 'open')
+    LIMIT 20
+  `).all<{
+    id: number; tenant_id: string; kkauth_uid: number; business_name: string; media_type: string;
+    image_key: string | null; image_original_key: string | null; stream_uid: string | null;
+    status: string; admin_removed_by: string | null;
+  }>();
+
+  let processed = 0;
+  for (const row of results ?? []) {
+    try {
+      // Real deletion, not a soft flag - if any object delete fails, skip
+      // this row entirely (retry next sweep) rather than orphan the object
+      // by deleting the DB row anyway.
+      if (row.media_type === 'video') {
+        if (row.stream_uid) await deleteStreamVideo(env, row.stream_uid);
+      } else {
+        for (const key of [row.image_key, row.image_original_key]) {
+          if (!key) continue;
+          const res = await env.KKAUTH.fetch(new Request(`https://kkauth/internal/images/${key}`, {
+            method: 'DELETE',
+            headers: { 'X-Internal-Secret': env.INTERNAL_SECRET },
+          }));
+          if (!res.ok && res.status !== 404) throw new Error(`image delete failed for ${key}: ${res.status}`);
+        }
+      }
+
+      await env.DB.batch([
+        env.DB.prepare(
+          'INSERT INTO splash_tombstones (tenant_id, kkauth_uid, business_name, final_status, destroyed_at) VALUES (?, ?, ?, ?, unixepoch())'
+        ).bind(row.tenant_id, row.kkauth_uid, row.business_name, tombstoneFinalStatus(row)),
+        env.DB.prepare('DELETE FROM splash_submissions WHERE id = ?').bind(row.id),
+      ]);
+      processed++;
+    } catch (err) {
+      logger.error(`Splash destruction sweep failed for submission ${row.id}: ${(err as Error).message}`);
+    }
+  }
+  return processed;
+}
+
+/** POST /api/internal/splash/sweep — cron backstop entry point (X-Internal-Secret only, same shape as internalSweep in deals.ts). */
+export async function internalSplashSweep(c: AppContext) {
+  if (!matchesInternalSecret(c.req.header('X-Internal-Secret'), c.env)) {
+    throw new HTTPException(401, { message: 'Unauthorized' });
+  }
+  const offersExpired = await sweepExpiredSplashOffers(c.env);
+  const holdsExpired = await sweepExpiredSplashHolds(c.env);
+  const destroyed = await sweepSplashDestruction(c.env);
+  return c.json({
+    data: { processed: offersExpired + holdsExpired + destroyed, offers_expired: offersExpired, holds_expired: holdsExpired, destroyed },
   });
 }

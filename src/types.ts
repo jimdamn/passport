@@ -91,6 +91,14 @@ export interface TenantConfig {
   bd_signing_secret?: string;
   sponsor_drawer?: 'on' | 'off';
   inline_sponsors?: 'on' | 'off';
+  splash?: Partial<{
+    accept_award_k: number;
+    hold_days: number;
+    offer_days: number;
+    destroy_delay_days: number;
+    max_video_seconds: number;
+    fee_original_cents: number;
+  }>;
 }
 
 export interface Niche {

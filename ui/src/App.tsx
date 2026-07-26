@@ -51,6 +51,7 @@ import AdminSupport from './pages/profile/AdminSupport';
 import AdminVolunteer from './pages/profile/AdminVolunteer';
 import AdminHappenings from './pages/profile/AdminHappenings';
 import AdminFresh from './pages/profile/AdminFresh';
+import AdminSplash from './pages/profile/AdminSplash';
 import AdminSales from './pages/profile/AdminSales';
 import AdminPets from './pages/profile/AdminPets';
 import AdminPopups from './pages/profile/AdminPopups';
@@ -124,6 +125,7 @@ export default function App() {
         <Route path="/profile/admin/volunteer" element={<AdminVolunteer />} />
         <Route path="/profile/admin/happenings" element={<AdminHappenings />} />
         <Route path="/profile/admin/fresh" element={<AdminFresh />} />
+        <Route path="/profile/admin/splash" element={<AdminSplash />} />
         <Route path="/profile/admin/sales" element={<AdminSales />} />
         <Route path="/profile/admin/pets" element={<AdminPets />} />
         <Route path="/profile/admin/popups" element={<AdminPopups />} />
