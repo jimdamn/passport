@@ -59,10 +59,11 @@ import { geocodeAddress } from '../../src/handlers/geocode';
 import { getAroundInterests, putAroundInterests } from '../../src/handlers/around';
 import {
   getSplashEligible, submitSplash, getMySplash, updateSplashCaption, withdrawSplash,
-  getSplashMediaView, getSplashMediaRaw,
+  getSplashMediaView, getSplashMediaRaw, respondToSplashOffer, regenerateSplashCertificateCode,
 } from '../../src/handlers/splash';
 import {
   getSplashInbox, putSplashSettings, acceptSplash, declineSplash, getSplashInboxMediaView,
+  createSplashOffer, withdrawSplashOffer, getSplashMediaDownload,
 } from '../../src/handlers/splash-internal';
 
 import { listExchangeOffers } from '../../src/handlers/exchange';
@@ -226,6 +227,8 @@ tenantApp.get('/splash/mine', getMySplash);
 tenantApp.patch('/splash/:id/caption', updateSplashCaption);
 tenantApp.post('/splash/:id/withdraw', withdrawSplash);
 tenantApp.get('/splash/media/:id/view', getSplashMediaView);
+tenantApp.post('/splash/offers/:offerId/respond', respondToSplashOffer);
+tenantApp.post('/splash/certificates/:id/code', regenerateSplashCertificateCode);
 
 // Sale Day - yard/barn/moving/estate sales and auctions (any signed-in user,
 // no merchant verification). Public reads are registered on the root app
@@ -407,6 +410,9 @@ app.put('/api/internal/splash/settings', putSplashSettings);
 app.post('/api/internal/splash/:id/accept', acceptSplash);
 app.post('/api/internal/splash/:id/decline', declineSplash);
 app.get('/api/internal/splash/:id/media/view', getSplashInboxMediaView);
+app.post('/api/internal/splash/:id/offer', createSplashOffer);
+app.post('/api/internal/splash/offers/:offerId/withdraw', withdrawSplashOffer);
+app.get('/api/internal/splash/:id/media/download', getSplashMediaDownload);
 
 // Public Passport Scan & Claims APIs (Tenant-scoped, Guest-friendly)
 app.post('/api/t/:tenant/passport/scan', resolveTenant, scanPlaque);

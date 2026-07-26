@@ -4,7 +4,8 @@ import { useAuth } from '../context/AuthContext';
 import { useTenant } from '../context/TenantContext';
 import {
   getSplashEligible, getMySplash, submitSplash, updateSplashCaption, withdrawSplash,
-  getSplashMediaViewUrl, type SplashEligibleBusiness, type SplashSubmission, type SplashTombstone,
+  getSplashMediaViewUrl, respondToSplashOffer, regenerateSplashCertificateCode,
+  type SplashEligibleBusiness, type SplashSubmission, type SplashTombstone, type SplashOffer, type SplashCertificate,
 } from '../api/splash';
 import { Camera, Pencil, Trash2 } from 'lucide-react';
 import { Spinner } from '../components/ui/Spinner';
@@ -47,6 +48,9 @@ function statusLine(sub: SplashSubmission): { text: string; tone: 'muted' | 'amb
     return { text: 'Waiting for the business to respond.', tone: 'muted' };
   }
   if (sub.status === 'held') {
+    if (sub.open_offer) {
+      return { text: `${sub.business_name} would like to license this photo - your call below.`, tone: 'amber' };
+    }
     const by = sub.hold_expires_at ? ` - they have until ${shortDate(sub.hold_expires_at)} to decide` : '';
     return { text: `Accepted! The business is deciding whether to license it${by}.`, tone: 'amber' };
   }
@@ -188,6 +192,105 @@ function SubmitForm({ tenantId, business, onCancel, onSubmitted }: {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// An open offer on a held submission - agree/pass. Agreeing to a gift
+// certificate shows the one-time code right here (also emailed); agreeing to
+// credits just settles quietly (the guest's balance is the confirmation).
+// ─────────────────────────────────────────────────────────────────────────────
+
+function OfferCard({ offer, tenantId, onChanged }: {
+  offer: SplashOffer;
+  tenantId: string;
+  onChanged: () => void;
+}) {
+  const [working, setWorking] = useState(false);
+  const [error, setError] = useState('');
+  const [certCode, setCertCode] = useState<string | null>(null);
+
+  async function respond(action: 'agree' | 'pass') {
+    if (working) return;
+    setWorking(true);
+    setError('');
+    try {
+      const res = await respondToSplashOffer(tenantId, offer.id, action);
+      if (res.data.certificate_code) setCertCode(res.data.certificate_code);
+      onChanged();
+    } catch (err: any) {
+      setError(err.message || 'That action failed.');
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  const considerationText = offer.consideration_type === 'credits'
+    ? `${offer.credits_amount} KrowdKredits`
+    : `a gift certificate - ${offer.cert_description}`;
+
+  return (
+    <div style={{ marginTop: 10, padding: 12, background: 'var(--cream, #f4f1ea)', border: '1px solid var(--border)', borderRadius: 8 }}>
+      <p style={{ margin: '0 0 8px', fontSize: '0.85rem', color: 'var(--text)' }}>
+        Offering <strong>{considerationText}</strong> to license this photo.
+      </p>
+      {error && <Alert type="error" style={{ marginBottom: 8 }}>{error}</Alert>}
+      {certCode ? (
+        <Alert type="success">
+          Certificate code: <strong>{certCode}</strong> - also emailed to you. Show this to redeem it.
+        </Alert>
+      ) : (
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-amber btn-sm" disabled={working} onClick={() => respond('agree')} style={{ minHeight: 32 }}>
+            Agree
+          </button>
+          <button className="btn btn-secondary btn-sm" disabled={working} onClick={() => respond('pass')} style={{ minHeight: 32 }}>
+            Pass
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// A single certificate the guest is holding.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function CertificateCard({ cert, tenantId }: { cert: SplashCertificate; tenantId: string }) {
+  const [code, setCode] = useState<string | null>(null);
+  const [working, setWorking] = useState(false);
+  const [error, setError] = useState('');
+
+  async function handleRegenerate() {
+    if (working) return;
+    setWorking(true);
+    setError('');
+    try {
+      const res = await regenerateSplashCertificateCode(tenantId, cert.id);
+      setCode(res.data.claim_code);
+    } catch (err: any) {
+      setError(err.message || 'Could not get a new code.');
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  return (
+    <div className="card" style={{ background: 'var(--white)', padding: 16, marginBottom: 12, borderLeft: '4px solid var(--amber)' }}>
+      <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--green)' }}>{cert.business_name}</div>
+      <p style={{ margin: '2px 0 8px', fontSize: '0.85rem', color: 'var(--text)' }}>{cert.description}</p>
+      <p style={{ margin: '0 0 8px', fontSize: '0.8rem', color: cert.status === 'redeemed' ? 'var(--muted)' : 'var(--sage)' }}>
+        {cert.status === 'redeemed' ? 'Redeemed' : 'Active - never expires'}
+      </p>
+      {error && <Alert type="error" style={{ marginBottom: 8 }}>{error}</Alert>}
+      {code && <Alert type="success" style={{ marginBottom: 8 }}>New code: <strong>{code}</strong></Alert>}
+      {cert.status === 'active' && !code && (
+        <button className="btn btn-secondary btn-sm" disabled={working} onClick={handleRegenerate} style={{ minHeight: 32 }}>
+          Lost your code? Get a new one
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // A single submission row.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -271,6 +374,10 @@ function SubmissionRow({ sub, tenantId, onChanged }: {
               </button>
             </div>
           )}
+
+          {sub.open_offer && (
+            <OfferCard offer={sub.open_offer} tenantId={tenantId} onChanged={onChanged} />
+          )}
         </div>
       </div>
     </div>
@@ -288,6 +395,7 @@ export default function Splash() {
   const [eligible, setEligible] = useState<SplashEligibleBusiness[]>([]);
   const [submissions, setSubmissions] = useState<SplashSubmission[]>([]);
   const [tombstones, setTombstones] = useState<SplashTombstone[]>([]);
+  const [certificates, setCertificates] = useState<SplashCertificate[]>([]);
   const [chosenBusiness, setChosenBusiness] = useState<SplashEligibleBusiness | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -306,6 +414,7 @@ export default function Splash() {
       setEligible(eligibleRes.data);
       setSubmissions(mineRes.data.submissions);
       setTombstones(mineRes.data.tombstones);
+      setCertificates(mineRes.data.certificates);
     } catch (err: any) {
       setError(err.message || 'Failed to load Social Splash.');
     } finally {
@@ -398,6 +507,17 @@ export default function Splash() {
             submissions.map(sub => (
               <SubmissionRow key={sub.id} sub={sub} tenantId={tenant!.id} onChanged={fetchAll} />
             ))
+          )}
+
+          {certificates.length > 0 && (
+            <div style={{ marginTop: 24 }}>
+              <h3 style={{ fontSize: '0.9rem', fontFamily: 'var(--font-serif)', color: 'var(--green)', marginBottom: 8 }}>
+                My certificates
+              </h3>
+              {certificates.map(cert => (
+                <CertificateCard key={cert.id} cert={cert} tenantId={tenant!.id} />
+              ))}
+            </div>
           )}
 
           {tombstones.length > 0 && (

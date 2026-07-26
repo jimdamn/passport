@@ -16,10 +16,20 @@
 
 import type { Context } from 'hono';
 import { HTTPException } from 'hono/http-exception';
+import { nanoid } from 'nanoid';
 import type { Env } from '../types';
 import { hmacHex, timingSafeEqual } from '../lib/hmac';
+import { transferCredits, escrowUid } from '../lib/credits';
+import { sendSplashCertificateEmail } from '../lib/email';
+import { notifySplash } from '../lib/splash-notify';
 
 type AppContext = Context<{ Bindings: Env }>;
+
+async function sha256(message: string): Promise<string> {
+  const msgBuffer = new TextEncoder().encode(message);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+  return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
 
 const BOARD_TZ = 'America/New_York';
 const CAPTION_MAX = 280;
@@ -209,8 +219,17 @@ export async function getMySplash(c: AppContext) {
     'SELECT id, business_name, final_status, destroyed_at FROM splash_tombstones WHERE tenant_id = ? AND kkauth_uid = ? ORDER BY destroyed_at DESC LIMIT 20'
   ).bind(tenant.id, kkauthUid).all<any>();
 
+  // Certificates never expire and are never deleted - shown regardless of
+  // their owning submission's current state. token_hash is never returned;
+  // the raw code was shown once (agree response) or via the regenerate route.
+  const { results: certificateRows } = await c.env.DB.prepare(
+    'SELECT id, business_name, value_cents, description, status, redeemed_at, created_at FROM splash_certificates WHERE tenant_id = ? AND kkauth_uid = ? ORDER BY created_at DESC'
+  ).bind(tenant.id, kkauthUid).all<any>();
+
   const withOffers = submissions.map((r: any) => ({ ...r, open_offer: offersBySubmission[r.id] ?? null }));
-  return c.json({ data: { submissions: withOffers, tombstones: tombstoneRows ?? [] } });
+  return c.json({
+    data: { submissions: withOffers, tombstones: tombstoneRows ?? [], certificates: certificateRows ?? [] },
+  });
 }
 
 /** PATCH /splash/:id/caption — owner, only while status = 'submitted'. */
@@ -322,4 +341,131 @@ export async function getSplashMediaRaw(c: AppContext) {
       'Cache-Control': 'private, max-age=300',
     },
   });
+}
+
+/**
+ * POST /splash/offers/:offerId/respond — body { action: 'agree' | 'pass' }.
+ * Owner of the submission only. Agree is the atomic settlement (Part D.4):
+ * consideration settles FIRST (escrow-out transfer, or certificate mint),
+ * and only on that success do offer -> 'agreed' and submission -> 'licensed'
+ * happen together in one batch(). If the transfer/mint throws, nothing else
+ * changes - a retry re-enters cleanly since the offer is still 'open'.
+ */
+export async function respondToSplashOffer(c: AppContext) {
+  const tenant = c.get('tenant');
+  const user = c.get('user');
+  const offerId = Number(c.req.param('offerId'));
+  if (!Number.isInteger(offerId)) throw new HTTPException(400, { message: 'Invalid offer id' });
+
+  const body = await c.req.json<{ action?: string }>().catch(() => ({} as { action?: string }));
+  const action = body.action;
+  if (action !== 'agree' && action !== 'pass') {
+    throw new HTTPException(400, { message: "action must be 'agree' or 'pass'" });
+  }
+
+  const offer = await c.env.DB.prepare(`
+    SELECT o.id, o.submission_id, o.business_id, o.merchant_uid, o.consideration_type,
+           o.credits_amount, o.cert_value_cents, o.cert_description, o.status,
+           s.kkauth_uid, s.status AS submission_status, s.business_name
+    FROM splash_offers o JOIN splash_submissions s ON s.id = o.submission_id
+    WHERE o.id = ? AND o.tenant_id = ?
+  `).bind(offerId, tenant.id).first<any>();
+  if (!offer) throw new HTTPException(404, { message: 'Offer not found' });
+  if (Number(user.sub) !== offer.kkauth_uid) throw new HTTPException(403, { message: 'This offer is not yours to respond to.' });
+  if (offer.status !== 'open') throw new HTTPException(400, { message: 'This offer is no longer open.' });
+
+  if (action === 'pass') {
+    const res = await c.env.DB.prepare(
+      "UPDATE splash_offers SET status = 'passed' WHERE id = ? AND tenant_id = ? AND status = 'open'"
+    ).bind(offerId, tenant.id).run();
+    if (res.meta.changes !== 1) throw new HTTPException(400, { message: 'This offer is no longer open.' });
+
+    if (offer.consideration_type === 'credits') {
+      await transferCredits(
+        c.env, escrowUid(c.env), offer.merchant_uid, offer.credits_amount,
+        'Social Splash offer passed - refunded', 'splash_offer_refund', String(offerId)
+      ).catch(() => {}); // best-effort; the merchant-side withdraw route logs failures, this path mirrors it silently since the guest has no reason to see a refund-plumbing error
+    }
+    c.executionCtx.waitUntil(notifySplash(c.env, offer.merchant_uid, 'Offer passed', 'The guest passed on your offer for their photo.'));
+    return c.json({ data: { id: offerId, status: 'passed' } });
+  }
+
+  // agree
+  let certCode: string | null = null;
+  if (offer.consideration_type === 'credits') {
+    try {
+      await transferCredits(
+        c.env, escrowUid(c.env), offer.kkauth_uid, offer.credits_amount,
+        'Social Splash license agreed', 'splash_license', String(offerId)
+      );
+    } catch {
+      throw new HTTPException(502, { message: 'Could not complete this - try again.' });
+    }
+  } else {
+    const rawCode = `LL-${nanoid(8).toUpperCase()}`;
+    const tokenHash = await sha256(rawCode);
+    try {
+      await c.env.DB.prepare(`
+        INSERT INTO splash_certificates (tenant_id, offer_id, business_id, business_name, kkauth_uid, value_cents, description, token_hash, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active')
+      `).bind(tenant.id, offerId, offer.business_id, offer.business_name, offer.kkauth_uid, offer.cert_value_cents, offer.cert_description, tokenHash).run();
+      certCode = rawCode;
+    } catch (err) {
+      // UNIQUE(offer_id) means a retry already minted this certificate - the
+      // raw code was shown once and is gone; the guest uses the regenerate
+      // route below if they need a fresh one. Any other error is real.
+      if (!String((err as Error).message).includes('UNIQUE')) {
+        throw new HTTPException(500, { message: 'Could not complete this - try again.' });
+      }
+    }
+  }
+
+  await c.env.DB.batch([
+    c.env.DB.prepare("UPDATE splash_offers SET status = 'agreed', agreed_at = unixepoch() WHERE id = ? AND tenant_id = ? AND status = 'open'")
+      .bind(offerId, tenant.id),
+    c.env.DB.prepare("UPDATE splash_submissions SET status = 'licensed', licensed_at = unixepoch() WHERE id = ? AND tenant_id = ?")
+      .bind(offer.submission_id, tenant.id),
+  ]);
+
+  if (certCode) {
+    const guest = await c.env.DB.prepare('SELECT email FROM users WHERE kkauth_uid = ? AND tenant_id = ?')
+      .bind(offer.kkauth_uid, tenant.id).first<{ email: string | null }>();
+    if (guest?.email) {
+      c.executionCtx.waitUntil(sendSplashCertificateEmail(c.env, guest.email, offer.business_name, certCode, offer.cert_description));
+    }
+  }
+  c.executionCtx.waitUntil(notifySplash(
+    c.env, offer.merchant_uid, 'Offer accepted',
+    "The guest agreed - your licensed content is ready in your Splash inbox."
+  ));
+
+  return c.json({ data: { id: offerId, status: 'agreed', certificate_code: certCode } });
+}
+
+/**
+ * POST /splash/certificates/:id/code — regenerates a certificate's redeem
+ * code (same pattern as deals.ts's regenerateDealClaimCode) for a guest who
+ * lost the one-time code shown at agree time. Only the holder, only while
+ * 'active'.
+ */
+export async function regenerateSplashCertificateCode(c: AppContext) {
+  const tenant = c.get('tenant');
+  const user = c.get('user');
+  const certId = Number(c.req.param('id'));
+  if (!Number.isInteger(certId)) throw new HTTPException(400, { message: 'Invalid certificate id' });
+
+  const rawCode = `LL-${nanoid(8).toUpperCase()}`;
+  const tokenHash = await sha256(rawCode);
+
+  const result = await c.env.DB.prepare(`
+    UPDATE splash_certificates
+    SET token_hash = ?
+    WHERE id = ? AND tenant_id = ? AND kkauth_uid = ? AND status = 'active'
+  `).bind(tokenHash, certId, tenant.id, Number(user.sub)).run();
+
+  if (result.meta.changes !== 1) {
+    throw new HTTPException(409, { message: 'This certificate is no longer active, or already redeemed.' });
+  }
+
+  return c.json({ data: { claim_code: rawCode } });
 }

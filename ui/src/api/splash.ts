@@ -49,12 +49,32 @@ export interface SplashTombstone {
   destroyed_at: number;
 }
 
+export interface SplashCertificate {
+  id: number;
+  business_name: string;
+  value_cents: number;
+  description: string;
+  status: 'active' | 'redeemed';
+  redeemed_at: number | null;
+  created_at: number;
+}
+
 export function getSplashEligible(tenant: string) {
   return api.get<ApiResponse<SplashEligibleBusiness[]>>(`/t/${tenant}/splash/eligible`);
 }
 
 export function getMySplash(tenant: string) {
-  return api.get<ApiResponse<{ submissions: SplashSubmission[]; tombstones: SplashTombstone[] }>>(`/t/${tenant}/splash/mine`);
+  return api.get<ApiResponse<{ submissions: SplashSubmission[]; tombstones: SplashTombstone[]; certificates: SplashCertificate[] }>>(`/t/${tenant}/splash/mine`);
+}
+
+export function respondToSplashOffer(tenant: string, offerId: number, action: 'agree' | 'pass') {
+  return api.post<ApiResponse<{ id: number; status: string; certificate_code: string | null }>>(
+    `/t/${tenant}/splash/offers/${offerId}/respond`, { action }
+  );
+}
+
+export function regenerateSplashCertificateCode(tenant: string, certId: number) {
+  return api.post<ApiResponse<{ claim_code: string }>>(`/t/${tenant}/splash/certificates/${certId}/code`);
 }
 
 export function updateSplashCaption(tenant: string, id: number, caption: string | null) {

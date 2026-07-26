@@ -35,10 +35,11 @@ function requireRedeemer(c: AppContext): { isAdmin: boolean; merchantId: string 
   throw new HTTPException(403, { message: 'Only admins and verified merchants can redeem claims.' });
 }
 
-// A code can belong to a prize win (passport_claims) or a purchased deal
-// (passport_deal_claims) — both are checked so the merchant /redeem screen
-// works the same for either kind.
-async function findClaim(c: AppContext, claimCode: unknown): Promise<{ kind: 'prize' | 'deal'; claim: any }> {
+// A code can belong to a prize win (passport_claims), a purchased deal
+// (passport_deal_claims), or a Social Splash gift certificate
+// (splash_certificates) — all three are checked so the merchant /redeem
+// screen works the same for any kind.
+async function findClaim(c: AppContext, claimCode: unknown): Promise<{ kind: 'prize' | 'deal' | 'splash'; claim: any }> {
   if (typeof claimCode !== 'string' || !claimCode.trim()) {
     throw new HTTPException(400, { message: 'claim_code is required.' });
   }
@@ -68,10 +69,39 @@ async function findClaim(c: AppContext, claimCode: unknown): Promise<{ kind: 'pr
   `).bind(tokenHash, tenant.id).first<any>();
   if (dealClaim) return { kind: 'deal', claim: dealClaim };
 
+  const splashClaim = await c.env.DB.prepare(`
+    SELECT id AS cert_id, business_id AS merchant_id, business_name, kkauth_uid AS holder_uid,
+           value_cents, description, status, token_hash, created_at
+    FROM splash_certificates
+    WHERE token_hash = ? AND tenant_id = ?
+  `).bind(tokenHash, tenant.id).first<any>();
+  if (splashClaim) return { kind: 'splash', claim: splashClaim };
+
   throw new HTTPException(404, { message: 'No claim found for that code. Double-check it was typed exactly as shown (e.g. LL-AB12CD34).' });
 }
 
-function claimPayload(kind: 'prize' | 'deal', claim: any) {
+function claimPayload(kind: 'prize' | 'deal' | 'splash', claim: any) {
+  if (kind === 'splash') {
+    // Certificates never expire and use their own active/redeemed vocabulary -
+    // mapped onto the same pending/claimed the redeem screen already renders,
+    // rather than teaching that screen a third status set.
+    return {
+      kind,
+      status: claim.status === 'redeemed' ? 'claimed' : 'pending',
+      redeemable: claim.status === 'active',
+      prize: {
+        name: claim.description,
+        prize_type: 'splash_certificate',
+        value: Math.round(claim.value_cents / 100),
+        details: `${claim.business_name} - Social Splash certificate`,
+      },
+      plaque_name: claim.business_name,
+      location_name: 'Social Splash certificate',
+      contact_info: null,
+      created_at: claim.created_at,
+      expires_at: null,
+    };
+  }
   const now = Math.floor(Date.now() / 1000);
   const expired = claim.status === 'expired' || claim.status === 'refunded'
     || (claim.status === 'pending' && claim.expires_at <= now);
@@ -93,11 +123,13 @@ function claimPayload(kind: 'prize' | 'deal', claim: any) {
   };
 }
 
-function requireOwnClaim(redeemer: { isAdmin: boolean; merchantId: string | null }, claim: any, kind: 'prize' | 'deal') {
+function requireOwnClaim(redeemer: { isAdmin: boolean; merchantId: string | null }, claim: any, kind: 'prize' | 'deal' | 'splash') {
   if (!redeemer.isAdmin && claim.merchant_id !== redeemer.merchantId) {
     throw new HTTPException(403, {
       message: kind === 'deal'
         ? 'This deal belongs to another merchant, so it can’t be redeemed here.'
+        : kind === 'splash'
+        ? 'This certificate belongs to another business, so it can’t be redeemed here.'
         : 'This claim is for another merchant’s prize, so it can’t be redeemed here.',
     });
   }
@@ -135,6 +167,12 @@ export async function confirmClaim(c: AppContext) {
         UPDATE passport_deal_claims
         SET status = 'claimed', claimed_at = unixepoch()
         WHERE token_hash = ? AND tenant_id = ? AND status = 'pending' AND expires_at > unixepoch()
+      `).bind(claim.token_hash, tenant.id).run()
+    : kind === 'splash'
+    ? await c.env.DB.prepare(`
+        UPDATE splash_certificates
+        SET status = 'redeemed', redeemed_at = unixepoch()
+        WHERE token_hash = ? AND tenant_id = ? AND status = 'active'
       `).bind(claim.token_hash, tenant.id).run()
     : await c.env.DB.prepare(`
         UPDATE passport_claims

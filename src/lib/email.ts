@@ -73,6 +73,78 @@ export async function sendClaimEmail({
 }
 
 /**
+ * Social Splash: "a business would like to license your photo" (sent when
+ * the merchant creates an offer) and "here is your certificate code" (sent
+ * when the guest agrees to a gift-certificate offer). Both follow
+ * sendSupportAlertEmail's self-contained pattern (checks RESEND_API_KEY,
+ * swallows its own errors) rather than sendClaimEmail's throw-on-failure -
+ * these are always fired via c.executionCtx.waitUntil and must never affect
+ * the accept/offer/agree request they're attached to.
+ */
+export async function sendSplashOfferEmail(env: Env, to: string, businessName: string, loginUrl: string): Promise<void> {
+  if (!env.RESEND_API_KEY) return;
+  try {
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: 'Lake & Locals <passport@lakeandlocals.com>',
+        to: [to],
+        subject: `${businessName} would like to license your photo`,
+        html: `
+          <div style="font-family: Georgia, serif; max-width: 480px; margin: 0 auto; padding: 32px 24px; background: #f4f1ea;">
+            <h2 style="color: #1e3320; margin: 0 0 8px;">Social Splash</h2>
+            <p style="color: #507850; margin: 0 0 24px; font-size: 0.9rem;">${businessName} would like to license your photo.</p>
+            <p style="color: #555; font-size: 0.88rem; line-height: 1.5; margin: 0 0 20px;">
+              Nothing is licensed without your OK. Open My Splash to see what they're offering and decide.
+            </p>
+            <a href="${loginUrl}" style="display: inline-block; background: #1e3320; color: #f4f1ea; font-family: system-ui, sans-serif; font-size: 0.92rem; font-weight: 600; padding: 12px 24px; border-radius: 8px; text-decoration: none;">
+              Open My Splash &rarr;
+            </a>
+          </div>
+        `,
+        text: `${businessName} would like to license your photo.\n\nNothing is licensed without your OK. Open My Splash to see what they're offering and decide: ${loginUrl}`,
+      }),
+    });
+    if (!response.ok) console.error(`Resend error (${response.status}):`, await response.text());
+  } catch (err) {
+    console.error('[sendSplashOfferEmail] failed:', err);
+  }
+}
+
+export async function sendSplashCertificateEmail(env: Env, to: string, businessName: string, certCode: string, description: string): Promise<void> {
+  if (!env.RESEND_API_KEY) return;
+  try {
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: 'Lake & Locals <passport@lakeandlocals.com>',
+        to: [to],
+        subject: `Your Social Splash certificate from ${businessName}`,
+        html: `
+          <div style="font-family: Georgia, serif; max-width: 480px; margin: 0 auto; padding: 32px 24px; background: #f4f1ea;">
+            <h2 style="color: #1e3320; margin: 0 0 8px;">Social Splash</h2>
+            <p style="color: #507850; margin: 0 0 24px; font-size: 0.9rem;">You agreed to license your photo with ${businessName}.</p>
+            <div style="background: #ffffff; border: 1px solid #ddd8cc; border-radius: 6px; padding: 32px; text-align: center; margin-bottom: 24px;">
+              <p style="color: #777; font-size: 0.85rem; margin: 0 0 8px;">${description}</p>
+              <p style="color: #777; font-size: 0.85rem; margin: 0 0 12px;">Your certificate code</p>
+              <div style="font-size: 1.8rem; font-weight: bold; color: #1e3320; letter-spacing: 4px; font-family: monospace;">${certCode}</div>
+              <p style="color: #777; font-size: 0.8rem; margin: 16px 0 0;">This code never expires</p>
+            </div>
+            <p style="color: #555; font-size: 0.88rem; line-height: 1.5;">Show this code to ${businessName} when you're ready to redeem it.</p>
+          </div>
+        `,
+        text: `You agreed to license your photo with ${businessName}.\n\n${description}\n\nYour certificate code: ${certCode}\n\nThis code never expires. Show it to ${businessName} when you're ready to redeem it.`,
+      }),
+    });
+    if (!response.ok) console.error(`Resend error (${response.status}):`, await response.text());
+  } catch (err) {
+    console.error('[sendSplashCertificateEmail] failed:', err);
+  }
+}
+
+/**
  * Alerts Jim by email the moment a new support message lands - the gap the
  * LVE original never closed (it only had a dashboard badge). Skips silently
  * if RESEND_API_KEY is unset; callers must never let this fail the request
