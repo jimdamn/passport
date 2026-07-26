@@ -29,6 +29,7 @@ export interface SplashSubmission {
   business_id: string;
   business_name: string;
   media_type: 'image' | 'video';
+  duration_seconds: number | null;
   caption: string | null;
   status: 'submitted' | 'held' | 'licensed' | 'declined' | 'removed';
   held_at: number | null;
@@ -86,7 +87,7 @@ export function withdrawSplash(tenant: string, id: number) {
 }
 
 export function getSplashMediaViewUrl(tenant: string, id: number) {
-  return api.get<ApiResponse<{ url: string }>>(`/t/${tenant}/splash/media/${id}/view`);
+  return api.get<ApiResponse<{ url: string; type: 'image' | 'video' }>>(`/t/${tenant}/splash/media/${id}/view`);
 }
 
 /**
@@ -118,4 +119,22 @@ export async function submitSplash(
     throw new Error((body as any).error || `Upload failed: ${res.status}`);
   }
   return res.json();
+}
+
+export const SPLASH_MAX_VIDEO_SECONDS = 60;
+
+export function requestSplashVideoUpload(tenant: string) {
+  return api.post<ApiResponse<{ uid: string; upload_url: string }>>(`/t/${tenant}/splash/video/direct-upload`);
+}
+
+/**
+ * Submits a video whose bytes are already sitting in Stream (uploaded
+ * directly by the browser to upload_url, bypassing this Worker entirely).
+ * Plain JSON body - this is how submitSplash's Content-Type dispatcher on the
+ * backend tells a video submission from a multipart photo one.
+ */
+export function submitSplashVideo(tenant: string, businessId: string, streamUid: string, caption: string) {
+  return api.post<ApiResponse<SplashSubmission>>(`/t/${tenant}/splash/submit`, {
+    business_id: businessId, stream_uid: streamUid, caption: caption.trim() || undefined,
+  });
 }

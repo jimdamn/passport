@@ -17,11 +17,12 @@
 import type { Context } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { nanoid } from 'nanoid';
-import type { Env } from '../types';
+import type { Env, Tenant } from '../types';
 import { hmacHex, timingSafeEqual } from '../lib/hmac';
 import { transferCredits, escrowUid } from '../lib/credits';
 import { sendSplashCertificateEmail } from '../lib/email';
 import { notifySplash } from '../lib/splash-notify';
+import { createDirectUpload, getVideoDetails, mintSignedPlaybackToken, signedIframeUrl } from '../lib/stream';
 
 type AppContext = Context<{ Bindings: Env }>;
 
@@ -35,6 +36,7 @@ const BOARD_TZ = 'America/New_York';
 const CAPTION_MAX = 280;
 const SCAN_WINDOW_SECONDS = 24 * 60 * 60;
 const MEDIA_VIEW_TTL_SECONDS = 5 * 60;
+const MAX_VIDEO_SECONDS = 60; // splash.max_video_seconds default (Part B.1)
 
 // Config defaults (SOCIAL-SPLASH-BUILD-PLAN.md Part B.1). Centralizing these
 // in Passport's KV-config pattern is Increment 6's job (alongside the fee/
@@ -85,27 +87,14 @@ export async function getSplashEligible(c: AppContext) {
 }
 
 /**
- * POST /splash/submit — multipart { business_id, file, caption? }. Every
- * visibility-driving field (opt-in, the qualifying scan, the daily cap) is
- * re-derived server-side here, never trusted from the eligible-list the
- * client fetched moments earlier.
+ * Shared visibility-driving validation for both submit paths (photo and
+ * video): opt-in, the qualifying scan, and the daily cap. Never trust any of
+ * this from the eligible-list the client fetched moments earlier - re-derive
+ * it here every time.
  */
-export async function submitSplash(c: AppContext) {
-  const tenant = c.get('tenant');
-  const user = c.get('user');
-  const kkauthUid = Number(user.sub);
-
-  const form = await c.req.formData().catch(() => null);
-  if (!form) throw new HTTPException(400, { message: 'Choose a photo to share.' });
-
-  const businessId = String(form.get('business_id') ?? '').trim();
-  if (!businessId) throw new HTTPException(400, { message: 'Choose a business to share this with.' });
-
-  const file = form.get('file');
-  if (!file || typeof file === 'string') throw new HTTPException(400, { message: 'Choose a photo to share.' });
-
-  const caption = cleanText(form.get('caption'), CAPTION_MAX);
-
+async function checkSplashEligibility(
+  c: AppContext, tenant: Tenant, kkauthUid: number, businessId: string
+): Promise<{ scanId: string; businessName: string; createdDay: string }> {
   const settings = await c.env.DB.prepare(
     'SELECT opt_in FROM splash_settings WHERE tenant_id = ? AND business_id = ?'
   ).bind(tenant.id, businessId).first<{ opt_in: number }>();
@@ -134,6 +123,40 @@ export async function submitSplash(c: AppContext) {
   if (already) {
     throw new HTTPException(400, { message: `You've already shared with ${scan.business_name} today - come back tomorrow.` });
   }
+
+  return { scanId: scan.scan_id, businessName: scan.business_name, createdDay };
+}
+
+/**
+ * POST /splash/submit — multipart { business_id, file, caption? } for a
+ * photo, or JSON { business_id, stream_uid, caption? } for a video already
+ * uploaded to Stream. Branches on Content-Type.
+ */
+export async function submitSplash(c: AppContext) {
+  const contentType = c.req.header('Content-Type') ?? '';
+  if (contentType.includes('application/json')) {
+    return submitSplashVideo(c);
+  }
+  return submitSplashPhoto(c);
+}
+
+async function submitSplashPhoto(c: AppContext) {
+  const tenant = c.get('tenant');
+  const user = c.get('user');
+  const kkauthUid = Number(user.sub);
+
+  const form = await c.req.formData().catch(() => null);
+  if (!form) throw new HTTPException(400, { message: 'Choose a photo to share.' });
+
+  const businessId = String(form.get('business_id') ?? '').trim();
+  if (!businessId) throw new HTTPException(400, { message: 'Choose a business to share this with.' });
+
+  const file = form.get('file');
+  if (!file || typeof file === 'string') throw new HTTPException(400, { message: 'Choose a photo to share.' });
+
+  const caption = cleanText(form.get('caption'), CAPTION_MAX);
+
+  const { scanId, businessName, createdDay } = await checkSplashEligibility(c, tenant, kkauthUid, businessId);
 
   // Forward to KKAuth's generic upload proxy (private + retained original -
   // Social Splash Increment 1), same call shape as Fresh Today's photo
@@ -166,14 +189,85 @@ export async function submitSplash(c: AppContext) {
       VALUES (?, ?, ?, ?, 'image', ?, ?, ?, ?, ?)
       RETURNING id, business_id, business_name, media_type, caption, status, created_at
     `).bind(
-      tenant.id, kkauthUid, businessId, scan.business_name, imageKey, originalKey, caption, scan.scan_id, createdDay
+      tenant.id, kkauthUid, businessId, businessName, imageKey, originalKey, caption, scanId, createdDay
     ).first<any>();
     return c.json({ data: inserted }, 201);
   } catch (e: any) {
     // Race with a concurrent submit for the same (tenant, user, business, day) -
     // the UNIQUE constraint is the hard backstop behind the pre-check above.
     if (String(e?.message ?? '').includes('UNIQUE')) {
-      throw new HTTPException(400, { message: `You've already shared with ${scan.business_name} today - come back tomorrow.` });
+      throw new HTTPException(400, { message: `You've already shared with ${businessName} today - come back tomorrow.` });
+    }
+    throw e;
+  }
+}
+
+/**
+ * POST /splash/video/direct-upload — mints a Stream direct-upload session
+ * bound to the caller. The client uploads raw bytes straight to the returned
+ * uploadURL (never through this Worker); submit-video below re-checks
+ * ownership of the resulting stream_uid before trusting it.
+ */
+export async function requestSplashVideoUpload(c: AppContext) {
+  const tenant = c.get('tenant');
+  const user = c.get('user');
+  const kkauthUid = Number(user.sub);
+
+  const { uid, uploadURL } = await createDirectUpload(c.env, MAX_VIDEO_SECONDS);
+  await c.env.DB.prepare(
+    'INSERT INTO splash_video_uploads (stream_uid, tenant_id, kkauth_uid) VALUES (?, ?, ?)'
+  ).bind(uid, tenant.id, kkauthUid).run();
+
+  return c.json({ data: { uid, upload_url: uploadURL } });
+}
+
+async function submitSplashVideo(c: AppContext) {
+  const tenant = c.get('tenant');
+  const user = c.get('user');
+  const kkauthUid = Number(user.sub);
+
+  const body = await c.req.json<{ business_id?: string; stream_uid?: string; caption?: string }>()
+    .catch(() => ({} as { business_id?: string; stream_uid?: string; caption?: string }));
+  const businessId = String(body.business_id ?? '').trim();
+  const streamUid = String(body.stream_uid ?? '').trim();
+  if (!businessId) throw new HTTPException(400, { message: 'Choose a business to share this with.' });
+  if (!streamUid) throw new HTTPException(400, { message: 'No video upload found - try recording again.' });
+  const caption = cleanText(body.caption, CAPTION_MAX);
+
+  const { scanId, businessName, createdDay } = await checkSplashEligibility(c, tenant, kkauthUid, businessId);
+
+  // The pending row proves THIS caller minted THIS stream_uid through us -
+  // never trust a client-supplied uid without it (it could be any existing
+  // video, including someone else's).
+  const pending = await c.env.DB.prepare(
+    'SELECT stream_uid FROM splash_video_uploads WHERE stream_uid = ? AND tenant_id = ? AND kkauth_uid = ?'
+  ).bind(streamUid, tenant.id, kkauthUid).first<{ stream_uid: string }>();
+  if (!pending) {
+    throw new HTTPException(403, { message: 'This video upload does not belong to you.' });
+  }
+
+  const details = await getVideoDetails(c.env, streamUid).catch(() => null);
+  if (!details || !details.readyToStream) {
+    throw new HTTPException(400, { message: "That video isn't ready yet - wait a moment and try again." });
+  }
+  if (details.duration > MAX_VIDEO_SECONDS) {
+    throw new HTTPException(400, { message: `Videos can be up to ${MAX_VIDEO_SECONDS} seconds - this one is longer.` });
+  }
+
+  try {
+    const inserted = await c.env.DB.prepare(`
+      INSERT INTO splash_submissions
+        (tenant_id, kkauth_uid, business_id, business_name, media_type, stream_uid, duration_seconds, caption, scan_ref, created_day)
+      VALUES (?, ?, ?, ?, 'video', ?, ?, ?, ?, ?)
+      RETURNING id, business_id, business_name, media_type, caption, status, created_at
+    `).bind(
+      tenant.id, kkauthUid, businessId, businessName, streamUid, Math.round(details.duration), caption, scanId, createdDay
+    ).first<any>();
+    await c.env.DB.prepare('DELETE FROM splash_video_uploads WHERE stream_uid = ?').bind(streamUid).run();
+    return c.json({ data: inserted }, 201);
+  } catch (e: any) {
+    if (String(e?.message ?? '').includes('UNIQUE')) {
+      throw new HTTPException(400, { message: `You've already shared with ${businessName} today - come back tomorrow.` });
     }
     throw e;
   }
@@ -192,7 +286,7 @@ export async function getMySplash(c: AppContext) {
   const kkauthUid = Number(user.sub);
 
   const { results: submissionRows } = await c.env.DB.prepare(`
-    SELECT id, business_id, business_name, media_type, caption, status,
+    SELECT id, business_id, business_name, media_type, duration_seconds, caption, status,
            held_at, hold_expires_at, licensed_at, declined_at, destroy_after,
            original_unlocked, admin_removed_reason, created_at
     FROM splash_submissions
@@ -278,8 +372,11 @@ export async function withdrawSplash(c: AppContext) {
 }
 
 /**
- * GET /splash/media/:id/view — owner or admin only. Mints a 5-minute signed
- * URL for the raw-serving route below; raw R2 keys never reach the client.
+ * GET /splash/media/:id/view — owner or admin only. For a photo, mints a
+ * 5-minute HMAC-signed URL for the raw-serving route below (raw R2 keys
+ * never reach the client). For a video, mints a short-lived Stream signed
+ * playback token and returns Stream's own iframe URL directly - Stream
+ * serves the bytes itself, so there is no equivalent raw-serving route.
  */
 export async function getSplashMediaView(c: AppContext) {
   const tenant = c.get('tenant');
@@ -288,18 +385,24 @@ export async function getSplashMediaView(c: AppContext) {
   if (!Number.isInteger(id)) throw new HTTPException(400, { message: 'Invalid submission id' });
 
   const row = await c.env.DB.prepare(
-    'SELECT kkauth_uid, image_key FROM splash_submissions WHERE id = ? AND tenant_id = ?'
-  ).bind(id, tenant.id).first<{ kkauth_uid: number; image_key: string | null }>();
+    'SELECT kkauth_uid, media_type, image_key, stream_uid FROM splash_submissions WHERE id = ? AND tenant_id = ?'
+  ).bind(id, tenant.id).first<{ kkauth_uid: number; media_type: string; image_key: string | null; stream_uid: string | null }>();
   if (!row) throw new HTTPException(404, { message: 'Submission not found' });
   if (Number(user.sub) !== row.kkauth_uid && !user.is_admin) {
     throw new HTTPException(403, { message: 'Not your submission.' });
   }
-  if (!row.image_key) throw new HTTPException(404, { message: 'No photo on this submission yet.' });
 
+  if (row.media_type === 'video') {
+    if (!row.stream_uid) throw new HTTPException(404, { message: 'No video on this submission yet.' });
+    const token = await mintSignedPlaybackToken(c.env, row.stream_uid, MEDIA_VIEW_TTL_SECONDS);
+    return c.json({ data: { url: signedIframeUrl(c.env, token), type: 'video' } });
+  }
+
+  if (!row.image_key) throw new HTTPException(404, { message: 'No photo on this submission yet.' });
   const expiresAt = Math.floor(Date.now() / 1000) + MEDIA_VIEW_TTL_SECONDS;
   const sig = await hmacHex(c.env.SPLASH_MEDIA_SECRET, `${id}|${expiresAt}`);
   const url = `/api/t/${tenant.id}/splash/media/${id}/raw?exp=${expiresAt}&sig=${sig}`;
-  return c.json({ data: { url } });
+  return c.json({ data: { url, type: 'image' } });
 }
 
 /**

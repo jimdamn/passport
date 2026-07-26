@@ -22,6 +22,11 @@ export interface Env {
   FIELD_NOTES_BASE_URL?: string; // Override for Field Notes HTTPS origin (Pages project, not a service binding); defaults to prod
   KWEST_GUEST_SECRET: string; // HS256 signing secret for KrowdKwest's durable guest key (kwest_guest_keys)
   SPLASH_MEDIA_SECRET: string; // HMAC secret for Social Splash's short-TTL signed media-view URLs
+  STREAM_ACCOUNT_ID: string;    // Cloudflare account id (Stream API path segment)
+  STREAM_API_TOKEN: string;     // Account-wide Stream:Edit token (Increment 5)
+  STREAM_KEY_ID: string;        // Signing key id, from the one-time src/lib/stream.ts createSigningKey call
+  STREAM_JWK: string;           // Signing key private JWK (base64), same one-time call
+  STREAM_PLAYBACK_DOMAIN: string; // e.g. "https://customer-xxxxx.cloudflarestream.com" — same for every video on this account
 }
 
 

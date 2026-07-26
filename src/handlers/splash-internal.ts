@@ -23,6 +23,7 @@ import { transferCredits, escrowUid } from '../lib/credits';
 import { notifySplash } from '../lib/splash-notify';
 import { sendSplashOfferEmail } from '../lib/email';
 import { logger } from '../lib/logger';
+import { mintSignedPlaybackToken, signedIframeUrl, signedDownloadUrl, enableMp4Download } from '../lib/stream';
 
 type AppContext = Context<{ Bindings: Env }>;
 
@@ -233,11 +234,13 @@ export async function declineSplash(c: AppContext) {
 }
 
 /**
- * GET /internal/splash/:id/media/view?tenant_id=&business_id= — mints the
- * same 5-min HMAC token as the guest-facing mint in splash.ts (identical
- * token shape, so the one public raw-serving route in splash.ts serves both
- * without any changes there), but returns an ABSOLUTE url - the merchant's
- * browser is on kk-business's own domain, not Passport's.
+ * GET /internal/splash/:id/media/view?tenant_id=&business_id= — for a photo,
+ * mints the same 5-min HMAC token as the guest-facing mint in splash.ts
+ * (identical shape, so the one public raw-serving route serves both) but
+ * returns an ABSOLUTE url since the merchant's browser is on kk-business's
+ * own domain. For a video, mints a Stream signed playback token and returns
+ * Stream's own iframe URL directly - no absolute-vs-relative distinction
+ * applies there since Stream's domain is never Passport's own to begin with.
  */
 export async function getSplashInboxMediaView(c: AppContext) {
   const id = Number(c.req.param('id'));
@@ -248,17 +251,23 @@ export async function getSplashInboxMediaView(c: AppContext) {
   await requireMerchantBridge(c, businessId);
 
   const row = await c.env.DB.prepare(
-    'SELECT business_id, image_key FROM splash_submissions WHERE id = ? AND tenant_id = ?'
-  ).bind(id, tenantId).first<{ business_id: string; image_key: string | null }>();
+    'SELECT business_id, media_type, image_key, stream_uid FROM splash_submissions WHERE id = ? AND tenant_id = ?'
+  ).bind(id, tenantId).first<{ business_id: string; media_type: string; image_key: string | null; stream_uid: string | null }>();
   if (!row) throw new HTTPException(404, { message: 'Submission not found' });
   if (row.business_id !== businessId) throw new HTTPException(403, { message: 'This submission does not belong to your business.' });
-  if (!row.image_key) throw new HTTPException(404, { message: 'No photo on this submission yet.' });
 
+  if (row.media_type === 'video') {
+    if (!row.stream_uid) throw new HTTPException(404, { message: 'No video on this submission yet.' });
+    const token = await mintSignedPlaybackToken(c.env, row.stream_uid, MEDIA_VIEW_TTL_SECONDS);
+    return c.json({ data: { url: signedIframeUrl(c.env, token), type: 'video' } });
+  }
+
+  if (!row.image_key) throw new HTTPException(404, { message: 'No photo on this submission yet.' });
   const expiresAt = Math.floor(Date.now() / 1000) + MEDIA_VIEW_TTL_SECONDS;
   const sig = await hmacHex(c.env.SPLASH_MEDIA_SECRET, `${id}|${expiresAt}`);
   const hostname = await tenantHostname(c, tenantId);
   const url = `https://${hostname}/api/t/${tenantId}/splash/media/${id}/raw?exp=${expiresAt}&sig=${sig}`;
-  return c.json({ data: { url } });
+  return c.json({ data: { url, type: 'image' } });
 }
 
 /**
@@ -421,11 +430,25 @@ export async function getSplashMediaDownload(c: AppContext) {
   await requireMerchantBridge(c, businessId);
 
   const row = await c.env.DB.prepare(
-    'SELECT business_id, status, image_key, image_original_key, original_unlocked FROM splash_submissions WHERE id = ? AND tenant_id = ?'
-  ).bind(id, tenantId).first<{ business_id: string; status: string; image_key: string | null; image_original_key: string | null; original_unlocked: number }>();
+    'SELECT business_id, status, media_type, stream_uid, image_key, image_original_key, original_unlocked FROM splash_submissions WHERE id = ? AND tenant_id = ?'
+  ).bind(id, tenantId).first<{ business_id: string; status: string; media_type: string; stream_uid: string | null; image_key: string | null; image_original_key: string | null; original_unlocked: number }>();
   if (!row) throw new HTTPException(404, { message: 'Submission not found' });
   if (row.business_id !== businessId) throw new HTTPException(403, { message: 'This submission does not belong to your business.' });
   if (row.status !== 'licensed') throw new HTTPException(403, { message: 'This photo is not licensed yet.' });
+
+  if (row.media_type === 'video') {
+    // Video has no free-preview download tier - the MP4 is the original, so it
+    // is gated entirely behind original_unlocked (unlike photos, which have a
+    // watermark-free displayed image available even before unlock).
+    if (!row.original_unlocked) throw new HTTPException(403, { message: 'original-locked' });
+    if (!row.stream_uid) throw new HTTPException(404, { message: 'Video not found' });
+    const download = await enableMp4Download(c.env, row.stream_uid);
+    if (download.status !== 'ready') {
+      return c.json({ data: { type: 'video', status: download.status, percent_complete: download.percentComplete } }, 202);
+    }
+    const token = await mintSignedPlaybackToken(c.env, row.stream_uid, MEDIA_VIEW_TTL_SECONDS);
+    return c.json({ data: { type: 'video', status: 'ready', url: signedDownloadUrl(c.env, token) } });
+  }
 
   const wantsOriginal = c.req.query('original') === 'true';
   if (wantsOriginal && !row.original_unlocked) {

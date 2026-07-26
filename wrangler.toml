@@ -37,6 +37,11 @@ FIELD_NOTES_BASE_URL = "https://fieldnotes.lakeandlocals.com"
 # in KKCredits wrangler.toml). Claims hold funds here until settled to the
 # merchant on redemption or returned to the member on expiry.
 DEALS_ESCROW_UID = "900000101"
+# Cloudflare account id — Stream API path segment (Social Splash Increment 5). Not sensitive on its own.
+STREAM_ACCOUNT_ID = "943518e1efbb7399d5f04cdf63233024"
+# Stream customer subdomain that serves signed playback/download URLs, e.g. "https://customer-xxxxx.cloudflarestream.com"
+# Same for every video on this account. Fill in once known (Cloudflare Stream dashboard -> any video's "Preview" tab shows the customer subdomain).
+STREAM_PLAYBACK_DOMAIN = ""
 
 # Secrets — set via: wrangler pages secret put <NAME>
 # INTERNAL_SECRET  — Shared secret for KKAuth internal calls
@@ -47,5 +52,8 @@ DEALS_ESCROW_UID = "900000101"
 # QR_SIGNING_SECRET — HMAC-SHA256 signing secret for standardized QR payloads
 # RESEND_API_KEY   — Resend API key for guest claim-code emails (optional; claim emails skip if unset)
 # SPLASH_MEDIA_SECRET — HMAC secret for Social Splash's short-TTL signed media-view URLs (Pages secret - needs a redeploy to take effect)
+# STREAM_API_TOKEN — Cloudflare API token, account-wide Stream:Edit scope (Social Splash Increment 5)
+# STREAM_KEY_ID    — Stream signing key id, from the one-time src/lib/stream.ts createSigningKey call
+# STREAM_JWK       — Stream signing key private JWK (base64), same one-time call
 
 

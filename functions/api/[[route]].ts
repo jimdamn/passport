@@ -60,6 +60,7 @@ import { getAroundInterests, putAroundInterests } from '../../src/handlers/aroun
 import {
   getSplashEligible, submitSplash, getMySplash, updateSplashCaption, withdrawSplash,
   getSplashMediaView, getSplashMediaRaw, respondToSplashOffer, regenerateSplashCertificateCode,
+  requestSplashVideoUpload,
 } from '../../src/handlers/splash';
 import {
   getSplashInbox, putSplashSettings, acceptSplash, declineSplash, getSplashInboxMediaView,
@@ -223,6 +224,7 @@ tenantApp.post('/admin/fresh/posts/:id/hide', adminHideFreshPost);
 // registered on the root app below, alongside the other public reads.
 tenantApp.get('/splash/eligible', getSplashEligible);
 tenantApp.post('/splash/submit', submitSplash);
+tenantApp.post('/splash/video/direct-upload', requestSplashVideoUpload);
 tenantApp.get('/splash/mine', getMySplash);
 tenantApp.patch('/splash/:id/caption', updateSplashCaption);
 tenantApp.post('/splash/:id/withdraw', withdrawSplash);

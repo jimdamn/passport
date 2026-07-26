@@ -5,9 +5,10 @@ import { useTenant } from '../context/TenantContext';
 import {
   getSplashEligible, getMySplash, submitSplash, updateSplashCaption, withdrawSplash,
   getSplashMediaViewUrl, respondToSplashOffer, regenerateSplashCertificateCode,
+  requestSplashVideoUpload, submitSplashVideo, SPLASH_MAX_VIDEO_SECONDS,
   type SplashEligibleBusiness, type SplashSubmission, type SplashTombstone, type SplashOffer, type SplashCertificate,
 } from '../api/splash';
-import { Camera, Pencil, Trash2 } from 'lucide-react';
+import { Camera, Video, Pencil, Trash2 } from 'lucide-react';
 import { Spinner } from '../components/ui/Spinner';
 import { Alert } from '../components/ui/Alert';
 import { resizeForUpload } from 'kk-shared-ui';
@@ -71,35 +72,53 @@ function statusLine(sub: SplashSubmission): { text: string; tone: 'muted' | 'amb
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// A submission's photo, loaded through a fresh short-TTL signed view URL -
-// raw image-api keys never reach the client. Failure is quiet: a photo
-// preview is a nice-to-have, never something that should block the row.
+// A submission's photo or video, loaded through a fresh short-TTL signed view
+// URL - raw image-api keys and Stream UIDs never reach the client. Failure is
+// quiet: a preview is a nice-to-have, never something that should block the row.
 // ─────────────────────────────────────────────────────────────────────────────
 
 function SplashPhoto({ tenantId, submissionId }: { tenantId: string; submissionId: number }) {
-  const [url, setUrl] = useState<string | null>(null);
+  const [media, setMedia] = useState<{ url: string; type: 'image' | 'video' } | null>(null);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     let active = true;
-    setUrl(null);
+    setMedia(null);
     setFailed(false);
     getSplashMediaViewUrl(tenantId, submissionId)
-      .then(res => { if (active) setUrl(res.data.url); })
+      .then(res => { if (active) setMedia(res.data); })
       .catch(() => { if (active) setFailed(true); });
     return () => { active = false; };
   }, [tenantId, submissionId]);
 
   if (failed) return null;
-  if (!url) {
+  if (!media) {
     return <div style={{ width: 80, height: 80, borderRadius: 8, background: 'var(--light)', flexShrink: 0 }} />;
   }
-  return <img src={url} alt="" style={{ width: 80, height: 80, objectFit: 'cover', borderRadius: 8, display: 'block', flexShrink: 0 }} />;
+  if (media.type === 'video') {
+    return (
+      <iframe src={media.url} allow="accelerometer; encrypted-media; picture-in-picture;" allowFullScreen
+        style={{ width: 140, height: 80, border: 0, borderRadius: 8, display: 'block', flexShrink: 0 }} />
+    );
+  }
+  return <img src={media.url} alt="" style={{ width: 80, height: 80, objectFit: 'cover', borderRadius: 8, display: 'block', flexShrink: 0 }} />;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Submit form - one eligible business at a time.
 // ─────────────────────────────────────────────────────────────────────────────
+
+/** Reads a video file's duration client-side, via an off-DOM <video> element - a courtesy check only, the server re-verifies against Stream's own measured duration. */
+function readVideoDuration(file: File): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const el = document.createElement('video');
+    el.preload = 'metadata';
+    el.onloadedmetadata = () => { URL.revokeObjectURL(url); resolve(el.duration); };
+    el.onerror = () => { URL.revokeObjectURL(url); reject(new Error('That file could not be read as a video.')); };
+    el.src = url;
+  });
+}
 
 function SubmitForm({ tenantId, business, onCancel, onSubmitted }: {
   tenantId: string;
@@ -108,61 +127,141 @@ function SubmitForm({ tenantId, business, onCancel, onSubmitted }: {
   onSubmitted: () => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const [mode, setMode] = useState<'photo' | 'video'>('photo');
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [caption, setCaption] = useState('');
   const [working, setWorking] = useState(false);
+  const [progress, setProgress] = useState('');
   const [error, setError] = useState('');
 
-  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+  function resetFile() {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setFile(null);
+    setPreviewUrl(null);
+  }
+
+  function switchMode(next: 'photo' | 'video') {
+    if (next === mode) return;
+    resetFile();
+    setError('');
+    setMode(next);
+  }
+
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
     e.target.value = '';
     if (!f) return;
     setError('');
-    if (f.size > MAX_PHOTO_BYTES) {
-      setError('That photo is over 8 MB - most phone photos are smaller. Try another one.');
-      return;
+    if (mode === 'photo') {
+      if (f.size > MAX_PHOTO_BYTES) {
+        setError('That photo is over 8 MB - most phone photos are smaller. Try another one.');
+        return;
+      }
+    } else {
+      try {
+        const duration = await readVideoDuration(f);
+        if (duration > SPLASH_MAX_VIDEO_SECONDS) {
+          setError(`Videos can be up to ${SPLASH_MAX_VIDEO_SECONDS} seconds - this one is longer. Try a shorter clip.`);
+          return;
+        }
+      } catch (err: any) {
+        setError(err.message || 'That file could not be read as a video.');
+        return;
+      }
     }
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setFile(f);
     setPreviewUrl(URL.createObjectURL(f));
   }
 
+  async function handleSubmitPhoto() {
+    if (!file) return;
+    const optimized = await resizeForUpload(file);
+    await submitSplash(tenantId, business.business_id, optimized, caption);
+  }
+
+  async function handleSubmitVideo() {
+    if (!file) return;
+    setProgress('Uploading...');
+    const { data } = await requestSplashVideoUpload(tenantId);
+    const form = new FormData();
+    form.append('file', file);
+    const uploadRes = await fetch(data.upload_url, { method: 'POST', body: form });
+    if (!uploadRes.ok) throw new Error('Could not upload the video. Try again.');
+
+    setProgress('Processing your video...');
+    for (let attempt = 0; attempt < 8; attempt++) {
+      try {
+        await submitSplashVideo(tenantId, business.business_id, data.uid, caption);
+        return;
+      } catch (err: any) {
+        if (!String(err?.message ?? '').includes("isn't ready yet")) throw err;
+        await new Promise(r => setTimeout(r, 3000));
+      }
+    }
+    throw new Error("Your video is taking longer than expected to process - wait a moment and try 'Share it' again.");
+  }
+
   async function handleSubmit() {
     if (!file || working) return;
     setWorking(true);
     setError('');
+    setProgress('');
     try {
-      const optimized = await resizeForUpload(file);
-      await submitSplash(tenantId, business.business_id, optimized, caption);
+      if (mode === 'photo') await handleSubmitPhoto();
+      else await handleSubmitVideo();
       onSubmitted();
     } catch (err: any) {
-      setError(err.message || 'That photo could not be shared. Try again.');
+      setError(err.message || `That ${mode} could not be shared. Try again.`);
     } finally {
       setWorking(false);
+      setProgress('');
     }
   }
 
   return (
     <div className="card" style={{ padding: 20, background: 'var(--white)', marginBottom: 16 }}>
       <h3 style={{ margin: '0 0 4px', fontSize: '1.05rem', fontFamily: 'var(--font-serif)', color: 'var(--green)' }}>
-        Share a photo with {business.business_name}
+        Share with {business.business_name}
       </h3>
       {business.blurb && (
-        <p style={{ margin: '0 0 16px', fontSize: '0.82rem', color: 'var(--muted)' }}>{business.blurb}</p>
+        <p style={{ margin: '0 0 12px', fontSize: '0.82rem', color: 'var(--muted)' }}>{business.blurb}</p>
       )}
+
+      <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+        <button type="button" className={mode === 'photo' ? 'btn btn-amber btn-sm' : 'btn btn-secondary btn-sm'}
+          style={{ minHeight: 34, display: 'inline-flex', alignItems: 'center', gap: 5 }}
+          onClick={() => switchMode('photo')}>
+          <Camera size={14} /> Photo
+        </button>
+        <button type="button" className={mode === 'video' ? 'btn btn-amber btn-sm' : 'btn btn-secondary btn-sm'}
+          style={{ minHeight: 34, display: 'inline-flex', alignItems: 'center', gap: 5 }}
+          onClick={() => switchMode('video')}>
+          <Video size={14} /> Video
+        </button>
+      </div>
 
       {error && <Alert type="error" style={{ marginBottom: 12 }}>{error}</Alert>}
 
       <div style={{ marginBottom: 12 }}>
-        {previewUrl && (
+        {previewUrl && mode === 'photo' && (
           <img src={previewUrl} alt="" style={{ width: 120, height: 120, objectFit: 'cover', borderRadius: 8, display: 'block', marginBottom: 8 }} />
         )}
-        <input ref={inputRef} type="file" accept="image/*" onChange={handleFile} style={{ display: 'none' }} />
+        {previewUrl && mode === 'video' && (
+          <video src={previewUrl} controls style={{ width: 200, maxHeight: 160, borderRadius: 8, display: 'block', marginBottom: 8 }} />
+        )}
+        <input ref={inputRef} type="file" accept={mode === 'photo' ? 'image/*' : 'video/*'} onChange={handleFile} style={{ display: 'none' }} />
         <button type="button" className="btn btn-secondary btn-sm" style={{ minHeight: 40, display: 'inline-flex', alignItems: 'center', gap: 6 }}
           onClick={() => inputRef.current?.click()}>
-          <Camera size={14} /> {file ? 'Change photo' : 'Choose a photo'}
+          {mode === 'photo' ? <Camera size={14} /> : <Video size={14} />}
+          {file ? `Change ${mode}` : `Choose a ${mode}`}
         </button>
+        {mode === 'video' && (
+          <p style={{ margin: '6px 0 0', fontSize: '0.76rem', color: 'var(--muted)' }}>
+            Up to {SPLASH_MAX_VIDEO_SECONDS} seconds.
+          </p>
+        )}
       </div>
 
       <div style={{ marginBottom: 16 }}>
@@ -174,12 +273,13 @@ function SubmitForm({ tenantId, business, onCancel, onSubmitted }: {
       </div>
 
       <p style={{ margin: '0 0 16px', fontSize: '0.76rem', color: 'var(--muted)', lineHeight: 1.5 }}>
-        By submitting, you confirm you took this photo at {business.business_name} and you allow {business.business_name} to
+        By submitting, you confirm you took this {mode} at {business.business_name} and you allow {business.business_name} to
         review it. If they accept it, you receive KrowdKredits. If they offer to license it, you choose whether to agree -
         nothing is licensed without your OK. If they decline, your submission is permanently deleted.
       </p>
 
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center' }}>
+        {working && progress && <span style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>{progress}</span>}
         <button className="btn btn-secondary btn-sm" onClick={onCancel} disabled={working} style={{ minHeight: 40 }}>
           Cancel
         </button>
