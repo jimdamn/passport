@@ -212,8 +212,14 @@ function OfferCard({ offer, tenantId, onChanged }: {
     setError('');
     try {
       const res = await respondToSplashOffer(tenantId, offer.id, action);
-      if (res.data.certificate_code) setCertCode(res.data.certificate_code);
-      onChanged();
+      if (res.data.certificate_code) {
+        // Hold off on refetching - a refetch replaces this row's open_offer
+        // with null and unmounts this card before the one-time code could be
+        // read. Only refetch once the guest has acknowledged it (below).
+        setCertCode(res.data.certificate_code);
+      } else {
+        onChanged();
+      }
     } catch (err: any) {
       setError(err.message || 'That action failed.');
     } finally {
@@ -233,7 +239,12 @@ function OfferCard({ offer, tenantId, onChanged }: {
       {error && <Alert type="error" style={{ marginBottom: 8 }}>{error}</Alert>}
       {certCode ? (
         <Alert type="success">
-          Certificate code: <strong>{certCode}</strong> - also emailed to you. Show this to redeem it.
+          <p style={{ margin: '0 0 8px' }}>
+            Certificate code: <strong>{certCode}</strong> - also emailed to you. Show this to redeem it.
+          </p>
+          <button className="btn btn-secondary btn-sm" style={{ minHeight: 32 }} onClick={onChanged}>
+            Got it
+          </button>
         </Alert>
       ) : (
         <div style={{ display: 'flex', gap: 8 }}>
