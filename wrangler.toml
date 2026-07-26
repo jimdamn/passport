@@ -39,9 +39,9 @@ FIELD_NOTES_BASE_URL = "https://fieldnotes.lakeandlocals.com"
 DEALS_ESCROW_UID = "900000101"
 # Cloudflare account id — Stream API path segment (Social Splash Increment 5). Not sensitive on its own.
 STREAM_ACCOUNT_ID = "943518e1efbb7399d5f04cdf63233024"
-# Stream customer subdomain that serves signed playback/download URLs, e.g. "https://customer-xxxxx.cloudflarestream.com"
-# Same for every video on this account. Fill in once known (Cloudflare Stream dashboard -> any video's "Preview" tab shows the customer subdomain).
-STREAM_PLAYBACK_DOMAIN = ""
+# Stream customer subdomain that serves signed playback/download URLs. Same for every video on this account.
+# Discovered live during Gate 5 testing (2026-07-26) via a real uploaded test clip's `preview` field.
+STREAM_PLAYBACK_DOMAIN = "https://customer-hqbke3zzo85ur2y9.cloudflarestream.com"
 
 # Secrets — set via: wrangler pages secret put <NAME>
 # INTERNAL_SECRET  — Shared secret for KKAuth internal calls
