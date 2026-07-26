@@ -61,6 +61,9 @@ import {
   getSplashEligible, submitSplash, getMySplash, updateSplashCaption, withdrawSplash,
   getSplashMediaView, getSplashMediaRaw,
 } from '../../src/handlers/splash';
+import {
+  getSplashInbox, putSplashSettings, acceptSplash, declineSplash, getSplashInboxMediaView,
+} from '../../src/handlers/splash-internal';
 
 import { listExchangeOffers } from '../../src/handlers/exchange';
 import { getContentSummary } from '../../src/handlers/content';
@@ -396,6 +399,14 @@ app.post('/api/internal/kwest/retention', internalKwestRetention);
 // Support inbox forwarding (kk-business) + retention sweep (X-Internal-Secret protected)
 app.post('/api/internal/support', internalSubmitSupport);
 app.post('/api/internal/support/retention', internalSupportRetention);
+// Social Splash Bridge C - kk-business's merchant inbox (X-Internal-Secret +
+// re-verified merchant Bearer, checked per-handler - see requireMerchantBridge
+// in splash-internal.ts)
+app.get('/api/internal/splash/inbox', getSplashInbox);
+app.put('/api/internal/splash/settings', putSplashSettings);
+app.post('/api/internal/splash/:id/accept', acceptSplash);
+app.post('/api/internal/splash/:id/decline', declineSplash);
+app.get('/api/internal/splash/:id/media/view', getSplashInboxMediaView);
 
 // Public Passport Scan & Claims APIs (Tenant-scoped, Guest-friendly)
 app.post('/api/t/:tenant/passport/scan', resolveTenant, scanPlaque);
