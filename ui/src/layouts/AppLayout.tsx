@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
-import { SponsorDrawer, shouldAttempt, markShown, markDismissed, markQuiet, otherOverlayOpen, type SponsorPlacementView } from 'kk-shared-ui';
+import { SponsorDrawer, Footer, shouldAttempt, markShown, markDismissed, markQuiet, otherOverlayOpen, type SponsorPlacementView } from 'kk-shared-ui';
 import Topbar from '../components/nav/Topbar';
 import BottomNav from '../components/nav/BottomNav';
 import { ProfilePanelProvider } from '../context/ProfilePanelContext';
@@ -121,6 +121,7 @@ export default function AppLayout() {
         <main className="main-content">
           <Outlet />
         </main>
+        <Footer brandName={tenant?.config.brand_name ?? 'Lake & Locals'} />
         <BottomNav />
         {sponsor && (
           <SponsorDrawer placement={sponsor} onDismiss={handleSponsorDismiss} onTap={handleSponsorTap} />
