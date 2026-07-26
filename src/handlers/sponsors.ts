@@ -532,18 +532,19 @@ export async function sponsorBeacon(c: AppContext) {
 
 /**
  * POST /sponsors/upload — admin uploads a sponsor image. Mirrors uploadFreshPhoto,
- * except the variant depends on what the photo is for:
- * - Drawer (route_drawer): the photo renders in a ~104-130px near-square box
- *   with object-fit:cover (SponsorDrawer.tsx), so 'small-square' (image-api's
- *   512px-long-edge preset, already used by avatars) is the right fit.
- * - Inline banner (inline_*): the photo renders full shell-width or as a large
- *   card (SponsorBanner.tsx), so it needs 'mobile' (1600px-long-edge, no crop) -
- *   the same variant every board photo uses. Bug fixed 2026-07-25: this
- *   endpoint requested 'small-square' unconditionally through Increment 2,
- *   silently compressing every inline banner photo down to ~512px before it
- *   ever reached the browser - see INLINE-SPONSOR-BANNER-BUILD-PLAN.md.
- * `placement` is validated against the known list (not trusted blindly) so a
- * crafted request can't ask image-api for an arbitrary variant.
+ * always requesting 'mobile' (image-api's 1600px-long-edge, no-crop preset) -
+ * the same variant every board photo uses - regardless of which placement the
+ * photo is for. A larger source image downscaled by the browser into the
+ * Drawer's small ~130px box (object-fit:cover) is always fine; only the
+ * reverse - a small source stretched into a full-width banner box - looks
+ * bad. Deliberately NOT conditioned on placement (tried that 2026-07-25,
+ * reverted same day): the admin form's Placement selector can be changed
+ * after a photo is already uploaded, so a variant choice keyed off form state
+ * at upload time was order-dependent and silently picked the wrong (small)
+ * variant whenever a photo was uploaded before the placement was set -
+ * exactly what happened live on a real footer banner. Always uploading at
+ * the larger size removes that whole class of bug at the cost of a bigger
+ * stored file for the (low-volume, admin-curated) Drawer thumbnail case.
  */
 export async function uploadSponsorPhoto(c: AppContext) {
   requireAdmin(c);
@@ -554,14 +555,11 @@ export async function uploadSponsorPhoto(c: AppContext) {
   if (!file || typeof file === 'string') {
     throw new HTTPException(400, { message: 'Choose a photo to upload.' });
   }
-  const placementRaw = form?.get('placement');
-  const placement = typeof placementRaw === 'string' && KNOWN_PLACEMENT_VALUES.includes(placementRaw) ? placementRaw : 'route_drawer';
-  const variant = INLINE_PLACEMENTS.has(placement) ? 'mobile' : 'small-square';
 
   const uploadForm = new FormData();
   uploadForm.append('file', file as File);
   uploadForm.append('user_id', String(Number(user.sub)));
-  uploadForm.append('variant', variant);
+  uploadForm.append('variant', 'mobile');
 
   const res = await c.env.KKAUTH.fetch(
     new Request('https://kkauth/internal/uploads', {

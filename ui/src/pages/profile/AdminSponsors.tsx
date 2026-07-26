@@ -206,7 +206,7 @@ export default function AdminSponsors() {
     setError('');
     try {
       const optimized = await resizeForUpload(file);
-      const res = await uploadSponsorPhoto(tenant.id, optimized, form.placement);
+      const res = await uploadSponsorPhoto(tenant.id, optimized);
       if (res.data.url) setForm(f => ({ ...f, image_url: res.data.url! }));
     } catch (err: any) {
       setError(err.message || 'Photo upload failed - you can still save without one.');
