@@ -51,26 +51,26 @@ export default function PassportTopbar() {
   const desktopLinks: TopbarLink[] = user
     ? [
         { label: 'My Stamps', to: '/my-stamps' },
-        { label: 'My Profile', onClick: () => openProfile() },
+        { label: 'Edit Profile', onClick: () => openProfile() },
         { label: 'Help', to: '/help' },
-        { label: 'Hub', to: HUB_URL, external: true },
+        { label: 'Apps', to: HUB_URL, external: true },
       ]
     : [
         { label: 'Help', to: '/help' },
-        { label: 'Hub', to: HUB_URL, external: true },
+        { label: 'Apps', to: HUB_URL, external: true },
       ];
 
   const drawerLinks: TopbarLink[] = user
     ? [
         { label: 'My Stamps', to: '/my-stamps', icon: Award },
         { label: 'My QR Code', onClick: () => setQrOpen(true), icon: QrCode },
-        { label: 'My Profile', onClick: () => openProfile(), icon: User },
+        { label: 'Edit Profile', onClick: () => openProfile(), icon: User },
         { label: 'Help', to: '/help', icon: HelpCircle },
-        { label: 'Hub', to: HUB_URL, external: true, icon: LayoutGrid },
+        { label: 'Apps', to: HUB_URL, external: true, icon: LayoutGrid },
       ]
     : [
         { label: 'Help', to: '/help', icon: HelpCircle },
-        { label: 'Hub', to: HUB_URL, external: true, icon: LayoutGrid },
+        { label: 'Apps', to: HUB_URL, external: true, icon: LayoutGrid },
       ];
 
   return (

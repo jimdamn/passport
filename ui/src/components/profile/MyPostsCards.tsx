@@ -1,7 +1,8 @@
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Newspaper, ArrowLeftRight, Sprout, Signpost, Truck, UtensilsCrossed, PawPrint, Camera, AlertCircle, ChevronRight } from 'lucide-react';
+import { Newspaper, ArrowLeftRight, Sprout, Signpost, Truck, UtensilsCrossed, PawPrint, Camera, AlertCircle, ChevronRight, ExternalLink } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { CrossAppLink } from 'kk-shared-ui';
 import { getContentSummary } from '../../api/content';
 import type { ContentSummary, ContentSummaryItem, ContentSummarySource } from '../../api/content';
 import { Badge } from '../ui/Badge';
@@ -138,6 +139,7 @@ function SummaryCard({
   countLine,
   manageLabel,
   manageUrl,
+  externalSubtitle,
   statusLabels,
 }: {
   icon: LucideIcon;
@@ -152,6 +154,9 @@ function SummaryCard({
   countLine: (source: ContentSummarySource) => string;
   manageLabel: string;
   manageUrl: string;
+  /** Set only when manageUrl leaves passport.lakeandlocals.com - renders the
+   *  cross-app seam convention (Gate 9 §9.5) instead of a plain internal Link. */
+  externalSubtitle?: string;
   statusLabels: Record<string, string>;
 }) {
   // The group request can succeed (200) while this one source's own upstream
@@ -197,16 +202,22 @@ function SummaryCard({
             <RecentRow key={item.id} item={item} statusLabels={statusLabels} />
           ))}
 
-          <Link
-            to={manageUrl}
-            style={{
-              display: 'inline-flex', alignItems: 'center', minHeight: 44,
-              marginTop: 12, fontFamily: 'var(--font-sans)',
-              fontSize: '0.85rem', fontWeight: 600, color: 'var(--green)',
-            }}
-          >
-            {manageLabel} &rarr;
-          </Link>
+          {externalSubtitle ? (
+            <div style={{ marginTop: 12 }}>
+              <CrossAppLink href={manageUrl} label={manageLabel} subtitle={externalSubtitle} />
+            </div>
+          ) : (
+            <Link
+              to={manageUrl}
+              style={{
+                display: 'inline-flex', alignItems: 'center', minHeight: 44,
+                marginTop: 12, fontFamily: 'var(--font-sans)',
+                fontSize: '0.85rem', fontWeight: 600, color: 'var(--green)',
+              }}
+            >
+              {manageLabel} &rarr;
+            </Link>
+          )}
         </>
       ) : null}
     </div>
@@ -219,7 +230,7 @@ function SummaryCard({
 // row on this same page (MyProfile.tsx) - icon, label, chevron, nothing new
 // invented. minHeight is explicit rather than inherited from padding alone,
 // so the 44px touch target holds regardless of font metrics.
-function MoreRow({ icon: Icon, title, value, href }: { icon: LucideIcon; title: string; value: string; href: string }) {
+function MoreRow({ icon: Icon, title, value, href, external }: { icon: LucideIcon; title: string; value: string; href: string; external?: boolean }) {
   return (
     <Link
       to={href}
@@ -232,7 +243,9 @@ function MoreRow({ icon: Icon, title, value, href }: { icon: LucideIcon; title: 
       <span style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
         <Icon size={16} strokeWidth={2} color="var(--sage)" aria-hidden="true" style={{ flexShrink: 0 }} />
         <span style={{ minWidth: 0 }}>
-          <span style={{ display: 'block', fontFamily: 'var(--font-sans)', fontSize: '0.88rem', fontWeight: 600 }}>{title}</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontFamily: 'var(--font-sans)', fontSize: '0.88rem', fontWeight: 600 }}>
+            {title} {external && <ExternalLink size={11} strokeWidth={2} aria-hidden="true" color="var(--muted)" />}
+          </span>
           <span style={{ display: 'block', fontFamily: 'var(--font-sans)', fontSize: '0.75rem', color: 'var(--muted)' }}>{value}</span>
         </span>
       </span>
@@ -248,6 +261,7 @@ interface SourceConfig {
   countLine: (s: ContentSummarySource) => string;
   manageLabel: string;
   manageUrl: string;
+  externalSubtitle?: string;
   statusLabels: Record<string, string>;
   collapsedTitle: string;
   collapsedValue: string;
@@ -268,6 +282,7 @@ const SOURCES: SourceConfig[] = [
     },
     manageLabel: 'Manage my stories',
     manageUrl: FIELD_NOTES_MY_STORIES_URL,
+    externalSubtitle: 'Opens Field Notes',
     statusLabels: STORY_STATUS_LABEL,
     collapsedTitle: 'Share a story',
     collapsedValue: 'Local-life stories, visible to the whole network',
@@ -283,6 +298,7 @@ const SOURCES: SourceConfig[] = [
     },
     manageLabel: 'Manage my posts',
     manageUrl: EXCHANGE_MY_POSTS_URL,
+    externalSubtitle: 'Opens Exchange',
     statusLabels: EXCHANGE_STATUS_LABEL,
     collapsedTitle: 'Post on the Exchange',
     collapsedValue: 'Trade skills and goods, no cash needed',
@@ -307,7 +323,10 @@ const SOURCES: SourceConfig[] = [
   {
     key: 'sales',
     icon: Signpost,
-    title: 'My Sales',
+    // "My Sales" collided with BusinessOverviewCard's POS "sales this week" -
+    // Gate 9 §9.2 disambiguates by naming this after the app it posts to,
+    // matching the sibling boards (My Stand/My Schedule/My Kitchen).
+    title: 'My Sale Day',
     countLine: s => {
       const total = s.counts.sales ?? 0;
       const onNow = s.counts.on_now ?? 0;
@@ -422,6 +441,7 @@ export default function MyPostsCards({ tenantId }: { tenantId: string }) {
           countLine={cfg.countLine}
           manageLabel={cfg.manageLabel}
           manageUrl={cfg.manageUrl}
+          externalSubtitle={cfg.externalSubtitle}
           statusLabels={cfg.statusLabels}
         />
       );
@@ -458,6 +478,7 @@ export default function MyPostsCards({ tenantId }: { tenantId: string }) {
               title={row.collapsedTitle}
               value={row.collapsedValue}
               href={row.collapsedHref}
+              external={!!row.externalSubtitle}
             />
           ))}
         </div>

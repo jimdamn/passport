@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { LogOut, Award, ChevronRight, QrCode, Shield, ShieldCheck, Gift, Inbox, MapPin, Compass, Handshake } from 'lucide-react';
+import { LogOut, Award, ChevronRight, QrCode, Shield, Inbox, MapPin, Compass, Handshake } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTenant } from '../../context/TenantContext';
 import { useProfilePanel } from '../../context/ProfilePanelContext';
@@ -13,12 +13,10 @@ import { getMyBusiness } from '../../api/merchant';
 import { getAroundInterests, PICKER_LABELS } from '../../api/around';
 import { getContentSummary } from '../../api/content';
 import { resolveBalance, balanceText } from '../../utils/balance';
-import { ledgerLabel } from '../../utils/ledgerLabels';
-import { formatDate } from '../../utils/dates';
-import { Spinner } from '../../components/ui/Spinner';
 import { Alert } from '../../components/ui/Alert';
+import { Badge } from '../../components/ui/Badge';
 import StatsPanel, { type StatsPanelType } from '../../components/profile/StatsPanel';
-import BadgeStrip, { type Badge } from '../../components/ui/BadgeStrip';
+import BadgeStrip, { type Badge as MemberBadge } from '../../components/ui/BadgeStrip';
 import QrDrawer from '../../components/ui/QrDrawer';
 import MerchantQrDrawer from '../../components/ui/MerchantQrDrawer';
 import { PersonaSelector } from 'kk-shared-ui';
@@ -31,12 +29,12 @@ import NextStepCard from '../../components/profile/NextStepCard';
 import BusinessOverviewCard from '../../components/profile/BusinessOverviewCard';
 
 // Badge definitions mirrored client-side (server is authoritative; this is for /profile self-view)
-const BADGE_DEFS: Badge[] = [
+const BADGE_DEFS: MemberBadge[] = [
   { id: 'bd-member',   label: 'L&L Member',  description: 'Verified Lake & Locals member' },
 ];
 
-function computeMyBadges(profile: any): Badge[] {
-  const badges: Badge[] = [];
+function computeMyBadges(profile: any): MemberBadge[] {
+  const badges: MemberBadge[] = [];
   if (profile.bd_member_since) badges.push(BADGE_DEFS[0]);
   return badges;
 }
@@ -63,6 +61,13 @@ function AvatarDisplay({ name, avatarUrl }: { name: string; avatarUrl: string | 
       }
     </div>
   );
+}
+
+// Zone headers (Gate 9 §9.1) reuse the existing .section-title class - sans,
+// uppercase, muted (D-REV Option 2) - never serif green, which stays
+// reserved for card titles one level down.
+function ZoneHeader({ children }: { children: React.ReactNode }) {
+  return <h2 className="section-title" style={{ marginTop: 24 }}>{children}</h2>;
 }
 
 export default function MyProfile() {
@@ -112,8 +117,8 @@ export default function MyProfile() {
   const aroundPick = interests && interests.interests.length > 0 ? interests.interests[0] : null;
 
   // Shares its cache with MyPostsCards's identical query (same key/fn) - one
-  // network fetch, two consumers, no prop-drilling the summary down through
-  // a component that doesn't otherwise need to know about the next-step card.
+  // network fetch, three consumers (also the attention row below), no
+  // prop-drilling the summary through components that don't otherwise need it.
   const { data: contentSummaryData } = useQuery({
     queryKey: ['content-summary', tenant.id],
     queryFn: () => getContentSummary(tenant.id),
@@ -121,6 +126,17 @@ export default function MyProfile() {
     staleTime: 60_000,
   });
   const contentSummary = contentSummaryData?.data;
+
+  // Gate 9 §9.3 - "Waiting on you": attention_total was already in the API
+  // and already rendered, just nine phone screens down inside My Splash's own
+  // card. Splash is the only source with a real single-item decision and an
+  // addressable deep link (/splash#submission-<id>); the others' `attention`
+  // semantics aren't specified precisely enough here to safely deep-link, so
+  // they stay visible only within their own SummaryCard, unchanged.
+  const splashAttention = contentSummary?.splash;
+  const attentionItem = splashAttention?.recent.find(item => item.attention);
+  const showAttentionRow = !!splashAttention && splashAttention.attention_total > 0;
+  const attentionHref = attentionItem ? `/splash#submission-${attentionItem.id}` : '/splash';
 
   const { data: meData, isLoading } = useQuery({
     queryKey: ['me', tenant?.id],
@@ -141,7 +157,7 @@ export default function MyProfile() {
     }
   }, [isWelcome, user]);
 
-  const { data: creditsData, isLoading: creditsLoading, isError: creditsError, isSuccess: creditsSuccess, refetch: refetchCredits } = useQuery({
+  const { data: creditsData, isError: creditsError, isSuccess: creditsSuccess, refetch: refetchCredits } = useQuery({
     queryKey: ['credits', tenant?.id],
     queryFn: () => getBalance(tenant!.id),
     enabled: !!tenant.id && !!user,
@@ -205,12 +221,6 @@ export default function MyProfile() {
   return (
     <div className="main-content" style={{ paddingTop: 24, paddingBottom: 96 }}>
 
-      <div style={{ marginBottom: 8 }}>
-        <Link to="/" style={{ fontFamily: 'var(--font-sans)', fontSize: '0.85rem', color: 'var(--muted)' }}>
-          &larr; Back to Passport
-        </Link>
-      </div>
-
       {isWelcome && (
         <div className="card" style={{ marginBottom: 16, borderColor: 'var(--amber)', background: '#fffbf2' }}>
           <p style={{ margin: '0 0 4px', fontWeight: 'bold', fontFamily: 'var(--font-serif)', color: 'var(--green)' }}>
@@ -222,7 +232,29 @@ export default function MyProfile() {
         </div>
       )}
 
-      {/* ── Profile card ── */}
+      {/* ── Waiting on you (Gate 9.3) - status, not urgency ── */}
+      {showAttentionRow && (
+        <Link
+          to={attentionHref}
+          className="card"
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+            marginBottom: 16, minHeight: 44, textDecoration: 'none',
+          }}
+        >
+          <span style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+            <Badge variant="amber">Waiting on you</Badge>
+            <span style={{ fontFamily: 'var(--font-sans)', fontSize: '0.85rem', color: 'var(--green)' }}>
+              A Splash photo is waiting on your decision.
+            </span>
+          </span>
+          <ChevronRight size={15} color="var(--muted)" style={{ flexShrink: 0 }} />
+        </Link>
+      )}
+
+      {/* ══════════════════════════ Me ══════════════════════════ */}
+      <ZoneHeader>Me</ZoneHeader>
+
       <div className="card" style={{ marginBottom: 16 }}>
         <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', marginBottom: 12 }}>
           <AvatarDisplay
@@ -267,7 +299,6 @@ export default function MyProfile() {
         </div>
       </div>
 
-      {/* ── Persona Selector card ── */}
       <div className="card" style={{ marginBottom: 16 }}>
         <h3 style={{ margin: '0 0 12px', fontSize: '1.05rem', fontFamily: 'var(--font-serif)', color: 'var(--green)', fontWeight: 'bold' }}>
           Active Persona
@@ -286,40 +317,7 @@ export default function MyProfile() {
         {personaError && <Alert type="error" style={{ marginTop: 10 }}>{personaError}</Alert>}
       </div>
 
-      {/* ── Where Around Town opens (Around Town interest pick) ── */}
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-          <div style={{ minWidth: 0 }}>
-            <h3 style={{ margin: '0 0 4px', fontSize: '1.05rem', fontFamily: 'var(--font-serif)', color: 'var(--green)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Compass size={17} strokeWidth={2} aria-hidden="true" /> Where Around Town opens
-            </h3>
-            <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--muted)' }}>
-              {/* Existing-data note: a legacy multi-pick row's first element
-                  is the pick everywhere - never join the whole array. */}
-              {interestsLoading ? '' : interestsError ? (
-                <>
-                  Couldn't load your pick.{' '}
-                  <button
-                    type="button"
-                    onClick={() => refetchInterests()}
-                    style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', color: 'var(--green)', textDecoration: 'underline', cursor: 'pointer' }}
-                  >
-                    Retry
-                  </button>
-                </>
-              ) : interests && interests.interests.length > 0
-                ? (PICKER_LABELS[interests.interests[0]] ?? interests.interests[0])
-                : 'Everything - no pick yet'}
-            </p>
-          </div>
-          <button className="btn btn-secondary btn-sm" onClick={() => setInterestsDrawerOpen(true)} style={{ flexShrink: 0 }}>
-            Edit
-          </button>
-        </div>
-      </div>
-
-      {/* ── Stats grid ── */}
-      <div className="stats-grid" style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
+      <div className="stats-grid" style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap', marginBottom: 16 }}>
         <button className="stat-card stat-card--featured stat-card--btn" onClick={() => setStatsPanel('credits')} style={{ flex: 1, minWidth: 100, maxWidth: 180 }}>
           <div className="stat-num">{balanceText(balanceDisplay)}</div>
           <div className="stat-label">{creditsName}</div>
@@ -338,94 +336,70 @@ export default function MyProfile() {
         )}
       </div>
 
-      <StatsPanel
-        open={statsPanel !== null}
-        type={statsPanel}
-        onClose={() => setStatsPanel(null)}
-      />
+      {/* ══════════════════════════ My business ══════════════════════════
+          Merchants only (D-REV Order B - right after identity, since a
+          merchant's business doorway is often why they opened the app).
+          Someone with no business relationship yet sees the recruitment CTA
+          in Account instead - there is no doorway to collapse for them. */}
+      {user.business_id && (
+        <>
+          <ZoneHeader>My business</ZoneHeader>
 
-      <AnonymousPersonaDrawer
-        open={personaDrawer === 'anonymous'}
-        currentPersona={user.active_persona ?? 'anonymous'}
-        tenantId={tenant!.id}
-        onClose={() => setPersonaDrawer(null)}
-        onSwitch={() => { updateUser({ active_persona: 'anonymous' }); qc.invalidateQueries({ queryKey: ['me'] }); setPersonaDrawer(null); }}
-      />
-      <PersonalPersonaDrawer
-        open={personaDrawer === 'personal'}
-        currentPersona={user.active_persona ?? 'anonymous'}
-        tenantId={tenant!.id}
-        displayName={profile.display_name}
-        onClose={() => setPersonaDrawer(null)}
-        onSwitch={() => { updateUser({ active_persona: 'personal' }); qc.invalidateQueries({ queryKey: ['me'] }); setPersonaDrawer(null); }}
-      />
-      <BusinessPersonaDrawer
-        open={personaDrawer === 'business'}
-        currentPersona={user.active_persona ?? 'anonymous'}
-        businessStatus={user.business_status}
-        businessName={user.business_name}
-        onClose={() => setPersonaDrawer(null)}
-        onSwitch={() => { updateUser({ active_persona: 'business' }); qc.invalidateQueries({ queryKey: ['me'] }); setPersonaDrawer(null); }}
-      />
-
-      <AroundInterestsDrawer
-        open={interestsDrawerOpen}
-        tenantId={tenant!.id}
-        onClose={() => setInterestsDrawerOpen(false)}
-        onSaved={data => qc.setQueryData(interestsQueryKey, { data })}
-      />
-
-      <QrDrawer
-        open={qrOpen}
-        onClose={() => setQrOpen(false)}
-      />
-
-      <MerchantQrDrawer
-        open={merchantQrOpen}
-        onClose={() => setMerchantQrOpen(false)}
-      />
-
-      {(creditsLoading || (credits && credits.history.length > 0)) && (
-        <div className="card" style={{ marginBottom: 16, minHeight: creditsLoading ? 100 : undefined }}>
-          <h3 className="card-title">{creditsName} Activity</h3>
-          {creditsLoading ? (
-            <div style={{ display: 'flex', justifyContent: 'center', padding: '16px 0' }}>
-              <Spinner size="md" />
+          {user.business_status === 'pending' && (
+            <div className="card" style={{ marginBottom: 16, borderColor: 'var(--amber)', background: 'rgba(200, 134, 10, 0.04)' }}>
+              <p style={{ margin: '0 0 4px', fontWeight: 'bold', color: 'var(--amber)', fontFamily: 'var(--font-sans)', fontSize: '0.9rem' }}>
+                Merchant Profile Pending Approval
+              </p>
+              <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--muted)', fontFamily: 'var(--font-sans)', lineHeight: 1.45 }}>
+                Your application for <strong>{user.business_name || 'your business'}</strong> is currently under review by our community admin and will be active shortly.
+              </p>
             </div>
-          ) : credits!.history.slice(0, 8).map((entry: any) => (
-            <div
-              key={entry.id}
-              style={{
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                padding: '9px 0', borderBottom: '1px solid var(--border)',
-              }}
-            >
-              <div>
-                <div style={{ fontSize: '0.875rem' }}>{ledgerLabel(entry)}</div>
-                {!!entry.created_at && (
-                  <div style={{ fontSize: '0.72rem', color: 'var(--muted)' }}>
-                    {formatDate(entry.created_at)}
-                  </div>
-                )}
-              </div>
-              <span style={{
-                fontWeight: 'bold', fontSize: '0.9rem',
-                color: entry.amount > 0 ? 'var(--sage)' : 'var(--muted)',
-              }}>
-                {entry.amount > 0 ? '+' : ''}{entry.amount}
-              </span>
+          )}
+
+          {user.business_status === 'verified' && (
+            <>
+              {businessMissingLocation && (
+                <div className="card" style={{ marginBottom: 16, borderColor: 'var(--amber)', background: 'rgba(200, 134, 10, 0.04)' }}>
+                  <p style={{ margin: '0 0 4px', fontWeight: 'bold', color: 'var(--amber)', display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'var(--font-sans)', fontSize: '0.9rem' }}>
+                    <MapPin size={16} strokeWidth={2} aria-hidden="true" /> Almost There
+                  </p>
+                  <p style={{ margin: '0 0 12px', fontSize: '0.82rem', color: 'var(--muted)', fontFamily: 'var(--font-sans)', lineHeight: 1.45 }}>
+                    Add your business location to activate customer check-ins and your Display Check-in QR Code.
+                  </p>
+                  <Link to="/merchant" className="btn btn-amber btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
+                    Set Business Location
+                  </Link>
+                </div>
+              )}
+
+              <BusinessOverviewCard businessName={user.business_name ?? ''} onShowQr={() => setMerchantQrOpen(true)} />
+            </>
+          )}
+
+          {user.business_status === 'rejected' && (
+            <div className="card" style={{ marginBottom: 16, borderColor: 'var(--error)', background: 'rgba(176, 0, 0, 0.04)' }}>
+              <p style={{ margin: '0 0 4px', fontWeight: 'bold', color: 'var(--error)', fontFamily: 'var(--font-sans)', fontSize: '0.9rem' }}>
+                Merchant Application Declined
+              </p>
+              <p style={{ margin: '0 0 8px', fontSize: '0.82rem', color: 'var(--muted)', fontFamily: 'var(--font-sans)', lineHeight: 1.45 }}>
+                The application for <strong>{user.business_name}</strong> could not be verified. Please check your details and re-apply.
+              </p>
+              <Link to="/profile/apply-merchant" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
+                Re-apply Now
+              </Link>
             </div>
-          ))}
-        </div>
+          )}
+        </>
       )}
 
-      {/* ── A good next step (Gate 8.2) ── */}
+      {/* ══════════════════════════ My posts and places ══════════════════════════ */}
+      <ZoneHeader>My posts and places</ZoneHeader>
+
       <NextStepCard pick={aroundPick} contentSummary={contentSummary} />
 
-      {/* ── My Posts summary cards (Exchange + Field Notes) ── */}
       {tenant.id && <MyPostsCards tenantId={tenant.id} />}
 
-      {/* ── Admin Portal Banners ── */}
+      {/* ── Admin Portal Banners (site-operator tools, outside the four member zones) ── */}
       {user.is_admin && (
         <div className="card" style={{ marginBottom: 16, borderColor: 'var(--green)', background: 'rgba(30, 51, 32, 0.02)' }}>
           <p style={{ margin: '0 0 4px', fontWeight: 'bold', fontFamily: 'var(--font-serif)', color: 'var(--green)', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -505,7 +479,9 @@ export default function MyProfile() {
         </div>
       )}
 
-      {/* ── Merchant/Business Identity Onboarding & Status ── */}
+      {/* ══════════════════════════ Account ══════════════════════════ */}
+      <ZoneHeader>Account</ZoneHeader>
+
       {!isLoading && !user.business_id && (
         <div className="card" style={{ marginBottom: 16, borderColor: 'var(--amber)' }}>
           <p style={{ margin: '0 0 4px', fontWeight: 'bold', fontFamily: 'var(--font-serif)', color: 'var(--green)' }}>
@@ -520,69 +496,36 @@ export default function MyProfile() {
         </div>
       )}
 
-      {user.business_id && user.business_status === 'pending' && (
-        <div className="card" style={{ marginBottom: 16, borderColor: 'var(--amber)', background: 'rgba(200, 134, 10, 0.04)' }}>
-          <p style={{ margin: '0 0 4px', fontWeight: 'bold', color: 'var(--amber)', fontFamily: 'var(--font-sans)', fontSize: '0.9rem' }}>
-            Merchant Profile Pending Approval
-          </p>
-          <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--muted)', fontFamily: 'var(--font-sans)', lineHeight: 1.45 }}>
-            Your application for <strong>{user.business_name || 'your business'}</strong> is currently under review by our community admin and will be active shortly.
-          </p>
-        </div>
-      )}
-
-      {user.business_id && user.business_status === 'verified' && (
-        <div className="card" style={{ marginBottom: 16, borderColor: 'var(--green)', background: 'rgba(30, 51, 32, 0.04)' }}>
-          <p style={{ margin: '0 0 4px', fontWeight: 'bold', color: 'var(--green)', display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'var(--font-sans)', fontSize: '0.9rem' }}>
-            <ShieldCheck size={16} strokeWidth={2} aria-hidden="true" /> Verified Merchant Profile
-          </p>
-          <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--muted)', fontFamily: 'var(--font-sans)', lineHeight: 1.45 }}>
-            Your business <strong>{user.business_name}</strong> is live! It is fully integrated with the Explore network directory.
-          </p>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
-            <Link to="/merchant" className="btn btn-amber btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, textDecoration: 'none' }}>
-              <Gift size={15} strokeWidth={2} aria-hidden="true" /> Merchant Dashboard
-            </Link>
-            <button
-              onClick={() => setMerchantQrOpen(true)}
-              className="btn btn-green btn-sm"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
-            >
-              <QrCode size={15} strokeWidth={2} aria-hidden="true" /> Display Check-in QR Code
-            </button>
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+          <div style={{ minWidth: 0 }}>
+            <h3 style={{ margin: '0 0 4px', fontSize: '1.05rem', fontFamily: 'var(--font-serif)', color: 'var(--green)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Compass size={17} strokeWidth={2} aria-hidden="true" /> Where Around Town opens
+            </h3>
+            <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--muted)' }}>
+              {/* Existing-data note: a legacy multi-pick row's first element
+                  is the pick everywhere - never join the whole array. */}
+              {interestsLoading ? '' : interestsError ? (
+                <>
+                  Couldn't load your pick.{' '}
+                  <button
+                    type="button"
+                    onClick={() => refetchInterests()}
+                    style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', color: 'var(--green)', textDecoration: 'underline', cursor: 'pointer' }}
+                  >
+                    Retry
+                  </button>
+                </>
+              ) : interests && interests.interests.length > 0
+                ? (PICKER_LABELS[interests.interests[0]] ?? interests.interests[0])
+                : 'Everything - no pick yet'}
+            </p>
           </div>
+          <button className="btn btn-secondary btn-sm" onClick={() => setInterestsDrawerOpen(true)} style={{ flexShrink: 0 }}>
+            Edit
+          </button>
         </div>
-      )}
-
-      {businessMissingLocation && (
-        <div className="card" style={{ marginBottom: 16, borderColor: 'var(--amber)', background: 'rgba(200, 134, 10, 0.04)' }}>
-          <p style={{ margin: '0 0 4px', fontWeight: 'bold', color: 'var(--amber)', display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'var(--font-sans)', fontSize: '0.9rem' }}>
-            <MapPin size={16} strokeWidth={2} aria-hidden="true" /> Almost There
-          </p>
-          <p style={{ margin: '0 0 12px', fontSize: '0.82rem', color: 'var(--muted)', fontFamily: 'var(--font-sans)', lineHeight: 1.45 }}>
-            Add your business location to activate customer check-ins and your Display Check-in QR Code.
-          </p>
-          <Link to="/merchant" className="btn btn-amber btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
-            Set Business Location
-          </Link>
-        </div>
-      )}
-
-      {user.business_status === 'verified' && <BusinessOverviewCard onShowQr={() => setMerchantQrOpen(true)} />}
-
-      {user.business_id && user.business_status === 'rejected' && (
-        <div className="card" style={{ marginBottom: 16, borderColor: 'var(--error)', background: 'rgba(176, 0, 0, 0.04)' }}>
-          <p style={{ margin: '0 0 4px', fontWeight: 'bold', color: 'var(--error)', fontFamily: 'var(--font-sans)', fontSize: '0.9rem' }}>
-            Merchant Application Declined
-          </p>
-          <p style={{ margin: '0 0 8px', fontSize: '0.82rem', color: 'var(--muted)', fontFamily: 'var(--font-sans)', lineHeight: 1.45 }}>
-            The application for <strong>{user.business_name}</strong> could not be verified. Please check your details and re-apply.
-          </p>
-          <Link to="/profile/apply-merchant" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
-            Re-apply Now
-          </Link>
-        </div>
-      )}
+      </div>
 
       <div className="card" style={{ marginBottom: 16 }}>
         <Link
@@ -593,7 +536,7 @@ export default function MyProfile() {
           }}
         >
           <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Award size={15} /> My Stamps
+            <Award size={15} /> Stamps
           </span>
           <ChevronRight size={15} color="var(--muted)" />
         </Link>
@@ -606,6 +549,54 @@ export default function MyProfile() {
       >
         <LogOut size={16} /> Sign Out
       </button>
+
+      {/* ── Drawers (state lives here regardless of which zone triggers them) ── */}
+      <StatsPanel
+        open={statsPanel !== null}
+        type={statsPanel}
+        onClose={() => setStatsPanel(null)}
+      />
+
+      <AnonymousPersonaDrawer
+        open={personaDrawer === 'anonymous'}
+        currentPersona={user.active_persona ?? 'anonymous'}
+        tenantId={tenant!.id}
+        onClose={() => setPersonaDrawer(null)}
+        onSwitch={() => { updateUser({ active_persona: 'anonymous' }); qc.invalidateQueries({ queryKey: ['me'] }); setPersonaDrawer(null); }}
+      />
+      <PersonalPersonaDrawer
+        open={personaDrawer === 'personal'}
+        currentPersona={user.active_persona ?? 'anonymous'}
+        tenantId={tenant!.id}
+        displayName={profile.display_name}
+        onClose={() => setPersonaDrawer(null)}
+        onSwitch={() => { updateUser({ active_persona: 'personal' }); qc.invalidateQueries({ queryKey: ['me'] }); setPersonaDrawer(null); }}
+      />
+      <BusinessPersonaDrawer
+        open={personaDrawer === 'business'}
+        currentPersona={user.active_persona ?? 'anonymous'}
+        businessStatus={user.business_status}
+        businessName={user.business_name}
+        onClose={() => setPersonaDrawer(null)}
+        onSwitch={() => { updateUser({ active_persona: 'business' }); qc.invalidateQueries({ queryKey: ['me'] }); setPersonaDrawer(null); }}
+      />
+
+      <AroundInterestsDrawer
+        open={interestsDrawerOpen}
+        tenantId={tenant!.id}
+        onClose={() => setInterestsDrawerOpen(false)}
+        onSaved={data => qc.setQueryData(interestsQueryKey, { data })}
+      />
+
+      <QrDrawer
+        open={qrOpen}
+        onClose={() => setQrOpen(false)}
+      />
+
+      <MerchantQrDrawer
+        open={merchantQrOpen}
+        onClose={() => setMerchantQrOpen(false)}
+      />
 
     </div>
   );

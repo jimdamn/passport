@@ -75,7 +75,7 @@ export default function QrDrawer({ open, onClose }: Props) {
               color: 'var(--green)',
               margin: 0,
             }}>
-              My Passport
+              My Code
             </h2>
           </div>
           <button

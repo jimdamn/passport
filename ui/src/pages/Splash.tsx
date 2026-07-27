@@ -441,7 +441,7 @@ function SubmissionRow({ sub, tenantId, onChanged }: {
   }
 
   return (
-    <div className="card" style={{ background: 'var(--white)', padding: 16, marginBottom: 16, borderLeft: '4px solid var(--green)' }}>
+    <div id={`submission-${sub.id}`} className="card" style={{ background: 'var(--white)', padding: 16, marginBottom: 16, borderLeft: '4px solid var(--green)' }}>
       <div style={{ display: 'flex', gap: 12 }}>
         <SplashPhoto tenantId={tenantId} submissionId={sub.id} />
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -540,6 +540,15 @@ export default function Splash() {
   }
 
   useEffect(() => { fetchAll(); }, [tenant]);
+
+  // Deep-link receiving end for the /profile attention row (Gate 9 §9.3):
+  // /splash#submission-<id> scrolls straight to the item waiting on a
+  // decision instead of dropping the member at the top of a growing list.
+  useEffect(() => {
+    if (loading || !window.location.hash.startsWith('#submission-')) return;
+    const el = document.getElementById(window.location.hash.slice(1));
+    el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [loading, submissions]);
 
   if (!user) {
     return (

@@ -256,7 +256,7 @@ export default function ProfilePanel({ open, onClose, onSaved }: Props) {
             </svg>
           </button>
           <h2 data-drawer-heading style={{ fontFamily: 'var(--font-serif)', fontSize: '1.15rem', fontWeight: 'bold', color: 'var(--green)', margin: 0 }}>
-            My Profile
+            Edit Profile
           </h2>
         </div>
 

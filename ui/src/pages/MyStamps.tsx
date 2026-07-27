@@ -254,7 +254,7 @@ export default function MyStamps() {
         </div>
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: '3rem', marginBottom: 16 }}>🗺️</div>
-          <h2 style={{ fontFamily: 'var(--font-serif)', color: 'var(--green)', marginBottom: 10 }}>My Passport Stamps</h2>
+          <h2 style={{ fontFamily: 'var(--font-serif)', color: 'var(--green)', marginBottom: 10 }}>Stamps</h2>
           <p style={{ fontFamily: 'var(--font-sans)', color: 'var(--muted)', marginBottom: 20, fontSize: '0.9rem', lineHeight: 1.5 }}>
             {claimFromUrl
               ? `You have a winning claim code ready to deposit! Sign in (or create your free passport) and we'll add it to your account automatically.`
@@ -302,7 +302,7 @@ export default function MyStamps() {
       </div>
       {/* Title */}
       <div style={{ marginBottom: 24 }}>
-        <h1 className="page-title" style={{ margin: '0 0 4px 0' }}>My Passport</h1>
+        <h1 className="page-title" style={{ margin: '0 0 4px 0' }}>Stamps</h1>
         <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.88rem', color: 'var(--muted)', margin: 0 }}>
           Track your regional exploration, collected stamps, and earned milestones.
         </p>

@@ -12,14 +12,14 @@ export default function PassportBottomNav() {
   // stamps) - the same surface the passport-sdk launcher loads. Signed-out users
   // are sent to login instead.
   const scanItem: BottomNavItem = user
-    ? { label: 'Scan', icon: QrCode, fab: true, onClick: () => setScanOpen(true), ariaLabel: 'Open My Passport' }
+    ? { label: 'Scan', icon: QrCode, fab: true, onClick: () => setScanOpen(true), ariaLabel: 'Open scan panel' }
     : { label: 'Scan', icon: QrCode, fab: true, to: '/auth/login', ariaLabel: 'Sign in to scan' };
 
   const items: BottomNavItem[] = [
     { to: '/explore',   label: 'Around Town', icon: Map,    match: '/explore',   ariaLabel: 'Around Town' },
-    { to: '/deals',     label: 'Marketplace', icon: Tag,    match: '/deals',     ariaLabel: 'Marketplace' },
+    { to: '/deals',     label: 'Deals',       icon: Tag,    match: '/deals',     ariaLabel: 'Deals' },
     scanItem,
-    { to: '/my-stamps', label: 'Wallet',      icon: Wallet, match: '/my-stamps', ariaLabel: 'Wallet' },
+    { to: '/my-stamps', label: 'Stamps',      icon: Wallet, match: '/my-stamps', ariaLabel: 'Stamps' },
     { to: user ? '/profile' : '/auth/login', label: 'Me', icon: User, match: '/profile', ariaLabel: 'My profile' },
   ];
 
