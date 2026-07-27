@@ -1,5 +1,6 @@
+import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { LayoutDashboard, ChevronRight, AlertCircle } from 'lucide-react';
+import { LayoutDashboard, ChevronRight, AlertCircle, QrCode, Megaphone } from 'lucide-react';
 import { getBusinessOverview } from '../../api/overview';
 import { Badge } from '../ui/Badge';
 import { Spinner } from '../ui/Spinner';
@@ -28,12 +29,41 @@ function Row({ label, badge, href }: { label: string; badge?: number; href?: str
   ) : content;
 }
 
-export default function BusinessOverviewCard() {
+function StarterRow({ icon: Icon, label, onClick, to }: { icon: typeof QrCode; label: string; onClick?: () => void; to?: string }) {
+  const content = (
+    <div style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+      minHeight: 44, padding: '8px 0', borderBottom: '1px solid var(--border)',
+    }}>
+      <span style={{ display: 'flex', alignItems: 'center', gap: 10, fontFamily: 'var(--font-sans)', fontSize: '0.88rem', color: 'var(--green)', fontWeight: 600 }}>
+        <Icon size={16} strokeWidth={2} color="var(--sage)" aria-hidden="true" /> {label}
+      </span>
+      <ChevronRight size={15} color="var(--muted)" style={{ flexShrink: 0 }} />
+    </div>
+  );
+  if (onClick) {
+    return <button type="button" onClick={onClick} style={{ display: 'block', width: '100%', background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left' }}>{content}</button>;
+  }
+  return <Link to={to!} style={{ textDecoration: 'none', display: 'block' }}>{content}</Link>;
+}
+
+export default function BusinessOverviewCard({ onShowQr }: { onShowQr: () => void }) {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['business-overview'],
     queryFn: getBusinessOverview,
     staleTime: 60_000,
   });
+
+  // Gate 8.3: a newly verified merchant's first visit is five statements of
+  // zero centred on "$0 in sales this week" - the moment motivation peaks,
+  // greeted with nothing but absence. Swap in honest starters instead.
+  const isAllZero = !!data
+    && data.endorsements.pending === 0
+    && data.pos.week_total_cents === 0
+    && data.pos.open_storefront_orders === 0
+    && data.pos.new_quote_requests === 0
+    && data.bookings.upcoming_confirmed === 0
+    && data.volunteer.active_listings === 0;
 
   return (
     <div className="card" style={{ marginBottom: 16, minHeight: 180 }}>
@@ -57,6 +87,18 @@ export default function BusinessOverviewCard() {
             Retry
           </button>
         </div>
+      ) : isAllZero ? (
+        <>
+          <p style={{ margin: '0 0 2px', fontSize: '0.95rem', fontWeight: 700, color: 'var(--green)', fontFamily: 'var(--font-sans)' }}>
+            Your business is live
+          </p>
+          <p style={{ margin: '0 0 10px', fontSize: '0.85rem', color: 'var(--muted)', fontFamily: 'var(--font-sans)' }}>
+            Here's where to start:
+          </p>
+          <StarterRow icon={QrCode} label="Put your check-in QR by the register" onClick={onShowQr} />
+          <StarterRow icon={Megaphone} label="Post today's happening" to="/merchant" />
+          <StarterRow icon={LayoutDashboard} label="See your Merchant Dashboard" to="/merchant" />
+        </>
       ) : data ? (
         <>
           <Row
@@ -66,6 +108,7 @@ export default function BusinessOverviewCard() {
           />
           <Row
             label={`${formatCents(data.pos.week_total_cents)} in sales this week (${data.pos.week_ticket_count})`}
+            href={`${HUB_URL}/pos`}
           />
           <Row
             label={`${data.pos.open_storefront_orders + data.pos.new_quote_requests} open order${data.pos.open_storefront_orders + data.pos.new_quote_requests === 1 ? '' : 's'}`}

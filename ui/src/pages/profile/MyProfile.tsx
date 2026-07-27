@@ -11,6 +11,7 @@ import { getBalance } from '../../api/credits';
 import { getAdminSupportCount } from '../../api/support';
 import { getMyBusiness } from '../../api/merchant';
 import { getAroundInterests, PICKER_LABELS } from '../../api/around';
+import { getContentSummary } from '../../api/content';
 import { resolveBalance, balanceText } from '../../utils/balance';
 import { ledgerLabel } from '../../utils/ledgerLabels';
 import { formatDate } from '../../utils/dates';
@@ -26,6 +27,7 @@ import { PersonalPersonaDrawer } from '../../components/profile/PersonalPersonaD
 import { BusinessPersonaDrawer } from '../../components/profile/BusinessPersonaDrawer';
 import { AroundInterestsDrawer } from '../../components/profile/AroundInterestsDrawer';
 import MyPostsCards from '../../components/profile/MyPostsCards';
+import NextStepCard from '../../components/profile/NextStepCard';
 import BusinessOverviewCard from '../../components/profile/BusinessOverviewCard';
 
 // Badge definitions mirrored client-side (server is authoritative; this is for /profile self-view)
@@ -107,6 +109,18 @@ export default function MyProfile() {
     staleTime: 5 * 60_000,
   });
   const interests = interestsData?.data ?? null;
+  const aroundPick = interests && interests.interests.length > 0 ? interests.interests[0] : null;
+
+  // Shares its cache with MyPostsCards's identical query (same key/fn) - one
+  // network fetch, two consumers, no prop-drilling the summary down through
+  // a component that doesn't otherwise need to know about the next-step card.
+  const { data: contentSummaryData } = useQuery({
+    queryKey: ['content-summary', tenant.id],
+    queryFn: () => getContentSummary(tenant.id),
+    enabled: !!tenant.id && !!user,
+    staleTime: 60_000,
+  });
+  const contentSummary = contentSummaryData?.data;
 
   const { data: meData, isLoading } = useQuery({
     queryKey: ['me', tenant?.id],
@@ -405,6 +419,9 @@ export default function MyProfile() {
         </div>
       )}
 
+      {/* ── A good next step (Gate 8.2) ── */}
+      <NextStepCard pick={aroundPick} contentSummary={contentSummary} />
+
       {/* ── My Posts summary cards (Exchange + Field Notes) ── */}
       {tenant.id && <MyPostsCards tenantId={tenant.id} />}
 
@@ -551,7 +568,7 @@ export default function MyProfile() {
         </div>
       )}
 
-      {user.business_status === 'verified' && <BusinessOverviewCard />}
+      {user.business_status === 'verified' && <BusinessOverviewCard onShowQr={() => setMerchantQrOpen(true)} />}
 
       {user.business_id && user.business_status === 'rejected' && (
         <div className="card" style={{ marginBottom: 16, borderColor: 'var(--error)', background: 'rgba(176, 0, 0, 0.04)' }}>

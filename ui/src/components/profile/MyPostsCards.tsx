@@ -1,16 +1,23 @@
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Newspaper, ArrowLeftRight, Sprout, Signpost, Truck, UtensilsCrossed, PawPrint, Camera, AlertCircle } from 'lucide-react';
+import { Newspaper, ArrowLeftRight, Sprout, Signpost, Truck, UtensilsCrossed, PawPrint, Camera, AlertCircle, ChevronRight } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { getContentSummary } from '../../api/content';
-import type { ContentSummaryItem, ContentSummarySource } from '../../api/content';
+import type { ContentSummary, ContentSummaryItem, ContentSummarySource } from '../../api/content';
 import { Badge } from '../ui/Badge';
 import { Spinner } from '../ui/Spinner';
 
-const EXCHANGE_MY_POSTS_URL = 'https://exchange.lakeandlocals.com/me/posts';
+const FIELD_NOTES_SUBMIT_URL = 'https://fieldnotes.lakeandlocals.com/submit';
 const FIELD_NOTES_MY_STORIES_URL = 'https://fieldnotes.lakeandlocals.com/my-stories';
+const EXCHANGE_NEW_OFFER_URL = 'https://exchange.lakeandlocals.com/offers/new';
+const EXCHANGE_MY_POSTS_URL = 'https://exchange.lakeandlocals.com/me/posts';
 
 function formatDate(ts: number): string {
   return new Date(ts * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function sourceTotal(source: ContentSummarySource): number {
+  return Object.values(source.counts).reduce((a, b) => a + b, 0);
 }
 
 const EXCHANGE_STATUS_LABEL: Record<string, string> = {
@@ -131,12 +138,9 @@ function SummaryCard({
   countLine,
   manageLabel,
   manageUrl,
-  emptyLine,
-  emptyCtaLabel,
-  emptyCtaUrl,
   statusLabels,
 }: {
-  icon: typeof Newspaper;
+  icon: LucideIcon;
   title: string;
   source: ContentSummarySource | undefined;
   isLoading: boolean;
@@ -148,12 +152,8 @@ function SummaryCard({
   countLine: (source: ContentSummarySource) => string;
   manageLabel: string;
   manageUrl: string;
-  emptyLine: string;
-  emptyCtaLabel: string;
-  emptyCtaUrl: string;
   statusLabels: Record<string, string>;
 }) {
-  const total = source ? Object.values(source.counts).reduce((a, b) => a + b, 0) : 0;
   // The group request can succeed (200) while this one source's own upstream
   // failed - `ok: false` on an otherwise-empty source. Render that as a
   // failure, not as "you haven't posted yet", with its own retry since it's
@@ -181,22 +181,6 @@ function SummaryCard({
           <button type="button" onClick={onRetry} className="btn btn-secondary btn-sm">
             Retry
           </button>
-        </div>
-      ) : source && total === 0 ? (
-        <div style={{ textAlign: 'center', padding: '16px 8px' }}>
-          <Icon size={26} strokeWidth={1.5} color="var(--amber)" style={{ marginBottom: 8 }} aria-hidden="true" />
-          <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.85rem', color: 'var(--muted)', marginBottom: 4 }}>
-            {emptyLine}
-          </p>
-          <Link
-            to={emptyCtaUrl}
-            style={{
-              display: 'inline-flex', alignItems: 'center', minHeight: 44,
-              fontFamily: 'var(--font-sans)', fontSize: '0.85rem', fontWeight: 600,
-            }}
-          >
-            {emptyCtaLabel}
-          </Link>
         </div>
       ) : source ? (
         <>
@@ -229,6 +213,181 @@ function SummaryCard({
   );
 }
 
+// A zero-activity source collapses into one compact row here instead of its
+// own ~140px empty card (Gate 8.1 - eight empty cards was ~1100px of "you
+// haven't done anything yet" for a brand-new member). Donor: the My Stamps
+// row on this same page (MyProfile.tsx) - icon, label, chevron, nothing new
+// invented. minHeight is explicit rather than inherited from padding alone,
+// so the 44px touch target holds regardless of font metrics.
+function MoreRow({ icon: Icon, title, value, href }: { icon: LucideIcon; title: string; value: string; href: string }) {
+  return (
+    <Link
+      to={href}
+      style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+        minHeight: 44, padding: '8px 0', borderBottom: '1px solid var(--border)',
+        color: 'var(--green)', textDecoration: 'none',
+      }}
+    >
+      <span style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+        <Icon size={16} strokeWidth={2} color="var(--sage)" aria-hidden="true" style={{ flexShrink: 0 }} />
+        <span style={{ minWidth: 0 }}>
+          <span style={{ display: 'block', fontFamily: 'var(--font-sans)', fontSize: '0.88rem', fontWeight: 600 }}>{title}</span>
+          <span style={{ display: 'block', fontFamily: 'var(--font-sans)', fontSize: '0.75rem', color: 'var(--muted)' }}>{value}</span>
+        </span>
+      </span>
+      <ChevronRight size={15} color="var(--muted)" style={{ flexShrink: 0 }} />
+    </Link>
+  );
+}
+
+interface SourceConfig {
+  key: keyof ContentSummary;
+  icon: LucideIcon;
+  title: string;
+  countLine: (s: ContentSummarySource) => string;
+  manageLabel: string;
+  manageUrl: string;
+  statusLabels: Record<string, string>;
+  collapsedTitle: string;
+  collapsedValue: string;
+  collapsedHref: string;
+}
+
+// Locked copy: Gate D mockup board, "Locked copy appendix" (approved
+// 2026-07-27, https://claude.ai/code/artifact/f2ad12ea-33a4-4dc8-a2fb-60d1c736f900).
+const SOURCES: SourceConfig[] = [
+  {
+    key: 'field_notes',
+    icon: Newspaper,
+    title: 'My Field Notes',
+    countLine: s => {
+      const total = sourceTotal(s);
+      const published = s.counts.published ?? 0;
+      return `${total} ${total === 1 ? 'story' : 'stories'} - ${published} published`;
+    },
+    manageLabel: 'Manage my stories',
+    manageUrl: FIELD_NOTES_MY_STORIES_URL,
+    statusLabels: STORY_STATUS_LABEL,
+    collapsedTitle: 'Share a story',
+    collapsedValue: 'Local-life stories, visible to the whole network',
+    collapsedHref: FIELD_NOTES_SUBMIT_URL,
+  },
+  {
+    key: 'exchange',
+    icon: ArrowLeftRight,
+    title: 'My Exchange Posts',
+    countLine: s => {
+      const total = sourceTotal(s);
+      return `${total} ${total === 1 ? 'post' : 'posts'} - ${s.counts.active ?? 0} active`;
+    },
+    manageLabel: 'Manage my posts',
+    manageUrl: EXCHANGE_MY_POSTS_URL,
+    statusLabels: EXCHANGE_STATUS_LABEL,
+    collapsedTitle: 'Post on the Exchange',
+    collapsedValue: 'Trade skills and goods, no cash needed',
+    collapsedHref: EXCHANGE_NEW_OFFER_URL,
+  },
+  {
+    key: 'fresh',
+    icon: Sprout,
+    title: 'My Stand',
+    countLine: s => {
+      const stands = s.counts.stands ?? 0;
+      const posts = s.counts.live_posts ?? 0;
+      return `${stands} ${stands === 1 ? 'stand' : 'stands'} - ${posts} ${posts === 1 ? 'post' : 'posts'} live today`;
+    },
+    manageLabel: 'Manage my stand',
+    manageUrl: '/fresh/mine',
+    statusLabels: FRESH_STATUS_LABEL,
+    collapsedTitle: 'Set up my stand',
+    collapsedValue: "A page for what you're growing or making, on Fresh Today",
+    collapsedHref: '/fresh/mine',
+  },
+  {
+    key: 'sales',
+    icon: Signpost,
+    title: 'My Sales',
+    countLine: s => {
+      const total = s.counts.sales ?? 0;
+      const onNow = s.counts.on_now ?? 0;
+      return `${total} ${total === 1 ? 'sale' : 'sales'} · ${onNow} on now`;
+    },
+    manageLabel: 'Manage my sales',
+    manageUrl: '/sales/mine',
+    statusLabels: SALES_STATUS_LABEL,
+    collapsedTitle: 'Post a sale',
+    collapsedValue: 'List a yard, barn, or moving sale on Sale Day',
+    collapsedHref: '/sales/mine',
+  },
+  {
+    key: 'popups',
+    icon: Truck,
+    title: 'My Schedule',
+    countLine: s => {
+      const vendors = s.counts.vendors ?? 0;
+      const upcoming = s.counts.upcoming_stops ?? 0;
+      return `${vendors} ${vendors === 1 ? 'vendor' : 'vendors'} · ${upcoming} stop${upcoming === 1 ? '' : 's'} coming up`;
+    },
+    manageLabel: 'Manage my schedule',
+    manageUrl: '/popups/mine',
+    statusLabels: POPUPS_STATUS_LABEL,
+    collapsedTitle: 'Set up my vendor page',
+    collapsedValue: 'Where your truck or pop-up shop is, and when',
+    collapsedHref: '/popups/mine',
+  },
+  {
+    key: 'meals',
+    icon: UtensilsCrossed,
+    title: 'My Kitchen',
+    countLine: s => {
+      const kitchens = s.counts.kitchens ?? 0;
+      const upcoming = s.counts.upcoming_meals ?? 0;
+      return `${kitchens} ${kitchens === 1 ? 'kitchen' : 'kitchens'} · ${upcoming} meal${upcoming === 1 ? '' : 's'} coming up`;
+    },
+    manageLabel: 'Manage my kitchen',
+    manageUrl: '/meals/mine',
+    statusLabels: MEALS_STATUS_LABEL,
+    collapsedTitle: 'Set up our kitchen',
+    collapsedValue: 'Meals your kitchen is serving, posted to Community Table',
+    collapsedHref: '/meals/mine',
+  },
+  {
+    key: 'pets',
+    icon: PawPrint,
+    title: 'Home Safe',
+    countLine: s => {
+      const looking = s.counts.looking ?? 0;
+      const homeSafe = s.counts.home_safe ?? 0;
+      return `${looking} looking · ${homeSafe} home safe`;
+    },
+    manageLabel: 'Manage my posts',
+    manageUrl: '/pets/mine',
+    statusLabels: PETS_STATUS_LABEL,
+    // Kept verbatim per Gate 8's plan - two reviewers independently called
+    // this the right register for a break-glass feature. Do not "improve" it.
+    collapsedTitle: 'Home Safe',
+    collapsedValue: 'No posts yet - here if you ever need it.',
+    collapsedHref: '/pets/mine',
+  },
+  {
+    key: 'splash',
+    icon: Camera,
+    title: 'My Splash',
+    countLine: s => {
+      const total = s.counts.submissions ?? 0;
+      const licensed = s.counts.licensed ?? 0;
+      return `${total} ${total === 1 ? 'photo' : 'photos'} shared - ${licensed} licensed`;
+    },
+    manageLabel: 'Manage my splash',
+    manageUrl: '/splash',
+    statusLabels: SPLASH_STATUS_LABEL,
+    collapsedTitle: 'Go to My Splash',
+    collapsedValue: 'Share a photo when a business scans you in',
+    collapsedHref: '/splash',
+  },
+];
+
 export default function MyPostsCards({ tenantId }: { tenantId: string }) {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['content-summary', tenantId],
@@ -237,6 +396,37 @@ export default function MyPostsCards({ tenantId }: { tenantId: string }) {
   });
 
   const summary = data?.data;
+
+  const collapsedRows: SourceConfig[] = [];
+  const fullCards: JSX.Element[] = [];
+
+  for (const cfg of SOURCES) {
+    const source = summary?.[cfg.key];
+    // A source graduates to its own full card the first time it's used;
+    // while loading, on a group failure, or on its own upstream failure it
+    // also gets the full-card treatment (spinner / retry) rather than being
+    // folded silently into the collapsed row.
+    const isEmpty = !isLoading && !isError && !!source && source.ok && sourceTotal(source) === 0;
+    if (isEmpty) {
+      collapsedRows.push(cfg);
+    } else {
+      fullCards.push(
+        <SummaryCard
+          key={cfg.key}
+          icon={cfg.icon}
+          title={cfg.title}
+          source={source}
+          isLoading={isLoading}
+          groupFailed={isError}
+          onRetry={() => refetch()}
+          countLine={cfg.countLine}
+          manageLabel={cfg.manageLabel}
+          manageUrl={cfg.manageUrl}
+          statusLabels={cfg.statusLabels}
+        />
+      );
+    }
+  }
 
   return (
     <>
@@ -254,164 +444,24 @@ export default function MyPostsCards({ tenantId }: { tenantId: string }) {
         </div>
       )}
 
-      <SummaryCard
-        icon={Newspaper}
-        title="My Field Notes"
-        source={summary?.field_notes}
-        isLoading={isLoading}
-        groupFailed={isError}
-        onRetry={() => refetch()}
-        countLine={s => {
-          const total = Object.values(s.counts).reduce((a, b) => a + b, 0);
-          const published = s.counts.published ?? 0;
-          return `${total} ${total === 1 ? 'story' : 'stories'} - ${published} published`;
-        }}
-        manageLabel="Manage my stories"
-        manageUrl={FIELD_NOTES_MY_STORIES_URL}
-        emptyLine="You haven't shared a story yet."
-        emptyCtaLabel="Share a story"
-        emptyCtaUrl="https://fieldnotes.lakeandlocals.com/submit"
-        statusLabels={STORY_STATUS_LABEL}
-      />
+      {fullCards}
 
-      <SummaryCard
-        icon={ArrowLeftRight}
-        title="My Exchange Posts"
-        source={summary?.exchange}
-        isLoading={isLoading}
-        groupFailed={isError}
-        onRetry={() => refetch()}
-        countLine={s => {
-          const total = Object.values(s.counts).reduce((a, b) => a + b, 0);
-          return `${total} ${total === 1 ? 'post' : 'posts'} - ${s.counts.active ?? 0} active`;
-        }}
-        manageLabel="Manage my posts"
-        manageUrl={EXCHANGE_MY_POSTS_URL}
-        emptyLine="You haven't posted on the Exchange yet."
-        emptyCtaLabel="Post on the Exchange"
-        emptyCtaUrl="https://exchange.lakeandlocals.com/offers/new"
-        statusLabels={EXCHANGE_STATUS_LABEL}
-      />
-
-      <SummaryCard
-        icon={Sprout}
-        title="My Stand"
-        source={summary?.fresh}
-        isLoading={isLoading}
-        groupFailed={isError}
-        onRetry={() => refetch()}
-        countLine={s => {
-          const stands = s.counts.stands ?? 0;
-          const posts = s.counts.live_posts ?? 0;
-          return `${stands} ${stands === 1 ? 'stand' : 'stands'} - ${posts} ${posts === 1 ? 'post' : 'posts'} live today`;
-        }}
-        manageLabel="Manage my stand"
-        manageUrl="/fresh/mine"
-        emptyLine="No stand yet - takes a minute to set up."
-        emptyCtaLabel="Set up my stand"
-        emptyCtaUrl="/fresh/mine"
-        statusLabels={FRESH_STATUS_LABEL}
-      />
-
-      <SummaryCard
-        icon={Signpost}
-        title="My Sales"
-        source={summary?.sales}
-        isLoading={isLoading}
-        groupFailed={isError}
-        onRetry={() => refetch()}
-        countLine={s => {
-          const total = s.counts.sales ?? 0;
-          const onNow = s.counts.on_now ?? 0;
-          return `${total} ${total === 1 ? 'sale' : 'sales'} · ${onNow} on now`;
-        }}
-        manageLabel="Manage my sales"
-        manageUrl="/sales/mine"
-        emptyLine="No sales yet - takes about a minute to post one."
-        emptyCtaLabel="Post a sale"
-        emptyCtaUrl="/sales/mine"
-        statusLabels={SALES_STATUS_LABEL}
-      />
-
-      <SummaryCard
-        icon={Truck}
-        title="My Schedule"
-        source={summary?.popups}
-        isLoading={isLoading}
-        groupFailed={isError}
-        onRetry={() => refetch()}
-        countLine={s => {
-          const vendors = s.counts.vendors ?? 0;
-          const upcoming = s.counts.upcoming_stops ?? 0;
-          return `${vendors} ${vendors === 1 ? 'vendor' : 'vendors'} · ${upcoming} stop${upcoming === 1 ? '' : 's'} coming up`;
-        }}
-        manageLabel="Manage my schedule"
-        manageUrl="/popups/mine"
-        emptyLine="No vendor page yet - takes about a minute to set up."
-        emptyCtaLabel="Set up my vendor page"
-        emptyCtaUrl="/popups/mine"
-        statusLabels={POPUPS_STATUS_LABEL}
-      />
-
-      <SummaryCard
-        icon={UtensilsCrossed}
-        title="My Kitchen"
-        source={summary?.meals}
-        isLoading={isLoading}
-        groupFailed={isError}
-        onRetry={() => refetch()}
-        countLine={s => {
-          const kitchens = s.counts.kitchens ?? 0;
-          const upcoming = s.counts.upcoming_meals ?? 0;
-          return `${kitchens} ${kitchens === 1 ? 'kitchen' : 'kitchens'} · ${upcoming} meal${upcoming === 1 ? '' : 's'} coming up`;
-        }}
-        manageLabel="Manage my kitchen"
-        manageUrl="/meals/mine"
-        emptyLine="No kitchen yet - takes about a minute to set up."
-        emptyCtaLabel="Set up our kitchen"
-        emptyCtaUrl="/meals/mine"
-        statusLabels={MEALS_STATUS_LABEL}
-      />
-
-      <SummaryCard
-        icon={PawPrint}
-        title="Home Safe"
-        source={summary?.pets}
-        isLoading={isLoading}
-        groupFailed={isError}
-        onRetry={() => refetch()}
-        countLine={s => {
-          const looking = s.counts.looking ?? 0;
-          const homeSafe = s.counts.home_safe ?? 0;
-          return `${looking} looking · ${homeSafe} home safe`;
-        }}
-        manageLabel="Manage my posts"
-        manageUrl="/pets/mine"
-        emptyLine="No posts yet - here if you ever need it."
-        emptyCtaLabel="Report a pet"
-        emptyCtaUrl="/pets/mine"
-        statusLabels={PETS_STATUS_LABEL}
-      />
-
-      <SummaryCard
-        icon={Camera}
-        title="My Splash"
-        source={summary?.splash}
-        isLoading={isLoading}
-        groupFailed={isError}
-        onRetry={() => refetch()}
-        countLine={s => {
-          const total = s.counts.submissions ?? 0;
-          const licensed = s.counts.licensed ?? 0;
-          return `${total} ${total === 1 ? 'photo' : 'photos'} shared - ${licensed} licensed`;
-        }}
-        manageLabel="Manage my splash"
-        manageUrl="/splash"
-        emptyLine="Scan a business's plaque, then share a photo with them."
-        emptyCtaLabel="Go to My Splash"
-        emptyCtaUrl="/splash"
-        statusLabels={SPLASH_STATUS_LABEL}
-      />
+      {collapsedRows.length > 0 && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <h3 style={{ margin: '0 0 4px', fontSize: '1.05rem', fontFamily: 'var(--font-serif)', color: 'var(--green)', fontWeight: 'bold' }}>
+            More you can do here
+          </h3>
+          {collapsedRows.map(row => (
+            <MoreRow
+              key={row.key}
+              icon={row.icon}
+              title={row.collapsedTitle}
+              value={row.collapsedValue}
+              href={row.collapsedHref}
+            />
+          ))}
+        </div>
+      )}
     </>
   );
 }
