@@ -472,6 +472,9 @@ img { max-width: 100%; display: block; }
 .btn-danger { background: var(--error); color: var(--white); }
 .btn-danger:hover:not(:disabled) { opacity: 0.88; }
 
+.btn-green { background: var(--sage); color: var(--white); }
+.btn-green:hover:not(:disabled) { opacity: 0.88; }
+
 .btn-sm { padding: 6px 14px; font-size: 0.85rem; min-height: 36px; }
 .btn-block { width: 100%; }
 

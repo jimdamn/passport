@@ -202,10 +202,15 @@ export default function ProfilePanel({ open, onClose, onSaved }: Props) {
         bio:          form.bio.trim()          || undefined,
       });
       updateUser(profileRes.data.user);
+    } catch (e: any) {
+      setSaveError(e.message || 'Could not save changes.');
+      return;
+    }
 
-      const currentZip  = user?.home_zip_location       ?? '';
-      const currentDist = user?.home_distance_preference ?? 25;
-      if (zip !== currentZip || (zip && form.home_distance_preference !== currentDist)) {
+    const currentZip  = user?.home_zip_location       ?? '';
+    const currentDist = user?.home_distance_preference ?? 25;
+    if (zip !== currentZip || (zip && form.home_distance_preference !== currentDist)) {
+      try {
         const locRes = await locationMutation.mutateAsync({
           home_zip_location:        zip || null,
           home_distance_preference: zip ? form.home_distance_preference : null,
@@ -216,16 +221,20 @@ export default function ProfilePanel({ open, onClose, onSaved }: Props) {
           home_zip_lon:             locRes.data.profile.home_zip_lon,
           home_distance_preference: locRes.data.profile.home_distance_preference,
         });
+      } catch {
+        // The name/location/bio save above already landed - only the zip
+        // update failed, so say exactly that instead of a blanket failure.
+        qc.invalidateQueries({ queryKey: ['me'] });
+        setSaveError('Your profile was saved. The zip code could not be updated - try again.');
+        return;
       }
-
-      qc.invalidateQueries({ queryKey: ['me'] });
-      setSaved(true);
-      setTimeout(() => {
-        onSaved?.();
-      }, 800);
-    } catch (e: any) {
-      setSaveError(e.message || 'Could not save changes.');
     }
+
+    qc.invalidateQueries({ queryKey: ['me'] });
+    setSaved(true);
+    setTimeout(() => {
+      onSaved?.();
+    }, 800);
   }
 
   const isPending = saveMutation.isPending || locationMutation.isPending || isFetching;

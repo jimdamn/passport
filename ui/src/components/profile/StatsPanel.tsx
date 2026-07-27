@@ -1,10 +1,12 @@
 import { useEffect } from 'react';
 import { ClipboardList } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
+import { useAuth } from '../../context/AuthContext';
 import { useTenant } from '../../context/TenantContext';
 import { getBalance } from '../../api/credits';
 import { Spinner } from '../ui/Spinner';
 import { formatDate } from '../../utils/dates';
+import { resolveBalance, balanceText } from '../../utils/balance';
 import type { CreditEntry } from '../../types';
 
 export type StatsPanelType = 'credits';
@@ -65,12 +67,13 @@ const PLACEHOLDER_CREDITS: CreditEntry[] = [
 ];
 
 function CreditsContent({ tenantId, creditsName }: { tenantId: string; creditsName: string }) {
-  const { data, isLoading } = useQuery({
+  const { user } = useAuth();
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['credits', tenantId],
     queryFn: () => getBalance(tenantId),
   });
 
-  const balance  = data?.data.balance ?? 0;
+  const balanceDisplay = resolveBalance(data?.data.balance, user?.credits_balance);
   const history  = data?.data.history ?? [];
   const hasData  = history.length > 0;
   const rows     = hasData ? history : PLACEHOLDER_CREDITS;
@@ -89,7 +92,7 @@ function CreditsContent({ tenantId, creditsName }: { tenantId: string; creditsNa
           fontFamily: 'var(--font-serif)', fontSize: '2.8rem',
           fontWeight: 'bold', color: 'var(--amber)', lineHeight: 1,
         }}>
-          {balance}
+          {balanceText(balanceDisplay)}
         </div>
         <div style={{
           fontFamily: 'var(--font-sans)', fontSize: '0.75rem', fontWeight: 700,
@@ -98,6 +101,18 @@ function CreditsContent({ tenantId, creditsName }: { tenantId: string; creditsNa
         }}>
           {creditsName} balance
         </div>
+        {isError && (
+          <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.78rem', color: 'var(--muted)', margin: '8px 0 0' }}>
+            Couldn't load right now.{' '}
+            <button
+              type="button"
+              onClick={() => refetch()}
+              style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', color: 'var(--green)', textDecoration: 'underline', cursor: 'pointer' }}
+            >
+              Retry
+            </button>
+          </p>
+        )}
       </div>
 
       <SectionLabel>Recent Activity</SectionLabel>

@@ -3,6 +3,7 @@ import { X, Compass, AlertCircle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTenant } from '../../context/TenantContext';
 import { getToken } from '../../api/client';
+import { Spinner } from './Spinner';
 
 function obfuscateUserId(id: number | string): string {
   const numId = typeof id === 'string' ? parseInt(id, 10) : id;
@@ -19,10 +20,14 @@ interface Props {
   onClose: () => void;
 }
 
+type QrStatus = 'loading' | 'ok' | 'error';
+
 export default function QrDrawer({ open, onClose }: Props) {
   const { user } = useAuth();
   const { tenant } = useTenant();
   const [qrSrc, setQrSrc] = useState<string | null>(null);
+  const [qrStatus, setQrStatus] = useState<QrStatus>('loading');
+  const [retryTick, setRetryTick] = useState(0);
 
   const creditsName = tenant?.config.credits_name ?? 'KrowdKredits';
 
@@ -38,23 +43,30 @@ export default function QrDrawer({ open, onClose }: Props) {
   useEffect(() => {
     if (!open) return;
     let objectUrl: string | null = null;
+    setQrStatus('loading');
     const token = getToken();
     fetch('/api/auth/me/qr-code', {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     })
-      .then(res => (res.ok ? res.blob() : null))
+      .then(res => {
+        if (res.ok) return res.blob();
+        setQrStatus('error');
+        return null;
+      })
       .then(blob => {
         if (blob) {
           objectUrl = URL.createObjectURL(blob);
           setQrSrc(objectUrl);
+          setQrStatus('ok');
         }
       })
-      .catch(() => setQrSrc(null));
+      .catch(() => setQrStatus('error'));
     return () => {
       if (objectUrl) URL.revokeObjectURL(objectUrl);
       setQrSrc(null);
+      setQrStatus('loading');
     };
-  }, [open]);
+  }, [open, retryTick]);
 
   if (!user) return null;
 
@@ -175,7 +187,7 @@ export default function QrDrawer({ open, onClose }: Props) {
             marginBottom: 20,
             overflow: 'hidden',
           }}>
-            {open && qrSrc && (
+            {open && qrStatus === 'ok' && qrSrc && (
               <img
                 src={qrSrc}
                 alt="My Personal QR Code"
@@ -185,6 +197,24 @@ export default function QrDrawer({ open, onClose }: Props) {
                   objectFit: 'contain',
                 }}
               />
+            )}
+            {open && qrStatus === 'loading' && (
+              <Spinner size="md" />
+            )}
+            {open && qrStatus === 'error' && (
+              <div style={{ padding: 16, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                <AlertCircle size={28} color="var(--error)" />
+                <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--muted)', lineHeight: 1.4 }}>
+                  Couldn't load your code. Check your connection and try again.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setRetryTick(t => t + 1)}
+                  className="btn btn-secondary btn-sm"
+                >
+                  Retry
+                </button>
+              </div>
             )}
           </div>
 

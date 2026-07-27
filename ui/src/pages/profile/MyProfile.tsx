@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { LogOut, Award, ChevronRight, QrCode, Shield, ShieldCheck, Gift, Inbox, MapPin, Compass, Handshake } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTenant } from '../../context/TenantContext';
@@ -9,7 +9,8 @@ import { getMe } from '../../api/auth';
 import { getBalance } from '../../api/credits';
 import { getAdminSupportCount } from '../../api/support';
 import { getMyBusiness } from '../../api/merchant';
-import { getAroundInterests, PICKER_LABELS, type AroundInterests } from '../../api/around';
+import { getAroundInterests, PICKER_LABELS } from '../../api/around';
+import { resolveBalance, balanceText } from '../../utils/balance';
 import { Spinner } from '../../components/ui/Spinner';
 import StatsPanel, { type StatsPanelType } from '../../components/profile/StatsPanel';
 import BadgeStrip, { type Badge } from '../../components/ui/BadgeStrip';
@@ -61,6 +62,7 @@ function AvatarDisplay({ name, avatarUrl }: { name: string; avatarUrl: string | 
 export default function MyProfile() {
   const { user, logout, updateUser } = useAuth();
   const { tenant } = useTenant();
+  const qc = useQueryClient();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const isWelcome = searchParams.get('welcome') === '1';
@@ -70,17 +72,20 @@ export default function MyProfile() {
   const [merchantQrOpen, setMerchantQrOpen] = useState(false);
   const [personaDrawer, setPersonaDrawer] = useState<'anonymous' | 'personal' | 'business' | null>(null);
   const [interestsDrawerOpen, setInterestsDrawerOpen] = useState(false);
-  const [interests, setInterests] = useState<AroundInterests | null>(null);
 
-  useEffect(() => {
-    if (!user || !tenant) return;
-    getAroundInterests(tenant.id).then(res => setInterests(res.data)).catch(() => {});
-  }, [user, tenant]);
+  const interestsQueryKey = ['around-interests', tenant.id];
+  const { data: interestsData } = useQuery({
+    queryKey: interestsQueryKey,
+    queryFn: () => getAroundInterests(tenant.id),
+    enabled: !!tenant.id && !!user,
+    staleTime: 5 * 60_000,
+  });
+  const interests = interestsData?.data ?? null;
 
   const { data: meData, isLoading } = useQuery({
     queryKey: ['me', tenant?.id],
     queryFn: () => getMe(tenant!.id),
-    enabled: !!user && !!tenant,
+    enabled: !!user && !!tenant.id,
     staleTime: 5 * 60_000,
   });
 
@@ -96,17 +101,17 @@ export default function MyProfile() {
     }
   }, [isWelcome, user]);
 
-  const { data: creditsData } = useQuery({
+  const { data: creditsData, isError: creditsError, refetch: refetchCredits } = useQuery({
     queryKey: ['credits', tenant?.id],
     queryFn: () => getBalance(tenant!.id),
-    enabled: !!tenant && !!user,
+    enabled: !!tenant.id && !!user,
     staleTime: 5 * 60_000,
   });
 
   const { data: supportCountData } = useQuery({
     queryKey: ['support-count', tenant?.id],
     queryFn: () => getAdminSupportCount(tenant!.id),
-    enabled: !!tenant && !!user?.is_admin,
+    enabled: !!tenant.id && !!user?.is_admin,
     staleTime: 60_000,
   });
 
@@ -116,7 +121,7 @@ export default function MyProfile() {
   const { data: businessData } = useQuery({
     queryKey: ['my-business', tenant?.id],
     queryFn: () => getMyBusiness(tenant!.id),
-    enabled: !!tenant && !!user && user.business_status === 'verified',
+    enabled: !!tenant.id && !!user && user.business_status === 'verified',
     staleTime: 60_000,
   });
   const businessMissingLocation = user?.business_status === 'verified'
@@ -156,6 +161,7 @@ export default function MyProfile() {
 
   const profile: any     = meData || user;
   const credits          = creditsData?.data;
+  const balanceDisplay   = resolveBalance(credits?.balance, user.credits_balance);
   const creditsName      = tenant?.config.credits_name ?? 'KrowdKredits';
   const currentAvatarUrl = (meData as any)?.avatar_url ?? user.avatar_url ?? null;
   const myBadges         = computeMyBadges(profile);
@@ -262,9 +268,21 @@ export default function MyProfile() {
       {/* ── Stats grid ── */}
       <div className="stats-grid" style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
         <button className="stat-card stat-card--featured stat-card--btn" onClick={() => setStatsPanel('credits')} style={{ flex: 1, minWidth: 100, maxWidth: 180 }}>
-          <div className="stat-num">{credits?.balance ?? user.credits_balance ?? 0}</div>
+          <div className="stat-num">{balanceText(balanceDisplay)}</div>
           <div className="stat-label">{creditsName}</div>
         </button>
+        {creditsError && (
+          <p style={{ width: '100%', textAlign: 'center', margin: 0, fontSize: '0.78rem', color: 'var(--muted)' }}>
+            Couldn't load right now.{' '}
+            <button
+              type="button"
+              onClick={() => refetchCredits()}
+              style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', color: 'var(--green)', textDecoration: 'underline', cursor: 'pointer' }}
+            >
+              Retry
+            </button>
+          </p>
+        )}
       </div>
 
       <StatsPanel
@@ -301,7 +319,7 @@ export default function MyProfile() {
         open={interestsDrawerOpen}
         tenantId={tenant!.id}
         onClose={() => setInterestsDrawerOpen(false)}
-        onSaved={setInterests}
+        onSaved={data => qc.setQueryData(interestsQueryKey, { data })}
       />
 
       <QrDrawer
@@ -338,7 +356,7 @@ export default function MyProfile() {
       )}
 
       {/* ── My Posts summary cards (Exchange + Field Notes) ── */}
-      {tenant && <MyPostsCards tenantId={tenant.id} />}
+      {tenant.id && <MyPostsCards tenantId={tenant.id} />}
 
       {/* ── Admin Portal Banners ── */}
       {user.is_admin && (
@@ -383,23 +401,29 @@ export default function MyProfile() {
             <Link to="/profile/admin/volunteer" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
               Volunteer Shift Review
             </Link>
-            <Link to="/profile/admin/happenings" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
-              Happenings
+            <Link to="/profile/admin/meals" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
+              Community Meals
             </Link>
             <Link to="/profile/admin/fresh" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
               Fresh Today
             </Link>
-            <Link to="/profile/admin/sales" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
-              Sale Day
+            <Link to="/profile/admin/happenings" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
+              Happenings
+            </Link>
+            <Link to="/profile/admin/pets" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
+              Home Safe
             </Link>
             <Link to="/profile/admin/popups" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
               Pop-Ups
             </Link>
-            <Link to="/profile/admin/sponsors" className="btn btn-secondary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, textDecoration: 'none' }}>
-              <Handshake size={13} /> Sponsor Messages
+            <Link to="/profile/admin/sales" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
+              Sale Day
             </Link>
             <Link to="/profile/admin/splash" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
               Social Splash
+            </Link>
+            <Link to="/profile/admin/sponsors" className="btn btn-secondary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, textDecoration: 'none' }}>
+              <Handshake size={13} /> Sponsor Messages
             </Link>
             <Link to="/redeem" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
               Redeem a Claim

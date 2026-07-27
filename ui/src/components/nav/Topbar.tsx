@@ -8,6 +8,7 @@ import { useTenant } from '../../context/TenantContext';
 import { useProfilePanel } from '../../context/ProfilePanelContext';
 import { getBalanceOnly } from '../../api/credits';
 import { getMe } from '../../api/auth';
+import { resolveBalance, balanceText } from '../../utils/balance';
 import QrDrawer from '../ui/QrDrawer';
 
 const HUB_URL = 'https://apps.lakeandlocals.com';
@@ -23,7 +24,7 @@ export default function PassportTopbar() {
   const { data: fullUserData } = useQuery({
     queryKey: ['me', tenant?.id],
     queryFn: () => getMe(tenant!.id),
-    enabled: !!user && !!tenant,
+    enabled: !!user && !!tenant.id,
     staleTime: 5 * 60_000,
   });
   useEffect(() => {
@@ -35,11 +36,11 @@ export default function PassportTopbar() {
   const { data: balanceData } = useQuery({
     queryKey: ['credits:balance', tenant?.id],
     queryFn: () => getBalanceOnly(tenant!.id),
-    enabled: !!user && !!tenant,
+    enabled: !!user && !!tenant.id,
     staleTime: 5 * 60_000,
     refetchOnWindowFocus: true,
   });
-  const displayBalance = Number(balanceData?.data?.balance ?? user?.credits_balance ?? 0);
+  const balanceDisplay = resolveBalance(balanceData?.data?.balance, user?.credits_balance);
   const creditsName = tenant?.config.credits_name ?? 'KrowdKredits';
 
   function handleLogout() {
@@ -78,7 +79,7 @@ export default function PassportTopbar() {
         brandName={tenant?.config.brand_name ?? 'Lake & Locals'}
         appLabel="Passport"
         user={user}
-        balanceLabel={user ? `${displayBalance.toLocaleString()} ${creditsName}` : null}
+        balanceLabel={user ? `${balanceText(balanceDisplay)} ${creditsName}` : null}
         desktopLinks={desktopLinks}
         drawerLinks={drawerLinks}
         onLogout={handleLogout}
