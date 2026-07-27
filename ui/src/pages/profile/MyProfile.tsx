@@ -76,7 +76,7 @@ export default function MyProfile() {
   const [interestsDrawerOpen, setInterestsDrawerOpen] = useState(false);
 
   const interestsQueryKey = ['around-interests', tenant.id];
-  const { data: interestsData } = useQuery({
+  const { data: interestsData, isLoading: interestsLoading, isError: interestsError, refetch: refetchInterests } = useQuery({
     queryKey: interestsQueryKey,
     queryFn: () => getAroundInterests(tenant.id),
     enabled: !!tenant.id && !!user,
@@ -103,7 +103,7 @@ export default function MyProfile() {
     }
   }, [isWelcome, user]);
 
-  const { data: creditsData, isError: creditsError, isSuccess: creditsSuccess, refetch: refetchCredits } = useQuery({
+  const { data: creditsData, isLoading: creditsLoading, isError: creditsError, isSuccess: creditsSuccess, refetch: refetchCredits } = useQuery({
     queryKey: ['credits', tenant?.id],
     queryFn: () => getBalance(tenant!.id),
     enabled: !!tenant.id && !!user,
@@ -149,14 +149,6 @@ export default function MyProfile() {
           <p style={{ marginBottom: 16 }}>You are not signed in.</p>
           <a className="btn btn-primary" href="/auth/login">Sign In</a>
         </div>
-      </div>
-    );
-  }
-
-  if (isLoading) {
-    return (
-      <div className="main-content" style={{ paddingTop: 48, textAlign: 'center' }}>
-        <Spinner size="lg" />
       </div>
     );
   }
@@ -259,7 +251,18 @@ export default function MyProfile() {
             <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--muted)' }}>
               {/* Existing-data note: a legacy multi-pick row's first element
                   is the pick everywhere - never join the whole array. */}
-              {interests && interests.interests.length > 0
+              {interestsLoading ? '' : interestsError ? (
+                <>
+                  Couldn't load your pick.{' '}
+                  <button
+                    type="button"
+                    onClick={() => refetchInterests()}
+                    style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', color: 'var(--green)', textDecoration: 'underline', cursor: 'pointer' }}
+                  >
+                    Retry
+                  </button>
+                </>
+              ) : interests && interests.interests.length > 0
                 ? (PICKER_LABELS[interests.interests[0]] ?? interests.interests[0])
                 : 'Everything - no pick yet'}
             </p>
@@ -337,10 +340,14 @@ export default function MyProfile() {
         onClose={() => setMerchantQrOpen(false)}
       />
 
-      {credits && credits.history.length > 0 && (
-        <div className="card" style={{ marginBottom: 16 }}>
+      {(creditsLoading || (credits && credits.history.length > 0)) && (
+        <div className="card" style={{ marginBottom: 16, minHeight: creditsLoading ? 100 : undefined }}>
           <p className="card-title">{creditsName} Activity</p>
-          {credits.history.slice(0, 8).map((entry: any) => (
+          {creditsLoading ? (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '16px 0' }}>
+              <Spinner size="md" />
+            </div>
+          ) : credits!.history.slice(0, 8).map((entry: any) => (
             <div
               key={entry.id}
               style={{

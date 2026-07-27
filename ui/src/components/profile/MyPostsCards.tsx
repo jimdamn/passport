@@ -1,9 +1,10 @@
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Newspaper, ArrowLeftRight, Sprout, Signpost, Truck, UtensilsCrossed, PawPrint, Camera } from 'lucide-react';
+import { Newspaper, ArrowLeftRight, Sprout, Signpost, Truck, UtensilsCrossed, PawPrint, Camera, AlertCircle } from 'lucide-react';
 import { getContentSummary } from '../../api/content';
 import type { ContentSummaryItem, ContentSummarySource } from '../../api/content';
 import { Badge } from '../ui/Badge';
+import { Spinner } from '../ui/Spinner';
 
 const EXCHANGE_MY_POSTS_URL = 'https://exchange.lakeandlocals.com/me/posts';
 const FIELD_NOTES_MY_STORIES_URL = 'https://fieldnotes.lakeandlocals.com/my-stories';
@@ -112,6 +113,9 @@ function SummaryCard({
   icon: Icon,
   title,
   source,
+  isLoading,
+  groupFailed,
+  onRetry,
   countLine,
   manageLabel,
   manageUrl,
@@ -123,6 +127,12 @@ function SummaryCard({
   icon: typeof Newspaper;
   title: string;
   source: ContentSummarySource | undefined;
+  isLoading: boolean;
+  // The whole /me/content-summary request failed - a single line already
+  // says so above the group, so each card just stays in a quiet shell state
+  // rather than repeating the message eight times.
+  groupFailed: boolean;
+  onRetry: () => void;
   countLine: (source: ContentSummarySource) => string;
   manageLabel: string;
   manageUrl: string;
@@ -132,14 +142,35 @@ function SummaryCard({
   statusLabels: Record<string, string>;
 }) {
   const total = source ? Object.values(source.counts).reduce((a, b) => a + b, 0) : 0;
+  // The group request can succeed (200) while this one source's own upstream
+  // failed - `ok: false` on an otherwise-empty source. Render that as a
+  // failure, not as "you haven't posted yet", with its own retry since it's
+  // the only card affected.
+  const sourceFailed = !groupFailed && !!source && !source.ok;
 
   return (
-    <div className="card" style={{ marginBottom: 16 }}>
+    <div className="card" style={{ marginBottom: 16, minHeight: 140 }}>
       <h3 style={{ margin: '0 0 12px', fontSize: '1.05rem', fontFamily: 'var(--font-serif)', color: 'var(--green)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 8 }}>
         <Icon size={17} strokeWidth={2} color="var(--amber)" aria-hidden="true" /> {title}
       </h3>
 
-      {source && total === 0 ? (
+      {isLoading ? (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '16px 0' }}>
+          <Spinner size="md" />
+        </div>
+      ) : groupFailed ? null : sourceFailed ? (
+        <div>
+          <p style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            fontFamily: 'var(--font-sans)', fontSize: '0.85rem', color: 'var(--muted)', margin: '0 0 10px',
+          }}>
+            <AlertCircle size={15} strokeWidth={2} aria-hidden="true" /> Couldn't load this right now.
+          </p>
+          <button type="button" onClick={onRetry} className="btn btn-secondary btn-sm">
+            Retry
+          </button>
+        </div>
+      ) : source && total === 0 ? (
         <div style={{ textAlign: 'center', padding: '16px 8px' }}>
           <Icon size={26} strokeWidth={1.5} color="var(--amber)" style={{ marginBottom: 8 }} aria-hidden="true" />
           <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.85rem', color: 'var(--muted)', marginBottom: 4 }}>
@@ -149,20 +180,18 @@ function SummaryCard({
             {emptyCtaLabel}
           </Link>
         </div>
-      ) : (
+      ) : source ? (
         <>
-          {source && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
-              <span style={{ fontFamily: 'var(--font-sans)', fontSize: '0.85rem', color: 'var(--muted)' }}>
-                {countLine(source)}
-              </span>
-              {source.attention_total > 0 && (
-                <Badge variant="amber">{source.attention_total} need{source.attention_total === 1 ? 's' : ''} attention</Badge>
-              )}
-            </div>
-          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontFamily: 'var(--font-sans)', fontSize: '0.85rem', color: 'var(--muted)' }}>
+              {countLine(source)}
+            </span>
+            {source.attention_total > 0 && (
+              <Badge variant="amber">{source.attention_total} need{source.attention_total === 1 ? 's' : ''} attention</Badge>
+            )}
+          </div>
 
-          {source?.recent.map(item => (
+          {source.recent.map(item => (
             <RecentRow key={item.id} item={item} statusLabels={statusLabels} />
           ))}
 
@@ -176,13 +205,13 @@ function SummaryCard({
             {manageLabel} &rarr;
           </Link>
         </>
-      )}
+      ) : null}
     </div>
   );
 }
 
 export default function MyPostsCards({ tenantId }: { tenantId: string }) {
-  const { data } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['content-summary', tenantId],
     queryFn: () => getContentSummary(tenantId),
     staleTime: 60_000,
@@ -192,10 +221,27 @@ export default function MyPostsCards({ tenantId }: { tenantId: string }) {
 
   return (
     <>
+      {isError && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <p style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            fontFamily: 'var(--font-sans)', fontSize: '0.85rem', color: 'var(--muted)', margin: '0 0 10px',
+          }}>
+            <AlertCircle size={15} strokeWidth={2} aria-hidden="true" /> Couldn't load your posts and stories right now.
+          </p>
+          <button type="button" onClick={() => refetch()} className="btn btn-secondary btn-sm">
+            Retry
+          </button>
+        </div>
+      )}
+
       <SummaryCard
         icon={Newspaper}
         title="My Field Notes"
         source={summary?.field_notes}
+        isLoading={isLoading}
+        groupFailed={isError}
+        onRetry={() => refetch()}
         countLine={s => {
           const total = Object.values(s.counts).reduce((a, b) => a + b, 0);
           const published = s.counts.published ?? 0;
@@ -213,6 +259,9 @@ export default function MyPostsCards({ tenantId }: { tenantId: string }) {
         icon={ArrowLeftRight}
         title="My Exchange Posts"
         source={summary?.exchange}
+        isLoading={isLoading}
+        groupFailed={isError}
+        onRetry={() => refetch()}
         countLine={s => {
           const total = Object.values(s.counts).reduce((a, b) => a + b, 0);
           return `${total} ${total === 1 ? 'post' : 'posts'} - ${s.counts.active ?? 0} active`;
@@ -229,6 +278,9 @@ export default function MyPostsCards({ tenantId }: { tenantId: string }) {
         icon={Sprout}
         title="My Stand"
         source={summary?.fresh}
+        isLoading={isLoading}
+        groupFailed={isError}
+        onRetry={() => refetch()}
         countLine={s => {
           const stands = s.counts.stands ?? 0;
           const posts = s.counts.live_posts ?? 0;
@@ -246,6 +298,9 @@ export default function MyPostsCards({ tenantId }: { tenantId: string }) {
         icon={Signpost}
         title="My Sales"
         source={summary?.sales}
+        isLoading={isLoading}
+        groupFailed={isError}
+        onRetry={() => refetch()}
         countLine={s => {
           const total = s.counts.sales ?? 0;
           const onNow = s.counts.on_now ?? 0;
@@ -263,6 +318,9 @@ export default function MyPostsCards({ tenantId }: { tenantId: string }) {
         icon={Truck}
         title="My Schedule"
         source={summary?.popups}
+        isLoading={isLoading}
+        groupFailed={isError}
+        onRetry={() => refetch()}
         countLine={s => {
           const vendors = s.counts.vendors ?? 0;
           const upcoming = s.counts.upcoming_stops ?? 0;
@@ -280,6 +338,9 @@ export default function MyPostsCards({ tenantId }: { tenantId: string }) {
         icon={UtensilsCrossed}
         title="My Kitchen"
         source={summary?.meals}
+        isLoading={isLoading}
+        groupFailed={isError}
+        onRetry={() => refetch()}
         countLine={s => {
           const kitchens = s.counts.kitchens ?? 0;
           const upcoming = s.counts.upcoming_meals ?? 0;
@@ -297,6 +358,9 @@ export default function MyPostsCards({ tenantId }: { tenantId: string }) {
         icon={PawPrint}
         title="Home Safe"
         source={summary?.pets}
+        isLoading={isLoading}
+        groupFailed={isError}
+        onRetry={() => refetch()}
         countLine={s => {
           const looking = s.counts.looking ?? 0;
           const homeSafe = s.counts.home_safe ?? 0;
@@ -314,6 +378,9 @@ export default function MyPostsCards({ tenantId }: { tenantId: string }) {
         icon={Camera}
         title="My Splash"
         source={summary?.splash}
+        isLoading={isLoading}
+        groupFailed={isError}
+        onRetry={() => refetch()}
         countLine={s => {
           const total = s.counts.submissions ?? 0;
           const licensed = s.counts.licensed ?? 0;

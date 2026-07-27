@@ -21,18 +21,18 @@ export interface BusinessOverview {
   volunteer: { active_listings: number; spots_filled: number; spots_total: number };
 }
 
+// Returns null only when there is no token yet (not authenticated) - a
+// legitimate non-error state. Any real fetch failure (network error, timeout,
+// non-OK status) throws, so callers can tell "couldn't reach the Hub" apart
+// from "reached it, nothing going on" instead of both collapsing to null.
 export async function getBusinessOverview(): Promise<BusinessOverview | null> {
   const token = getToken();
   if (!token) return null;
-  try {
-    const res = await fetch(`${BUSINESS_API}/overview`, {
-      headers: { Authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(3000),
-    });
-    if (!res.ok) return null;
-    const body = await res.json() as { data: BusinessOverview };
-    return body.data;
-  } catch {
-    return null;
-  }
+  const res = await fetch(`${BUSINESS_API}/overview`, {
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(3000),
+  });
+  if (!res.ok) throw new Error(`Business Hub overview failed: ${res.status}`);
+  const body = await res.json() as { data: BusinessOverview };
+  return body.data;
 }

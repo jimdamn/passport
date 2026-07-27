@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
-import { LayoutDashboard, ChevronRight } from 'lucide-react';
+import { LayoutDashboard, ChevronRight, AlertCircle } from 'lucide-react';
 import { getBusinessOverview } from '../../api/overview';
 import { Badge } from '../ui/Badge';
+import { Spinner } from '../ui/Spinner';
 
 const HUB_URL = 'https://business.lakeandlocals.com';
 
@@ -28,21 +29,35 @@ function Row({ label, badge, href }: { label: string; badge?: number; href?: str
 }
 
 export default function BusinessOverviewCard() {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['business-overview'],
     queryFn: getBusinessOverview,
     staleTime: 60_000,
   });
 
-  if (isLoading) return null;
-
   return (
-    <div className="card" style={{ marginBottom: 16 }}>
+    <div className="card" style={{ marginBottom: 16, minHeight: 180 }}>
       <h3 style={{ margin: '0 0 12px', fontSize: '1.05rem', fontFamily: 'var(--font-serif)', color: 'var(--green)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 8 }}>
         <LayoutDashboard size={17} strokeWidth={2} color="var(--amber)" aria-hidden="true" /> Your Business at a Glance
       </h3>
 
-      {data ? (
+      {isLoading ? (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '24px 0' }}>
+          <Spinner size="md" />
+        </div>
+      ) : isError ? (
+        <div style={{ marginBottom: 12 }}>
+          <p style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            fontFamily: 'var(--font-sans)', fontSize: '0.85rem', color: 'var(--muted)', margin: '0 0 10px',
+          }}>
+            <AlertCircle size={15} strokeWidth={2} aria-hidden="true" /> Couldn't reach the Business Hub.
+          </p>
+          <button type="button" onClick={() => refetch()} className="btn btn-secondary btn-sm">
+            Retry
+          </button>
+        </div>
+      ) : data ? (
         <>
           <Row
             label={`${data.endorsements.pending} pending endorsement${data.endorsements.pending === 1 ? '' : 's'}`}
