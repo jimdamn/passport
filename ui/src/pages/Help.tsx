@@ -744,7 +744,7 @@ export default function Help() {
           Look for scannable QR codes displayed at member merchants or parade street teams across your region!
         </p>
         <Link to="/my-stamps" className="btn btn-amber">
-          My Passport Stamps
+          Stamps
         </Link>
       </div>
 

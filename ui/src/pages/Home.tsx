@@ -57,7 +57,7 @@ export default function Home() {
     },
     {
       icon: <Award size={28} style={{ color: 'var(--amber)' }} />,
-      title: 'My Stamps',
+      title: 'Stamps',
       blurb: 'Your collection, wins, and prize claims.',
       to: '/my-stamps',
     },

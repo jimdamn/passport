@@ -50,7 +50,7 @@ export default function PassportTopbar() {
 
   const desktopLinks: TopbarLink[] = user
     ? [
-        { label: 'My Stamps', to: '/my-stamps' },
+        { label: 'Stamps', to: '/my-stamps' },
         { label: 'Edit Profile', onClick: () => openProfile() },
         { label: 'Help', to: '/help' },
         { label: 'Apps', to: HUB_URL, external: true },
@@ -62,7 +62,7 @@ export default function PassportTopbar() {
 
   const drawerLinks: TopbarLink[] = user
     ? [
-        { label: 'My Stamps', to: '/my-stamps', icon: Award },
+        { label: 'Stamps', to: '/my-stamps', icon: Award },
         { label: 'My QR Code', onClick: () => setQrOpen(true), icon: QrCode },
         { label: 'Edit Profile', onClick: () => openProfile(), icon: User },
         { label: 'Help', to: '/help', icon: HelpCircle },
