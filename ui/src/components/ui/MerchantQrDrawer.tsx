@@ -398,7 +398,7 @@ export default function MerchantQrDrawer({ open, onClose }: Props) {
               textAlign: 'left',
               lineHeight: 1.45,
             }}>
-              <strong>Verified Presence Guard:</strong> When scanned, our platform momentarily checks the scanner's high-accuracy GPS coordinates against your geofenced business coordinates to prevent off-site claims.
+              Check-ins only count when the scan happens at your place.
             </p>
           </div>
         </div>

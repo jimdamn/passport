@@ -105,10 +105,10 @@ const EXAMPLE_BADGES: Badge[] = [
     unlocked: false,
   },
   {
-    id: 'five-star',
-    name: 'Perfect Explorer',
+    id: 'neighbor',
+    name: 'Neighbor',
     icon: '🌟',
-    description: 'Maintained a flawless rating across all activities.',
+    description: 'Vouched for by someone who knows you.',
     unlocked: false,
   },
   {

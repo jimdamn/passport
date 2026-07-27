@@ -5,16 +5,6 @@ import { useTenant } from '../../context/TenantContext';
 import { getToken } from '../../api/client';
 import { Spinner } from './Spinner';
 
-function obfuscateUserId(id: number | string): string {
-  const numId = typeof id === 'string' ? parseInt(id, 10) : id;
-  if (isNaN(numId)) return String(id);
-  // Shift and XOR logic for premium membership key formatting (KK-XXX-XXX)
-  const shifted = (numId + 987654) ^ 0xADB8F;
-  const b36 = shifted.toString(36).toUpperCase().padStart(6, '0');
-  return `KK-${b36.slice(0, 3)}-${b36.slice(3)}`;
-}
-
-
 interface Props {
   open: boolean;
   onClose: () => void;
@@ -229,19 +219,6 @@ export default function QrDrawer({ open, onClose }: Props) {
             {user.display_name}
           </h3>
 
-          <div style={{
-            fontFamily: 'var(--font-sans)',
-            fontSize: '0.75rem',
-            fontWeight: 700,
-            color: 'var(--sage)',
-            background: 'rgba(80,120,80,0.1)',
-            padding: '3px 10px',
-            borderRadius: 'var(--r-pill)',
-            marginBottom: 16,
-          }}>
-            ID: {obfuscateUserId(user.id)}
-          </div>
-
           <p style={{
             fontFamily: 'var(--font-sans)',
             fontSize: '0.85rem',
@@ -250,7 +227,7 @@ export default function QrDrawer({ open, onClose }: Props) {
             maxWidth: 320,
             margin: '0 0 20px 0',
           }}>
-            Show this QR code to other members or local businesses. They can scan it to instantly transfer {creditsName} to your account.
+            Show this QR code to other members or local businesses. They can scan it to send you {creditsName}.
           </p>
 
           {/* Secure Badge Info */}
@@ -274,7 +251,7 @@ export default function QrDrawer({ open, onClose }: Props) {
               textAlign: 'left',
               lineHeight: 1.45,
             }}>
-              <strong>Secure Link:</strong> This code is dynamically rendered from your private account session. Unauthenticated users cannot view or scrape this image.
+              This code is yours alone. It only works while you are signed in.
             </p>
           </div>
         </div>

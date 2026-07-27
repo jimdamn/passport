@@ -7,6 +7,7 @@ import { getBalance } from '../../api/credits';
 import { Spinner } from '../ui/Spinner';
 import { formatDate } from '../../utils/dates';
 import { resolveBalance, balanceText } from '../../utils/balance';
+import { ledgerLabel } from '../../utils/ledgerLabels';
 import type { CreditEntry } from '../../types';
 
 export type StatsPanelType = 'credits';
@@ -61,9 +62,9 @@ function LoadingState() {
 // ── Credits panel ─────────────────────────────────────────────────────────────
 
 const PLACEHOLDER_CREDITS: CreditEntry[] = [
-  { id: 'p1', amount: 25,  balance_after: 25, reason: 'Welcome bonus',    created_at: 0 },
-  { id: 'p2', amount: -5,  balance_after: 20, reason: 'Offer boost',      created_at: 0 },
-  { id: 'p3', amount: 10,  balance_after: 30, reason: 'Trade completed',  created_at: 0 },
+  { id: 'p1', amount: 25,  balance_after: 25, reason: 'Welcome bonus',              created_at: 0 },
+  { id: 'p2', amount: 5,   balance_after: 30, reason: 'Checked in at a local shop', created_at: 0 },
+  { id: 'p3', amount: -10, balance_after: 20, reason: 'Claimed a local deal',       created_at: 0 },
 ];
 
 function CreditsContent({ tenantId, creditsName }: { tenantId: string; creditsName: string }) {
@@ -126,7 +127,7 @@ function CreditsContent({ tenantId, creditsName }: { tenantId: string; creditsNa
         }}>
           <div>
             <div style={{ fontFamily: 'var(--font-sans)', fontSize: '0.875rem', color: 'var(--green)' }}>
-              {entry.reason}
+              {ledgerLabel(entry)}
             </div>
             {hasData && entry.created_at > 0 && (
               <div style={{ fontFamily: 'var(--font-sans)', fontSize: '0.72rem', color: 'var(--muted)' }}>

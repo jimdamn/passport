@@ -4,8 +4,6 @@ export interface User {
   display_name: string;
   avatar_url: string | null;
   credits_balance: number;
-  rating_avg: number;
-  rating_count: number;
   trade_count: number;
   location: string | null;
   bio: string | null;
@@ -69,14 +67,11 @@ export interface Offer {
   zip_code: string | null;
   zip_lat: number | null;
   zip_lon: number | null;
-  is_boosted: number;
   status: string;
   view_count: number;
   interest_count: number;
   created_at: number;
   display_name: string;
-  rating_avg: number;
-  rating_count: number;
   category_name: string | null;
   category_icon: string | null;
 }
@@ -121,6 +116,7 @@ export interface CreditEntry {
   amount: number;
   balance_after: number;
   reason: string;
+  ref_type?: string | null;
   created_at: number;
 }
 

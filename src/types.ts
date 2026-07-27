@@ -159,15 +159,12 @@ export interface Offer {
   zip_code: string | null;
   zip_lat: number | null;
   zip_lon: number | null;
-  is_boosted: number;
   status: string;
   view_count: number;
   interest_count: number;
   created_at: number;
   // joined fields
   display_name?: string;
-  rating_avg?: number;
-  rating_count?: number;
   category_name?: string;
   category_icon?: string;
 }

@@ -152,7 +152,7 @@ export function BusinessPersonaDrawer({
                 style={{ background: '#f5f5f5', color: '#888', cursor: 'not-allowed' }}
               />
               <p className="form-hint" style={{ marginTop: 8, lineHeight: 1.4 }}>
-                Your business record is managed through your merchant profile. Contact your network administrator to update business details.
+                Your business details are managed from your <Link to="/merchant">Merchant Dashboard</Link>.
               </p>
             </div>
           </>

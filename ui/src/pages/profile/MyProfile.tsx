@@ -11,6 +11,8 @@ import { getAdminSupportCount } from '../../api/support';
 import { getMyBusiness } from '../../api/merchant';
 import { getAroundInterests, PICKER_LABELS } from '../../api/around';
 import { resolveBalance, balanceText } from '../../utils/balance';
+import { ledgerLabel } from '../../utils/ledgerLabels';
+import { formatDate } from '../../utils/dates';
 import { Spinner } from '../../components/ui/Spinner';
 import StatsPanel, { type StatsPanelType } from '../../components/profile/StatsPanel';
 import BadgeStrip, { type Badge } from '../../components/ui/BadgeStrip';
@@ -343,7 +345,14 @@ export default function MyProfile() {
                 padding: '9px 0', borderBottom: '1px solid var(--border)',
               }}
             >
-              <span style={{ fontSize: '0.875rem' }}>{entry.reason}</span>
+              <div>
+                <div style={{ fontSize: '0.875rem' }}>{ledgerLabel(entry)}</div>
+                {entry.created_at > 0 && (
+                  <div style={{ fontSize: '0.72rem', color: 'var(--muted)' }}>
+                    {formatDate(entry.created_at)}
+                  </div>
+                )}
+              </div>
               <span style={{
                 fontWeight: 'bold', fontSize: '0.9rem',
                 color: entry.amount > 0 ? 'var(--sage)' : 'var(--error)',

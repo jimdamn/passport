@@ -14,7 +14,7 @@
  * the Exchange forwards the Set-Cookie header so the browser stays in sync.
  *
  * The /me and /me (PUT) endpoints stay in the Exchange because they return and
- * update Exchange-specific profile data (trade_count, rating_avg, location, etc.)
+ * update Exchange-specific profile data (trade_count, location, etc.)
  */
 
 import { Hono } from 'hono';
