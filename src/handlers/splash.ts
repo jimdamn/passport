@@ -407,10 +407,11 @@ export async function getSplashMediaView(c: AppContext) {
   if (!Number.isInteger(id)) throw new HTTPException(400, { message: 'Invalid submission id' });
 
   const row = await c.env.DB.prepare(
-    'SELECT kkauth_uid, media_type, image_key, stream_uid FROM splash_submissions WHERE id = ? AND tenant_id = ?'
-  ).bind(id, tenant.id).first<{ kkauth_uid: number; media_type: string; image_key: string | null; stream_uid: string | null }>();
+    'SELECT kkauth_uid, media_type, image_key, image_watermarked_key, status, stream_uid FROM splash_submissions WHERE id = ? AND tenant_id = ?'
+  ).bind(id, tenant.id).first<{ kkauth_uid: number; media_type: string; image_key: string | null; image_watermarked_key: string | null; status: string; stream_uid: string | null }>();
   if (!row) throw new HTTPException(404, { message: 'Submission not found' });
-  if (Number(user.sub) !== row.kkauth_uid && !user.is_admin) {
+  const isOwner = Number(user.sub) === row.kkauth_uid;
+  if (!isOwner && !user.is_admin) {
     throw new HTTPException(403, { message: 'Not your submission.' });
   }
 
@@ -421,9 +422,17 @@ export async function getSplashMediaView(c: AppContext) {
   }
 
   if (!row.image_key) throw new HTTPException(404, { message: 'No photo on this submission yet.' });
+  // Owner sees their own submission clean, always, regardless of status.
+  // Admin sees watermarked by default (same as the merchant currently
+  // sees), with ?original=true as the explicit "view original" escape
+  // hatch for real moderation work (Jim's call,
+  // SOCIAL-SPLASH-WATERMARK-DESIGN.md).
+  const wantsOriginal = c.req.query('original') === 'true';
+  const variant: 'clean' | 'watermarked' =
+    isOwner || wantsOriginal || !row.image_watermarked_key ? 'clean' : 'watermarked';
   const expiresAt = Math.floor(Date.now() / 1000) + MEDIA_VIEW_TTL_SECONDS;
-  const sig = await hmacHex(c.env.SPLASH_MEDIA_SECRET, `${id}|${expiresAt}`);
-  const url = `/api/t/${tenant.id}/splash/media/${id}/raw?exp=${expiresAt}&sig=${sig}`;
+  const sig = await hmacHex(c.env.SPLASH_MEDIA_SECRET, `${id}|${variant}|${expiresAt}`);
+  const url = `/api/t/${tenant.id}/splash/media/${id}/raw?exp=${expiresAt}&variant=${variant}&sig=${sig}`;
   return c.json({ data: { url, type: 'image' } });
 }
 
@@ -437,6 +446,7 @@ export async function getSplashMediaRaw(c: AppContext) {
   const tenant = c.get('tenant');
   const id = Number(c.req.param('id'));
   const exp = Number(c.req.query('exp'));
+  const variant = c.req.query('variant') === 'watermarked' ? 'watermarked' : 'clean';
   const sig = c.req.query('sig') ?? '';
   if (!Number.isInteger(id) || !Number.isFinite(exp) || !sig) {
     throw new HTTPException(400, { message: 'Invalid media link' });
@@ -444,17 +454,26 @@ export async function getSplashMediaRaw(c: AppContext) {
   if (Math.floor(Date.now() / 1000) > exp) {
     throw new HTTPException(403, { message: 'This link has expired.' });
   }
-  const expected = await hmacHex(c.env.SPLASH_MEDIA_SECRET, `${id}|${exp}`);
+  // The variant is part of what's signed, not a separate unchecked flag - a
+  // caller can't request "clean" bytes by editing the query string, since
+  // that would no longer match the signature minted for this link
+  // (SOCIAL-SPLASH-WATERMARK-DESIGN.md).
+  const expected = await hmacHex(c.env.SPLASH_MEDIA_SECRET, `${id}|${variant}|${exp}`);
   if (!timingSafeEqual(expected, sig)) {
     throw new HTTPException(403, { message: 'Invalid media link' });
   }
 
   const row = await c.env.DB.prepare(
-    'SELECT image_key FROM splash_submissions WHERE id = ? AND tenant_id = ?'
-  ).bind(id, tenant.id).first<{ image_key: string | null }>();
+    'SELECT image_key, image_watermarked_key FROM splash_submissions WHERE id = ? AND tenant_id = ?'
+  ).bind(id, tenant.id).first<{ image_key: string | null; image_watermarked_key: string | null }>();
   if (!row?.image_key) throw new HTTPException(404, { message: 'Photo not found' });
 
-  const upstream = await c.env.KKAUTH.fetch(new Request(`https://kkauth/internal/images/${row.image_key}`, {
+  // Legacy fallback: a pre-watermark-feature row (or a row whose watermark
+  // generation degraded gracefully) has no image_watermarked_key - serve
+  // clean rather than 404, exactly today's behavior for those rows.
+  const key = (variant === 'watermarked' && row.image_watermarked_key) ? row.image_watermarked_key : row.image_key;
+
+  const upstream = await c.env.KKAUTH.fetch(new Request(`https://kkauth/internal/images/${key}`, {
     headers: { 'X-Internal-Secret': c.env.INTERNAL_SECRET },
   }));
   if (!upstream.ok) {

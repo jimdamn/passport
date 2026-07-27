@@ -260,8 +260,8 @@ export async function getSplashInboxMediaView(c: AppContext) {
   await requireMerchantBridge(c, businessId);
 
   const row = await c.env.DB.prepare(
-    'SELECT business_id, media_type, image_key, stream_uid FROM splash_submissions WHERE id = ? AND tenant_id = ?'
-  ).bind(id, tenantId).first<{ business_id: string; media_type: string; image_key: string | null; stream_uid: string | null }>();
+    'SELECT business_id, media_type, image_key, image_watermarked_key, status, stream_uid FROM splash_submissions WHERE id = ? AND tenant_id = ?'
+  ).bind(id, tenantId).first<{ business_id: string; media_type: string; image_key: string | null; image_watermarked_key: string | null; status: string; stream_uid: string | null }>();
   if (!row) throw new HTTPException(404, { message: 'Submission not found' });
   if (row.business_id !== businessId) throw new HTTPException(403, { message: 'This submission does not belong to your business.' });
 
@@ -272,10 +272,16 @@ export async function getSplashInboxMediaView(c: AppContext) {
   }
 
   if (!row.image_key) throw new HTTPException(404, { message: 'No photo on this submission yet.' });
+  // Merchant sees watermarked until the submission is actually licensed -
+  // that's the whole point of this feature (SOCIAL-SPLASH-WATERMARK-
+  // DESIGN.md). Legacy fallback: no image_watermarked_key means clean,
+  // same as before this feature existed.
+  const variant: 'clean' | 'watermarked' =
+    row.status === 'licensed' || !row.image_watermarked_key ? 'clean' : 'watermarked';
   const expiresAt = Math.floor(Date.now() / 1000) + MEDIA_VIEW_TTL_SECONDS;
-  const sig = await hmacHex(c.env.SPLASH_MEDIA_SECRET, `${id}|${expiresAt}`);
+  const sig = await hmacHex(c.env.SPLASH_MEDIA_SECRET, `${id}|${variant}|${expiresAt}`);
   const hostname = await tenantHostname(c, tenantId);
-  const url = `https://${hostname}/api/t/${tenantId}/splash/media/${id}/raw?exp=${expiresAt}&sig=${sig}`;
+  const url = `https://${hostname}/api/t/${tenantId}/splash/media/${id}/raw?exp=${expiresAt}&variant=${variant}&sig=${sig}`;
   return c.json({ data: { url, type: 'image' } });
 }
 
@@ -614,14 +620,14 @@ function tombstoneFinalStatus(row: { status: string; admin_removed_by: string | 
 
 async function sweepSplashDestruction(env: Env): Promise<number> {
   const { results } = await env.DB.prepare(`
-    SELECT id, tenant_id, kkauth_uid, business_name, media_type, image_key, image_original_key, stream_uid, status, admin_removed_by
+    SELECT id, tenant_id, kkauth_uid, business_name, media_type, image_key, image_original_key, image_watermarked_key, stream_uid, status, admin_removed_by
     FROM splash_submissions
     WHERE status IN ('declined', 'removed') AND destroy_after <= unixepoch()
       AND NOT EXISTS (SELECT 1 FROM splash_offers WHERE submission_id = splash_submissions.id AND status = 'open')
     LIMIT 20
   `).all<{
     id: number; tenant_id: string; kkauth_uid: number; business_name: string; media_type: string;
-    image_key: string | null; image_original_key: string | null; stream_uid: string | null;
+    image_key: string | null; image_original_key: string | null; image_watermarked_key: string | null; stream_uid: string | null;
     status: string; admin_removed_by: string | null;
   }>();
 
@@ -634,7 +640,7 @@ async function sweepSplashDestruction(env: Env): Promise<number> {
       if (row.media_type === 'video') {
         if (row.stream_uid) await deleteStreamVideo(env, row.stream_uid);
       } else {
-        for (const key of [row.image_key, row.image_original_key]) {
+        for (const key of [row.image_key, row.image_original_key, row.image_watermarked_key]) {
           if (!key) continue;
           const res = await env.KKAUTH.fetch(new Request(`https://kkauth/internal/images/${key}`, {
             method: 'DELETE',
