@@ -117,7 +117,7 @@ export default function AdminVolunteer() {
           <div key={s.id} className="card" style={{ background: 'var(--white)', padding: 16, borderLeft: '4px solid var(--amber)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
               <div>
-                <h3 style={{ margin: '0 0 4px', fontSize: '1rem', color: 'var(--green)', fontWeight: 600 }}>{s.title}</h3>
+                <h3 style={{ margin: '0 0 4px', fontSize: '1rem', color: 'var(--green)', fontWeight: 600, fontFamily: 'var(--font-serif)' }}>{s.title}</h3>
                 <p style={{ margin: '0 0 2px', fontSize: '0.76rem', color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
                   <Store size={11} /> {s.business_name}
                 </p>

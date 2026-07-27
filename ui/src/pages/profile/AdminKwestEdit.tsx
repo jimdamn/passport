@@ -298,7 +298,7 @@ export default function AdminKwestEdit() {
 
       {/* Hunt config */}
       <div className="card" style={{ padding: 20, background: 'var(--white)', marginBottom: 20 }}>
-        <h3 style={{ margin: '0 0 16px', fontSize: '1.05rem', color: 'var(--green)' }}>Hunt Config</h3>
+        <h3 style={{ margin: '0 0 16px', fontSize: '1.05rem', color: 'var(--green)', fontFamily: 'var(--font-serif)' }}>Hunt Config</h3>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
           <div><label style={labelStyle}>Name</label><input className="form-input" style={inputStyle} value={huntForm.name ?? ''} onChange={e => setHuntForm(f => ({ ...f, name: e.target.value }))} /></div>
           <div><label style={labelStyle}>Location label</label><input className="form-input" style={inputStyle} value={huntForm.location_label ?? ''} onChange={e => setHuntForm(f => ({ ...f, location_label: e.target.value }))} /></div>
@@ -335,7 +335,7 @@ export default function AdminKwestEdit() {
 
       {/* Steps */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <h3 style={{ margin: 0, fontSize: '1.05rem', color: 'var(--green)' }}>Steps</h3>
+        <h3 style={{ margin: 0, fontSize: '1.05rem', color: 'var(--green)', fontFamily: 'var(--font-serif)' }}>Steps</h3>
         <button className="btn btn-amber btn-sm" style={{ minHeight: 32, display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={openCreateStep}>
           <Plus size={13} /> Add Step
         </button>
@@ -379,7 +379,7 @@ export default function AdminKwestEdit() {
 
       {stepForm && (
         <div className="card" style={{ padding: 20, background: 'var(--white)', marginBottom: 20 }}>
-          <h3 style={{ margin: '0 0 16px', fontSize: '1.05rem', color: 'var(--green)' }}>{editingStepId ? 'Edit Step' : 'New Step'}</h3>
+          <h3 style={{ margin: '0 0 16px', fontSize: '1.05rem', color: 'var(--green)', fontFamily: 'var(--font-serif)' }}>{editingStepId ? 'Edit Step' : 'New Step'}</h3>
 
           <div style={{ marginBottom: 12 }}>
             <label style={labelStyle}>Clue</label>

@@ -124,7 +124,7 @@ export default function AdminKwest() {
 
       {showForm && (
         <div className="card" style={{ padding: 20, background: 'var(--white)', marginBottom: 20 }}>
-          <h3 style={{ margin: '0 0 16px', fontSize: '1.05rem', color: 'var(--green)' }}>New Hunt</h3>
+          <h3 style={{ margin: '0 0 16px', fontSize: '1.05rem', color: 'var(--green)', fontFamily: 'var(--font-serif)' }}>New Hunt</h3>
           <p style={{ margin: '0 0 16px', fontSize: '0.8rem', color: 'var(--muted)' }}>
             Start with the basics - you'll add steps, rewards, and the rest of the config next.
           </p>
@@ -206,7 +206,7 @@ export default function AdminKwest() {
             }}>
               <div style={{ minWidth: 0 }}>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4, flexWrap: 'wrap' }}>
-                  <h3 style={{ margin: 0, fontSize: '1rem', color: 'var(--green)', fontWeight: 600 }}>{hunt.name}</h3>
+                  <h3 style={{ margin: 0, fontSize: '1rem', color: 'var(--green)', fontWeight: 600, fontFamily: 'var(--font-serif)' }}>{hunt.name}</h3>
                   <span style={{
                     fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase', padding: '2px 8px',
                     borderRadius: 'var(--r-sm)', background: 'rgba(30,51,32,0.07)', color: STATUS_COLORS[hunt.status] ?? 'var(--muted)',

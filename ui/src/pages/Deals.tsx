@@ -262,7 +262,7 @@ export default function Deals() {
                             <Flame size={11} /> Hot Deal
                           </span>
                         )}
-                        <h3 style={{ margin: 0, fontSize: '1rem', color: 'var(--green)', fontWeight: 600 }}>{deal.title}</h3>
+                        <h3 style={{ margin: 0, fontSize: '1rem', color: 'var(--green)', fontWeight: 600, fontFamily: 'var(--font-serif)' }}>{deal.title}</h3>
                       </div>
                       <p style={{ margin: '0 0 4px', fontSize: '0.78rem', color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
                         <Store size={12} /> {deal.merchant_name ?? 'Local merchant'}
@@ -383,7 +383,7 @@ export default function Deals() {
                           }}>
                             {OFFER_TYPE_LABELS[offer.offer_type] || offer.offer_type}
                           </span>
-                          <h3 style={{ margin: 0, fontSize: '1rem', color: 'var(--green)', fontWeight: 600 }}>{offer.title}</h3>
+                          <h3 style={{ margin: 0, fontSize: '1rem', color: 'var(--green)', fontWeight: 600, fontFamily: 'var(--font-serif)' }}>{offer.title}</h3>
                           <ExternalLink size={13} style={{ color: 'var(--muted)' }} />
                         </div>
                       </a>

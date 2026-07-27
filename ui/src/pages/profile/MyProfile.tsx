@@ -192,7 +192,7 @@ export default function MyProfile() {
             avatarUrl={currentAvatarUrl}
           />
           <div style={{ flex: 1, minWidth: 0 }}>
-            <h2 style={{ margin: '0 0 2px', fontSize: '1.15rem' }}>{profile.display_name}</h2>
+            <h2 style={{ margin: '0 0 2px', fontSize: '1.15rem', fontFamily: 'var(--font-serif)' }}>{profile.display_name}</h2>
             <p style={{ margin: '0 0 4px', fontSize: '0.85rem', color: 'var(--muted)' }}>{profile.email}</p>
             {profile.location && (
               <p style={{ margin: '0 0 4px', fontSize: '0.85rem', color: 'var(--sage)' }}>
@@ -365,7 +365,7 @@ export default function MyProfile() {
               </div>
               <span style={{
                 fontWeight: 'bold', fontSize: '0.9rem',
-                color: entry.amount > 0 ? 'var(--sage)' : 'var(--error)',
+                color: entry.amount > 0 ? 'var(--sage)' : 'var(--muted)',
               }}>
                 {entry.amount > 0 ? '+' : ''}{entry.amount}
               </span>

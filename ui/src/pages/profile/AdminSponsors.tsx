@@ -396,7 +396,7 @@ export default function AdminSponsors() {
 
       {showForm && (
         <div ref={formRef} className="card" style={{ marginBottom: 20 }}>
-          <h3 style={{ margin: '0 0 16px', fontSize: '1.05rem', color: 'var(--green)' }}>
+          <h3 style={{ margin: '0 0 16px', fontSize: '1.05rem', color: 'var(--green)', fontFamily: 'var(--font-serif)' }}>
             {editingId ? 'Edit Placement' : 'New Placement'}
           </h3>
 
@@ -604,7 +604,7 @@ export default function AdminSponsors() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
                 <div>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4, flexWrap: 'wrap' }}>
-                    <h3 style={{ margin: 0, fontSize: '1rem', color: 'var(--green)', fontWeight: 600 }}>{s.sponsor_name}</h3>
+                    <h3 style={{ margin: 0, fontSize: '1rem', color: 'var(--green)', fontWeight: 600, fontFamily: 'var(--font-serif)' }}>{s.sponsor_name}</h3>
                     <span style={{ fontSize: '0.66rem', textTransform: 'uppercase', padding: '2px 6px', borderRadius: 'var(--r-sm)', background: 'rgba(30,51,32,0.12)', color: 'var(--green)', fontWeight: 700 }}>
                       {appLabel(s.app)}
                     </span>

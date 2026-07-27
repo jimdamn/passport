@@ -552,7 +552,7 @@ export default function MerchantDashboard() {
 
       {showForm && (
         <div className="card" style={{ padding: 20, background: 'var(--white)', marginBottom: 16 }}>
-          <h3 style={{ margin: '0 0 16px', fontSize: '1rem', color: 'var(--green)' }}>
+          <h3 style={{ margin: '0 0 16px', fontSize: '1rem', color: 'var(--green)', fontFamily: 'var(--font-serif)' }}>
             {editingId ? 'Edit Prize' : 'New Prize'}
           </h3>
 
@@ -636,7 +636,7 @@ export default function MerchantDashboard() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
                   <div>
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4, flexWrap: 'wrap' }}>
-                      <h3 style={{ margin: 0, fontSize: '1rem', color: 'var(--green)', fontWeight: 600 }}>{pr.name}</h3>
+                      <h3 style={{ margin: 0, fontSize: '1rem', color: 'var(--green)', fontWeight: 600, fontFamily: 'var(--font-serif)' }}>{pr.name}</h3>
                       <span style={{
                         fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', padding: '2px 6px',
                         borderRadius: 'var(--r-sm)',

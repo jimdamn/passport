@@ -149,7 +149,7 @@ export function BusinessPersonaDrawer({
                 type="text"
                 value={businessName || ''}
                 readOnly
-                style={{ background: '#f5f5f5', color: '#888', cursor: 'not-allowed' }}
+                style={{ background: '#f5f5f5', color: 'var(--muted)', cursor: 'not-allowed' }}
               />
               <p className="form-hint" style={{ marginTop: 8, lineHeight: 1.4 }}>
                 Your business details are managed from your <Link to="/merchant">Merchant Dashboard</Link>.

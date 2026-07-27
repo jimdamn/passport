@@ -93,7 +93,7 @@ export default function PublicProfile() {
         <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', marginBottom: 12 }}>
           <Avatar name={member.display_name} />
           <div>
-            <h2 style={{ margin: '0 0 4px', fontSize: '1.15rem' }}>{member.display_name}</h2>
+            <h2 style={{ margin: '0 0 4px', fontSize: '1.15rem', fontFamily: 'var(--font-serif)' }}>{member.display_name}</h2>
             {member.location && (
               <p style={{ margin: '0 0 6px', fontSize: '0.85rem', color: 'var(--sage)' }}>
                 {member.location}
@@ -118,7 +118,7 @@ export default function PublicProfile() {
 
       {business_links && (
         <div className="card" style={{ marginBottom: 16 }}>
-          <h3 style={{ margin: '0 0 4px', fontSize: '1rem' }}>
+          <h3 style={{ margin: '0 0 4px', fontSize: '1rem', fontFamily: 'var(--font-serif)' }}>
             {business_links.business_name}
           </h3>
           <p style={{ margin: '0 0 14px', fontSize: '0.82rem', color: 'var(--sage)' }}>
@@ -151,7 +151,7 @@ export default function PublicProfile() {
 
       {active_offers.length > 0 && (
         <div className="card" style={{ marginBottom: 16 }}>
-          <h3 style={{ margin: '0 0 12px', fontSize: '1rem' }}>
+          <h3 style={{ margin: '0 0 12px', fontSize: '1rem', fontFamily: 'var(--font-serif)' }}>
             On the Exchange
           </h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

@@ -157,7 +157,7 @@ export default function HappeningsManager() {
 
       {showForm && (
         <div className="card" style={{ padding: 20, background: 'var(--white)', marginBottom: 16 }}>
-          <h3 style={{ margin: '0 0 16px', fontSize: '1rem', color: 'var(--green)' }}>
+          <h3 style={{ margin: '0 0 16px', fontSize: '1rem', color: 'var(--green)', fontFamily: 'var(--font-serif)' }}>
             {editingId ? 'Edit Happening' : 'New Happening'}
           </h3>
 

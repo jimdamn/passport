@@ -255,7 +255,7 @@ export default function AdminPlaques() {
 
       {showForm && (
         <div className="card" style={{ padding: 20, background: 'var(--white)', marginBottom: 20 }}>
-          <h3 style={{ margin: '0 0 16px', fontSize: '1.05rem', color: 'var(--green)' }}>
+          <h3 style={{ margin: '0 0 16px', fontSize: '1.05rem', color: 'var(--green)', fontFamily: 'var(--font-serif)' }}>
             {editingId ? 'Edit Plaque' : 'New Plaque'}
           </h3>
 
@@ -353,7 +353,7 @@ export default function AdminPlaques() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
                   <div>
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4, flexWrap: 'wrap' }}>
-                      <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--green)', fontWeight: 600 }}>{p.name}</h3>
+                      <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--green)', fontWeight: 600, fontFamily: 'var(--font-serif)' }}>{p.name}</h3>
                       {isEvent && (
                         <span style={{ fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', padding: '2px 6px', borderRadius: 'var(--r-sm)', background: 'rgba(200, 134, 10, 0.1)', color: 'var(--amber)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                           <PartyPopper size={10} /> Event

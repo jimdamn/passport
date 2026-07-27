@@ -1,12 +1,15 @@
 /* ─── Design Tokens ─────────────────────────────────────────────────── */
 :root {
   --green:  #1e3320;
-  --amber:  #c8860a;
+  --amber:  #c8860a;  /* brand accent only - borders, icons, chips. Never text on light, never a button fill (3.06:1 on white, 2.71:1 on cream - both fail AA). */
+  --amber-ink:     #8a5c00;  /* amber as text on a light background - 5.82:1 on white */
+  --amber-fill:    #a26c00;  /* .btn-amber background only - white text on it = 4.49:1 */
+  --amber-on-dark: #e8b84b;  /* amber as text on the forest-green active persona card */
   --sage:   #507850;
   --cream:  #f4f1ea;
   --white:  #ffffff;
   --border: #ddd8cc;
-  --muted:  #777777;
+  --muted:  #6b6b6b;  /* was #777777: 4.48:1 on white / 4.00:1 on cream, both fail AA */
   --error:  #b00000;
   --success: #2a6a2a;
 
@@ -30,7 +33,7 @@ html {
 }
 
 body {
-  font-family: var(--font-serif);
+  font-family: var(--font-sans);
   background: var(--cream);
   color: var(--green);
   line-height: 1.55;
@@ -40,8 +43,9 @@ body {
   padding-right: env(safe-area-inset-right);
 }
 
-a { color: var(--amber); text-decoration: none; }
+a { color: var(--green); text-decoration: none; }
 a:hover { text-decoration: underline; }
+.card a { color: var(--green); }
 
 img { max-width: 100%; display: block; }
 
@@ -466,7 +470,7 @@ img { max-width: 100%; display: block; }
 .btn-secondary { background: var(--white); color: var(--green); border: 1px solid var(--border); }
 .btn-secondary:hover:not(:disabled) { background: var(--cream); text-decoration: none; }
 
-.btn-amber { background: var(--amber); color: var(--white); }
+.btn-amber { background: var(--amber-fill); color: var(--white); }
 .btn-amber:hover:not(:disabled) { opacity: 0.88; text-decoration: none; color: var(--white); }
 
 .btn-danger { background: var(--error); color: var(--white); }
@@ -475,7 +479,7 @@ img { max-width: 100%; display: block; }
 .btn-green { background: var(--sage); color: var(--white); }
 .btn-green:hover:not(:disabled) { opacity: 0.88; }
 
-.btn-sm { padding: 6px 14px; font-size: 0.85rem; min-height: 36px; }
+.btn-sm { padding: 9px 14px; font-size: 0.85rem; min-height: 44px; }
 .btn-block { width: 100%; }
 
 /* ─── Forms ─────────────────────────────────────────────────────────── */
@@ -525,7 +529,7 @@ img { max-width: 100%; display: block; }
 .form-select:focus {
   outline: none;
   border-color: var(--amber);
-  box-shadow: 0 0 0 2px rgba(200, 134, 10, 0.15);
+  box-shadow: 0 0 0 2px var(--amber);
 }
 
 .form-textarea { min-height: 100px; resize: vertical; }
@@ -571,7 +575,7 @@ img { max-width: 100%; display: block; }
   padding: 2px 10px;
   border-radius: var(--r-pill);
   font-family: var(--font-sans);
-  font-size: 0.72rem;
+  font-size: 0.78rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -595,7 +599,7 @@ img { max-width: 100%; display: block; }
 
 .alert-success { background: rgba(42,106,42,0.1);  border-color: var(--success); color: var(--success); }
 .alert-error   { background: rgba(176,0,0,0.08);   border-color: var(--error);   color: var(--error); }
-.alert-info    { background: rgba(200,134,10,0.08); border-color: var(--amber);   color: #8a5c00; }
+.alert-info    { background: rgba(200,134,10,0.08); border-color: var(--amber);   color: var(--amber-ink); }
 
 /* ─── Spinner ───────────────────────────────────────────────────────── */
 @keyframes spin { to { transform: rotate(360deg); } }

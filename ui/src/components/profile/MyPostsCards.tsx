@@ -75,12 +75,24 @@ const PETS_STATUS_LABEL: Record<string, string> = {
 };
 
 const SPLASH_STATUS_LABEL: Record<string, string> = {
-  submitted: 'Waiting for a response',
+  submitted: 'Waiting',
   held: 'Deciding',
   licensed: 'Licensed',
   declined: 'Declined',
   removed: 'Removed',
 };
+
+// Positive/live outcomes across every source's status vocabulary - rendered
+// sage so a good outcome (licensed, published, sold out) doesn't collapse
+// visually into the same gray as a terminal one (cancelled, removed).
+const POSITIVE_STATUSES = new Set([
+  'active', 'published', 'completed', 'visible', 'live', 'sold_out', 'licensed', 'home_safe',
+]);
+
+function chipVariant(item: ContentSummaryItem): 'sage' | 'amber' | 'gray' {
+  if (item.attention) return 'amber';
+  return POSITIVE_STATUSES.has(item.status) ? 'sage' : 'gray';
+}
 
 function RecentRow({ item, statusLabels }: { item: ContentSummaryItem; statusLabels: Record<string, string> }) {
   return (
@@ -100,7 +112,7 @@ function RecentRow({ item, statusLabels }: { item: ContentSummaryItem; statusLab
         </div>
       </div>
       <div style={{ display: 'flex', gap: 6, flexShrink: 0, alignItems: 'center' }}>
-        <Badge variant={item.attention ? 'amber' : 'gray'}>
+        <Badge variant={chipVariant(item)}>
           {statusLabels[item.status] ?? item.status}
         </Badge>
         {item.hidden && <Badge variant="gray">Hidden</Badge>}
@@ -176,7 +188,13 @@ function SummaryCard({
           <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.85rem', color: 'var(--muted)', marginBottom: 4 }}>
             {emptyLine}
           </p>
-          <Link to={emptyCtaUrl} style={{ fontFamily: 'var(--font-sans)', fontSize: '0.85rem', fontWeight: 600 }}>
+          <Link
+            to={emptyCtaUrl}
+            style={{
+              display: 'inline-flex', alignItems: 'center', minHeight: 44,
+              fontFamily: 'var(--font-sans)', fontSize: '0.85rem', fontWeight: 600,
+            }}
+          >
             {emptyCtaLabel}
           </Link>
         </div>
@@ -198,7 +216,8 @@ function SummaryCard({
           <Link
             to={manageUrl}
             style={{
-              display: 'block', marginTop: 12, fontFamily: 'var(--font-sans)',
+              display: 'inline-flex', alignItems: 'center', minHeight: 44,
+              marginTop: 12, fontFamily: 'var(--font-sans)',
               fontSize: '0.85rem', fontWeight: 600, color: 'var(--green)',
             }}
           >

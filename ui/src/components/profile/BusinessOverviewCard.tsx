@@ -90,7 +90,8 @@ export default function BusinessOverviewCard() {
       <a
         href={HUB_URL}
         style={{
-          display: 'block', marginTop: 12, fontFamily: 'var(--font-sans)',
+          display: 'inline-flex', alignItems: 'center', minHeight: 44,
+          marginTop: 12, fontFamily: 'var(--font-sans)',
           fontSize: '0.85rem', fontWeight: 600, color: 'var(--green)',
         }}
       >

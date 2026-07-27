@@ -156,7 +156,7 @@ export default function DealsManager() {
 
       {showForm && (
         <div className="card" style={{ padding: 20, background: 'var(--white)', marginBottom: 16 }}>
-          <h3 style={{ margin: '0 0 16px', fontSize: '1rem', color: 'var(--green)' }}>
+          <h3 style={{ margin: '0 0 16px', fontSize: '1rem', color: 'var(--green)', fontFamily: 'var(--font-serif)' }}>
             {editingId ? 'Edit Deal' : 'New Deal'}
           </h3>
 
@@ -245,7 +245,7 @@ export default function DealsManager() {
                   <div>
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4, flexWrap: 'wrap' }}>
                       {d.is_hot_deal === 1 && <Flame size={14} style={{ color: 'var(--error, #c0392b)' }} />}
-                      <h3 style={{ margin: 0, fontSize: '1rem', color: 'var(--green)', fontWeight: 600 }}>{d.title}</h3>
+                      <h3 style={{ margin: 0, fontSize: '1rem', color: 'var(--green)', fontWeight: 600, fontFamily: 'var(--font-serif)' }}>{d.title}</h3>
                       <span style={{
                         fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', padding: '2px 6px',
                         borderRadius: 'var(--r-sm)',

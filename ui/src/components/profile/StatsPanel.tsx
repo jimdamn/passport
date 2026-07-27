@@ -140,7 +140,7 @@ function CreditsContent({ tenantId, creditsName }: { tenantId: string; creditsNa
           </div>
           <span style={{
             fontFamily: 'var(--font-sans)', fontWeight: 'bold', fontSize: '0.9rem',
-            color: entry.amount > 0 ? 'var(--sage)' : 'var(--error)',
+            color: entry.amount > 0 ? 'var(--sage)' : 'var(--muted)',
           }}>
             {entry.amount > 0 ? '+' : ''}{entry.amount}
           </span>

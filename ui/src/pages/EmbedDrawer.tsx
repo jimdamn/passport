@@ -401,7 +401,7 @@ export default function EmbedDrawer() {
           alignItems: 'center'
         }}>
           <div>
-            <h3 style={{ margin: '0 0 4px 0', fontSize: '1.05rem' }}>{user.display_name}</h3>
+            <h3 style={{ margin: '0 0 4px 0', fontSize: '1.05rem', fontFamily: 'var(--font-serif)' }}>{user.display_name}</h3>
             <span style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>Member Wallet</span>
           </div>
           <div style={{ textAlign: 'right' }}>

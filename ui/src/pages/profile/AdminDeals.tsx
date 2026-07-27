@@ -96,7 +96,7 @@ export default function AdminDeals() {
           <div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4, flexWrap: 'wrap' }}>
               {d.is_hot_deal === 1 && <Flame size={14} style={{ color: 'var(--error, #c0392b)' }} />}
-              <h3 style={{ margin: 0, fontSize: '1rem', color: 'var(--green)', fontWeight: 600 }}>{d.title}</h3>
+              <h3 style={{ margin: 0, fontSize: '1rem', color: 'var(--green)', fontWeight: 600, fontFamily: 'var(--font-serif)' }}>{d.title}</h3>
             </div>
             <p style={{ margin: '0 0 2px', fontSize: '0.76rem', color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
               <Store size={11} /> {d.merchant_name ?? d.merchant_id}

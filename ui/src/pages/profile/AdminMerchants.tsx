@@ -179,7 +179,7 @@ export default function AdminMerchants() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
                   <div>
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4, flexWrap: 'wrap' }}>
-                      <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--green)', fontWeight: 600 }}>
+                      <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--green)', fontWeight: 600, fontFamily: 'var(--font-serif)' }}>
                         {m.name}
                       </h3>
                       <span style={{

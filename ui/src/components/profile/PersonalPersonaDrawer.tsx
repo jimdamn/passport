@@ -213,7 +213,7 @@ export function PersonalPersonaDrawer({
               type="text"
               value={displayName || ''}
               readOnly
-              style={{ background: '#f5f5f5', color: '#888', cursor: 'not-allowed' }}
+              style={{ background: '#f5f5f5', color: 'var(--muted)', cursor: 'not-allowed' }}
             />
             <p className="form-hint">To update your display name, use Edit Profile.</p>
           </div>

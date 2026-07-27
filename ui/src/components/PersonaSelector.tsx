@@ -74,7 +74,7 @@ export function PersonaSelector({
         }
         .persona-card.active {
           background-color: var(--dark, #1e3320);
-          color: var(--amber, #e8b84b);
+          color: var(--amber-on-dark, #e8b84b);
         }
         .persona-card.inactive {
           background-color: var(--offwhite, #f4f7f4);
@@ -102,7 +102,6 @@ export function PersonaSelector({
         }
         .persona-sub {
           font-size: 0.75rem;
-          opacity: 0.8;
           line-height: 1.3;
         }
         .persona-disabled-text {
