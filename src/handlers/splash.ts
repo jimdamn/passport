@@ -174,35 +174,40 @@ async function submitSplashPhoto(c: AppContext) {
   // Forward to KKAuth's generic upload proxy (private + retained original -
   // Social Splash Increment 1), same call shape as Fresh Today's photo
   // upload (uploadFreshPhoto in fresh.ts), plus the two new fields.
+  // watermark_text added for the pre-license-preview watermark
+  // (SOCIAL-SPLASH-WATERMARK-DESIGN.md) - the tenant's own brand name, so a
+  // merchant in one region never sees another region's mark.
   const uploadForm = new FormData();
   uploadForm.append('file', file as File);
   uploadForm.append('user_id', String(kkauthUid));
   uploadForm.append('variant', 'mobile');
   uploadForm.append('private', 'true');
   uploadForm.append('retain_original', 'true');
+  uploadForm.append('watermark_text', tenant.config.brand_name);
 
   const uploadRes = await c.env.KKAUTH.fetch(new Request('https://kkauth/internal/uploads', {
     method: 'POST',
     headers: { 'X-Internal-Secret': c.env.INTERNAL_SECRET },
     body: uploadForm,
   }));
-  const uploadBody = await uploadRes.json<{ data?: { key?: string; original_key?: string }; error?: string }>()
-    .catch(() => ({} as { data?: { key?: string; original_key?: string }; error?: string }));
+  const uploadBody = await uploadRes.json<{ data?: { key?: string; original_key?: string; watermarked_key?: string }; error?: string }>()
+    .catch(() => ({} as { data?: { key?: string; original_key?: string; watermarked_key?: string }; error?: string }));
   if (!uploadRes.ok) {
     throw new HTTPException(uploadRes.status as 400 | 413 | 415 | 502, { message: uploadBody?.error ?? 'Photo upload failed.' });
   }
   const imageKey = uploadBody?.data?.key;
   const originalKey = uploadBody?.data?.original_key ?? null;
+  const watermarkedKey = uploadBody?.data?.watermarked_key ?? null;
   if (!imageKey) throw new HTTPException(502, { message: 'Photo upload failed.' });
 
   try {
     const inserted = await c.env.DB.prepare(`
       INSERT INTO splash_submissions
-        (tenant_id, kkauth_uid, business_id, business_name, media_type, image_key, image_original_key, caption, scan_ref, created_day)
-      VALUES (?, ?, ?, ?, 'image', ?, ?, ?, ?, ?)
+        (tenant_id, kkauth_uid, business_id, business_name, media_type, image_key, image_original_key, image_watermarked_key, caption, scan_ref, created_day)
+      VALUES (?, ?, ?, ?, 'image', ?, ?, ?, ?, ?, ?)
       RETURNING id, business_id, business_name, media_type, caption, status, created_at
     `).bind(
-      tenant.id, kkauthUid, businessId, businessName, imageKey, originalKey, caption, scanId, createdDay
+      tenant.id, kkauthUid, businessId, businessName, imageKey, originalKey, watermarkedKey, caption, scanId, createdDay
     ).first<any>();
     return c.json({ data: inserted }, 201);
   } catch (e: any) {
