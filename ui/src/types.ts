@@ -3,7 +3,7 @@ export interface User {
   email: string;
   display_name: string;
   avatar_url: string | null;
-  credits_balance: number;
+  credits_balance: number | null;
   trade_count: number;
   location: string | null;
   bio: string | null;

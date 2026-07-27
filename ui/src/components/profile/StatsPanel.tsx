@@ -69,12 +69,15 @@ const PLACEHOLDER_CREDITS: CreditEntry[] = [
 
 function CreditsContent({ tenantId, creditsName }: { tenantId: string; creditsName: string }) {
   const { user } = useAuth();
-  const { data, isLoading, isError, refetch } = useQuery({
+  const { data, isLoading, isError, isSuccess, refetch } = useQuery({
     queryKey: ['credits', tenantId],
     queryFn: () => getBalance(tenantId),
   });
 
   const balanceDisplay = resolveBalance(data?.data.balance, user?.credits_balance);
+  // A 200 with balance: null means KKCredits itself was unreachable server-side -
+  // an outage, not a real zero. Treat it the same as a client-side fetch failure.
+  const creditsUnavailable = isError || (isSuccess && data?.data.balance == null);
   const history  = data?.data.history ?? [];
   const hasData  = history.length > 0;
   const rows     = hasData ? history : PLACEHOLDER_CREDITS;
@@ -102,7 +105,7 @@ function CreditsContent({ tenantId, creditsName }: { tenantId: string; creditsNa
         }}>
           {creditsName} balance
         </div>
-        {isError && (
+        {creditsUnavailable && (
           <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.78rem', color: 'var(--muted)', margin: '8px 0 0' }}>
             Couldn't load right now.{' '}
             <button

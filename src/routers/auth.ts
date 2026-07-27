@@ -589,8 +589,8 @@ authRouter.get('/me', async (c) => {
   }
 
   // Fetch live balance from KKCredits — it is the authoritative ledger.
-  const liveBalance = await fetchBalance(c.env, String(kk.id), authHeader.replace('Bearer ', '').trim());
-  const credits_balance = liveBalance ?? 0;
+  // null (not 0) when KKCredits is unreachable - a real outage, not a zero balance.
+  const credits_balance = await fetchBalance(c.env, String(kk.id), authHeader.replace('Bearer ', '').trim());
 
   return c.json({
     data: {

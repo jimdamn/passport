@@ -6,13 +6,15 @@ type AppContext = Context<{ Bindings: Env }>;
 
 // GET /api/t/:tenant/credits/balance — balance + history for StatsPanel/MyProfile.
 // Passport's users table has no credits_balance cache column, so KKCredits is
-// queried directly; on outage we return 0 rather than failing the whole panel.
+// queried directly. On outage `balance` is null, not 0 - a KKCredits outage
+// is a "couldn't load" state, not a real zero balance, and the client must
+// be able to tell the two apart.
 export async function getBalance(c: AppContext) {
   const tenant = c.get('tenant');
   const user = c.get('user');
   const token = c.req.header('Authorization')?.replace('Bearer ', '').trim() ?? '';
 
-  const balance = (await fetchBalance(c.env, user.sub, token)) ?? 0;
+  const balance = await fetchBalance(c.env, user.sub, token);
 
   let history: any[] = [];
   try {
@@ -43,7 +45,7 @@ export async function getBalanceOnly(c: AppContext) {
   const user = c.get('user');
   const token = c.req.header('Authorization')?.replace('Bearer ', '').trim() ?? '';
 
-  const balance = (await fetchBalance(c.env, user.sub, token)) ?? 0;
+  const balance = await fetchBalance(c.env, user.sub, token);
 
   return c.json({ data: { balance } });
 }

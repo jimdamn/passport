@@ -103,7 +103,7 @@ export default function MyProfile() {
     }
   }, [isWelcome, user]);
 
-  const { data: creditsData, isError: creditsError, refetch: refetchCredits } = useQuery({
+  const { data: creditsData, isError: creditsError, isSuccess: creditsSuccess, refetch: refetchCredits } = useQuery({
     queryKey: ['credits', tenant?.id],
     queryFn: () => getBalance(tenant!.id),
     enabled: !!tenant.id && !!user,
@@ -164,6 +164,9 @@ export default function MyProfile() {
   const profile: any     = meData || user;
   const credits          = creditsData?.data;
   const balanceDisplay   = resolveBalance(credits?.balance, user.credits_balance);
+  // A 200 with balance: null means KKCredits itself was unreachable server-side -
+  // an outage, not a real zero. Treat it the same as a client-side fetch failure.
+  const creditsUnavailable = creditsError || (creditsSuccess && credits?.balance == null);
   const creditsName      = tenant?.config.credits_name ?? 'KrowdKredits';
   const currentAvatarUrl = (meData as any)?.avatar_url ?? user.avatar_url ?? null;
   const myBadges         = computeMyBadges(profile);
@@ -273,7 +276,7 @@ export default function MyProfile() {
           <div className="stat-num">{balanceText(balanceDisplay)}</div>
           <div className="stat-label">{creditsName}</div>
         </button>
-        {creditsError && (
+        {creditsUnavailable && (
           <p style={{ width: '100%', textAlign: 'center', margin: 0, fontSize: '0.78rem', color: 'var(--muted)' }}>
             Couldn't load right now.{' '}
             <button
