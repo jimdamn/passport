@@ -117,7 +117,10 @@ export interface CreditEntry {
   balance_after: number;
   reason: string;
   ref_type?: string | null;
-  created_at: number;
+  // KKCredits' ledger returns "YYYY-MM-DD HH:MM:SS" (UTC, no zone marker),
+  // not unix seconds - see formatDate() in utils/dates.ts. The placeholder
+  // rows in StatsPanel use the number 0 as their "no real date" sentinel.
+  created_at: number | string;
 }
 
 export interface MyTrade {

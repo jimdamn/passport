@@ -132,7 +132,7 @@ function CreditsContent({ tenantId, creditsName }: { tenantId: string; creditsNa
             <div style={{ fontFamily: 'var(--font-sans)', fontSize: '0.875rem', color: 'var(--green)' }}>
               {ledgerLabel(entry)}
             </div>
-            {hasData && entry.created_at > 0 && (
+            {hasData && !!entry.created_at && (
               <div style={{ fontFamily: 'var(--font-sans)', fontSize: '0.72rem', color: 'var(--muted)' }}>
                 {formatDate(entry.created_at)}
               </div>

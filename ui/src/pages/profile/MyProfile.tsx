@@ -350,7 +350,7 @@ export default function MyProfile() {
             >
               <div>
                 <div style={{ fontSize: '0.875rem' }}>{ledgerLabel(entry)}</div>
-                {entry.created_at > 0 && (
+                {!!entry.created_at && (
                   <div style={{ fontSize: '0.72rem', color: 'var(--muted)' }}>
                     {formatDate(entry.created_at)}
                   </div>
