@@ -156,7 +156,6 @@ export default function MyProfile() {
 
   const profile: any     = meData || user;
   const credits          = creditsData?.data;
-  const isBDMember       = !!profile.bd_member_since;
   const creditsName      = tenant?.config.credits_name ?? 'KrowdKredits';
   const currentAvatarUrl = (meData as any)?.avatar_url ?? user.avatar_url ?? null;
   const myBadges         = computeMyBadges(profile);
@@ -491,25 +490,6 @@ export default function MyProfile() {
           <Link to="/profile/apply-merchant" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
             Re-apply Now
           </Link>
-        </div>
-      )}
-
-      {!isBDMember && (
-        <div className="card" style={{ marginBottom: 16, borderColor: 'var(--amber)' }}>
-          <p style={{ margin: '0 0 4px', fontWeight: 'bold' }}>
-            Are you a Lake &amp; Locals member?
-          </p>
-          <p style={{ margin: '0 0 12px', fontSize: '0.875rem', color: 'var(--muted)' }}>
-            Connect your membership to earn 25 bonus {creditsName} and sign in automatically next time.
-          </p>
-          <button
-            className="btn btn-amber btn-sm"
-            onClick={() => {
-              alert('Connect your L&L account - BD SSO widget goes here.\nSee SETUP.md for the integration snippet.');
-            }}
-          >
-            Connect my L&amp;L account
-          </button>
         </div>
       )}
 
