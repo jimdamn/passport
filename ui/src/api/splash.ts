@@ -86,8 +86,9 @@ export function withdrawSplash(tenant: string, id: number) {
   return api.post<ApiResponse<{ id: number; status: string; destroy_after: number }>>(`/t/${tenant}/splash/${id}/withdraw`);
 }
 
-export function getSplashMediaViewUrl(tenant: string, id: number) {
-  return api.get<ApiResponse<{ url: string; type: 'image' | 'video' }>>(`/t/${tenant}/splash/media/${id}/view`);
+export function getSplashMediaViewUrl(tenant: string, id: number, original?: boolean) {
+  const suffix = original ? '?original=true' : '';
+  return api.get<ApiResponse<{ url: string; type: 'image' | 'video' }>>(`/t/${tenant}/splash/media/${id}/view${suffix}`);
 }
 
 /**

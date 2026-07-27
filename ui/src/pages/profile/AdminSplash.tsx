@@ -3,10 +3,10 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTenant } from '../../context/TenantContext';
 import {
-  adminListSplash, adminRemoveSplash, adminGetSplashConfig, adminSetSplashConfig,
+  adminListSplash, adminRemoveSplash, adminGetSplashConfig, adminSetSplashConfig, getSplashMediaViewUrl,
   type AdminSplashRow, type SplashConfig,
 } from '../../api/splash';
-import { ArrowLeft, Camera, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Camera, RefreshCw, ExternalLink } from 'lucide-react';
 import { Alert } from '../../components/ui/Alert';
 import { Spinner } from '../../components/ui/Spinner';
 import { Badge } from '../../components/ui/Badge';
@@ -45,6 +45,66 @@ const CONFIG_FIELDS: Array<{ key: keyof SplashConfig; label: string; min: number
   { key: 'max_video_seconds', label: 'Max video length (seconds)', min: 10, max: 300 },
   { key: 'fee_original_cents', label: 'Original-file unlock fee (cents)', min: 0, max: 5000, hint: '199 = $1.99' },
 ];
+
+/**
+ * Admin's thumbnail - watermarked by default (same as the merchant currently
+ * sees), same signed-URL mint-then-fetch pattern kk-business's own
+ * SplashThumb uses for the merchant inbox (this app has no prior thumbnail
+ * at all on this page - added for the first time here,
+ * SOCIAL-SPLASH-WATERMARK-DESIGN.md).
+ */
+function AdminSplashThumb({ tenant, submissionId }: { tenant: string; submissionId: number; mediaType: string }) {
+  const [media, setMedia] = useState<{ url: string; type: 'image' | 'video' } | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    setMedia(null);
+    setFailed(false);
+    getSplashMediaViewUrl(tenant, submissionId)
+      .then(res => { if (active) setMedia(res.data); })
+      .catch(() => { if (active) setFailed(true); });
+    return () => { active = false; };
+  }, [tenant, submissionId]);
+
+  if (failed) return <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>No preview</span>;
+  if (!media) return <div style={{ width: 64, height: 64, borderRadius: 6, background: 'var(--border, #e5e0d5)' }} />;
+  if (media.type === 'video') {
+    return (
+      <iframe src={media.url} allow="accelerometer; encrypted-media; picture-in-picture;" allowFullScreen
+        style={{ width: 96, height: 64, border: 0, borderRadius: 6, display: 'block' }} />
+    );
+  }
+  return <img src={media.url} alt="" style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 6, display: 'block' }} />;
+}
+
+/** Opens the true, unwatermarked original in a new tab - real moderation work, not the default review view. */
+function ViewOriginalLink({ tenant, submissionId, mediaType }: { tenant: string; submissionId: number; mediaType: string }) {
+  const [working, setWorking] = useState(false);
+
+  async function open() {
+    setWorking(true);
+    try {
+      const res = await getSplashMediaViewUrl(tenant, submissionId, true);
+      window.open(res.data.url, '_blank', 'noopener,noreferrer');
+    } catch {
+      // Best-effort - the thumbnail above already shows something is there;
+      // a failed "view original" click isn't worth a modal error for an
+      // internal admin tool.
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  if (mediaType === 'video') return null; // video has no separate watermarked/clean split - nothing to escape to
+
+  return (
+    <button className="btn btn-secondary btn-sm" disabled={working} onClick={open}
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 4, minHeight: 28, fontSize: '0.74rem', marginTop: 4 }}>
+      <ExternalLink size={12} /> View original
+    </button>
+  );
+}
 
 function ConfigCard() {
   const { tenant } = useTenant();
@@ -227,6 +287,7 @@ export default function AdminSplash() {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                <th style={{ textAlign: 'left', padding: '10px 12px' }}>Preview</th>
                 <th style={{ textAlign: 'left', padding: '10px 12px' }}>Business</th>
                 <th style={{ textAlign: 'left', padding: '10px 12px' }}>Guest</th>
                 <th style={{ textAlign: 'left', padding: '10px 12px' }}>Type</th>
@@ -241,6 +302,10 @@ export default function AdminSplash() {
                 const removable = row.status !== 'licensed';
                 return (
                   <tr key={row.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                    <td style={{ padding: '10px 12px' }}>
+                      <AdminSplashThumb tenant={tenant!.id} submissionId={row.id} mediaType={row.media_type} />
+                      <ViewOriginalLink tenant={tenant!.id} submissionId={row.id} mediaType={row.media_type} />
+                    </td>
                     <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--green)' }}>{row.business_name}</td>
                     <td style={{ padding: '10px 12px', color: 'var(--muted)' }}>{row.owner_email ?? '-'}</td>
                     <td style={{ padding: '10px 12px', color: 'var(--muted)' }}>{row.media_type === 'video' ? 'Video' : 'Photo'}</td>
