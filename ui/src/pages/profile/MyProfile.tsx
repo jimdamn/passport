@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { LogOut, Award, ChevronRight, QrCode, Shield, Inbox, MapPin, Compass, Handshake } from 'lucide-react';
+import { LogOut, Award, ChevronRight, QrCode, MapPin, Compass } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTenant } from '../../context/TenantContext';
 import { useProfilePanel } from '../../context/ProfilePanelContext';
@@ -27,6 +27,7 @@ import { AroundInterestsDrawer } from '../../components/profile/AroundInterestsD
 import MyPostsCards from '../../components/profile/MyPostsCards';
 import NextStepCard from '../../components/profile/NextStepCard';
 import BusinessOverviewCard from '../../components/profile/BusinessOverviewCard';
+import AdminPortalCard from '../../components/profile/AdminPortalCard';
 
 // Badge definitions mirrored client-side (server is authoritative; this is for /profile self-view)
 const BADGE_DEFS: MemberBadge[] = [
@@ -299,6 +300,8 @@ export default function MyProfile() {
         </div>
       </div>
 
+      {user.is_admin && <AdminPortalCard newSupportCount={newSupportCount} />}
+
       <div className="card" style={{ marginBottom: 16 }}>
         <h3 style={{ margin: '0 0 12px', fontSize: '1.05rem', fontFamily: 'var(--font-serif)', color: 'var(--green)', fontWeight: 'bold' }}>
           Active Persona
@@ -398,86 +401,6 @@ export default function MyProfile() {
       <NextStepCard pick={aroundPick} contentSummary={contentSummary} />
 
       {tenant.id && <MyPostsCards tenantId={tenant.id} />}
-
-      {/* ── Admin Portal Banners (site-operator tools, outside the four member zones) ── */}
-      {user.is_admin && (
-        <div className="card" style={{ marginBottom: 16, borderColor: 'var(--green)', background: 'rgba(30, 51, 32, 0.02)' }}>
-          <p style={{ margin: '0 0 4px', fontWeight: 'bold', fontFamily: 'var(--font-serif)', color: 'var(--green)', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Shield size={18} strokeWidth={2} aria-hidden="true" /> Network Administrator Portal
-          </p>
-          <p style={{ margin: '0 0 12px', fontSize: '0.82rem', color: 'var(--muted)', fontFamily: 'var(--font-sans)' }}>
-            You have administrator privileges. Manage local network configurations and review pending merchant applications.
-          </p>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <Link to="/profile/admin/merchants" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
-              Review Merchant Applications
-            </Link>
-            <Link to="/profile/admin/users" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
-              Users
-            </Link>
-            <Link to="/profile/admin/content" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
-              Content
-            </Link>
-            <Link to="/profile/admin/plaques" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
-              Plaques & Events
-            </Link>
-            <Link to="/profile/admin/prizes" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
-              Prize Pools
-            </Link>
-            <Link to="/profile/admin/deals" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
-              Deal Review
-            </Link>
-            <Link to="/profile/admin/support" className="btn btn-secondary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, textDecoration: 'none', position: 'relative' }}>
-              <Inbox size={13} /> Support Inbox
-              {newSupportCount > 0 && (
-                <span style={{
-                  background: 'var(--amber)', color: 'var(--white)',
-                  fontFamily: 'var(--font-sans)', fontSize: '0.66rem', fontWeight: 700,
-                  padding: '1px 6px', borderRadius: 'var(--r-pill)', lineHeight: 1.4,
-                }}>
-                  {newSupportCount}
-                </span>
-              )}
-            </Link>
-            <Link to="/profile/admin/volunteer" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
-              Volunteer Shift Review
-            </Link>
-            <Link to="/profile/admin/meals" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
-              Community Meals
-            </Link>
-            <Link to="/profile/admin/fresh" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
-              Fresh Today
-            </Link>
-            <Link to="/profile/admin/happenings" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
-              Happenings
-            </Link>
-            <Link to="/profile/admin/pets" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
-              Home Safe
-            </Link>
-            <Link to="/profile/admin/popups" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
-              Pop-Ups
-            </Link>
-            <Link to="/profile/admin/sales" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
-              Sale Day
-            </Link>
-            <Link to="/profile/admin/splash" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
-              Social Splash
-            </Link>
-            <Link to="/profile/admin/sponsors" className="btn btn-secondary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, textDecoration: 'none' }}>
-              <Handshake size={13} /> Sponsor Messages
-            </Link>
-            <Link to="/redeem" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
-              Redeem a Claim
-            </Link>
-            <Link to="/profile/admin/test-plaque" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
-              Test Plaque
-            </Link>
-            <Link to="/profile/admin/kwest" className="btn btn-secondary btn-sm" style={{ display: 'inline-block', textDecoration: 'none' }}>
-              KrowdKwest
-            </Link>
-          </div>
-        </div>
-      )}
 
       {/* ══════════════════════════ Account ══════════════════════════ */}
       <ZoneHeader>Account</ZoneHeader>
