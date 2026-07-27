@@ -5,7 +5,7 @@ import { getMeal, categoryLabel, REGION_BOUNDS, type MealFeedRow } from '../api/
 import { UtensilsCrossed, Phone, Share2 } from 'lucide-react';
 import { Spinner } from '../components/ui/Spinner';
 import { Badge } from '../components/ui/Badge';
-import { RegionMap, type RegionPin } from 'kk-shared-ui';
+import { RegionMap, type RegionPin } from 'kk-shared-ui/map';
 
 // Community Table's public meal detail - the shareable page (plan §5.3).
 // Donor: PopupVendor.tsx / SaleDetail.tsx (Share buttons, map, layout

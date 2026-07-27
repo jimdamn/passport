@@ -6,11 +6,13 @@ import { fileURLToPath } from 'node:url';
 // For production Pages builds it will be installed as a git-pinned dependency
 // (github:jimdamn/kk-shared-ui), at which point this alias becomes a no-op.
 const sharedUi = fileURLToPath(new URL('../../kk-shared-ui/src/index.ts', import.meta.url));
+const sharedUiMap = fileURLToPath(new URL('../../kk-shared-ui/src/components/map/RegionMap.tsx', import.meta.url));
 
 export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
+      'kk-shared-ui/map': sharedUiMap,
       'kk-shared-ui': sharedUi,
     },
     // The shared-ui source lives outside this app and has no node_modules of its
@@ -31,5 +33,12 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'react-router-dom'],
+        },
+      },
+    },
   },
 });

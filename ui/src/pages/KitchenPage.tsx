@@ -5,7 +5,7 @@ import { getKitchen, categoryLabel, REGION_BOUNDS, type KitchenDetail } from '..
 import { UtensilsCrossed, Phone } from 'lucide-react';
 import { Spinner } from '../components/ui/Spinner';
 import { Badge } from '../components/ui/Badge';
-import { RegionMap, type RegionPin } from 'kk-shared-ui';
+import { RegionMap, type RegionPin } from 'kk-shared-ui/map';
 
 // Community Table's public kitchen page - the org profile (plan §5.4).
 // Donor: PopupVendor.tsx's layout conventions. maxBounds on the map per

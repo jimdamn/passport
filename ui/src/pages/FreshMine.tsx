@@ -12,7 +12,8 @@ import { geocodeAddress } from '../api/geocode';
 import { Sprout, Pencil, Trash2, Plus, Pause, Play, Camera, X, MapPin, Info } from 'lucide-react';
 import { Spinner } from '../components/ui/Spinner';
 import { Alert } from '../components/ui/Alert';
-import { RegionMap, resizeForUpload } from 'kk-shared-ui';
+import { RegionMap } from 'kk-shared-ui/map';
+import { resizeForUpload } from 'kk-shared-ui';
 
 // Fresh Today's authenticated "My Stand" page. Follows FreshToday/FreshStand's
 // visual conventions exactly (serif header + amber Sprout icon, white .card

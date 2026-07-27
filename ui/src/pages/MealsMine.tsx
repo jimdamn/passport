@@ -12,7 +12,8 @@ import { geocodeAddress } from '../api/geocode';
 import { UtensilsCrossed, Pencil, Trash2, Camera, X, Plus, Info, ChevronDown, ChevronUp } from 'lucide-react';
 import { Spinner } from '../components/ui/Spinner';
 import { Alert } from '../components/ui/Alert';
-import { RegionMap, resizeForUpload } from 'kk-shared-ui';
+import { RegionMap } from 'kk-shared-ui/map';
+import { resizeForUpload } from 'kk-shared-ui';
 
 // Community Table's authenticated "My Kitchen" page (plan §5.5). Follows
 // PopupsMine.tsx's vendor->stop nested conventions (serif header + amber

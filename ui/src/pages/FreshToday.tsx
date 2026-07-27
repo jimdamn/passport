@@ -9,7 +9,7 @@ import {
 import { Sprout, List, Map as MapIcon, Phone, MapPin, Navigation } from 'lucide-react';
 import { Spinner } from '../components/ui/Spinner';
 import { Badge } from '../components/ui/Badge';
-import { RegionMap, type RegionPin } from 'kk-shared-ui';
+import { RegionMap, type RegionPin } from 'kk-shared-ui/map';
 
 // Fresh Today's public browse board. Follows the Happenings design language
 // exactly: serif header with an inline icon, calm chip rows for filters,

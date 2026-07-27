@@ -5,7 +5,7 @@ import { getSale, categoryLabel, saleLocation, REGION_BOUNDS, type SaleFeedRow, 
 import { Signpost, Phone, MapPin, Share2 } from 'lucide-react';
 import { Spinner } from '../components/ui/Spinner';
 import { Badge } from '../components/ui/Badge';
-import { RegionMap } from 'kk-shared-ui';
+import { RegionMap } from 'kk-shared-ui/map';
 
 // Sale Day's public detail page. Donor: FreshStand.tsx.
 

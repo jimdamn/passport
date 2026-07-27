@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { RegionPin } from 'kk-shared-ui';
+import type { RegionPin } from 'kk-shared-ui/map';
 import { api } from './client';
 import type { ApiResponse } from '../types';
 import { getHappenings, type Happening } from './happenings';

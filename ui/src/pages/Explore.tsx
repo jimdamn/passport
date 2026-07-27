@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTenant } from '../context/TenantContext';
-import { RegionMap } from 'kk-shared-ui';
+import { RegionMap } from 'kk-shared-ui/map';
 import { CalendarDays, ChevronRight, HeartHandshake, Maximize2, PawPrint, Signpost, Sprout, Tag, Truck, UtensilsCrossed, type LucideIcon } from 'lucide-react';
 import { Spinner } from '../components/ui/Spinner';
 import LensRow from '../components/explore/LensRow';

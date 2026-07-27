@@ -10,7 +10,8 @@ import {
 import { PawPrint, Pencil, Trash2, Camera, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { Spinner } from '../components/ui/Spinner';
 import { Alert } from '../components/ui/Alert';
-import { RegionMap, resizeForUpload } from 'kk-shared-ui';
+import { RegionMap } from 'kk-shared-ui/map';
+import { resizeForUpload } from 'kk-shared-ui';
 
 // Home Safe's authenticated "My Posts" page. Follows SalesMine.tsx's visual
 // conventions exactly (serif header + amber icon, white .card rows with a

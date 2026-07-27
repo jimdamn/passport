@@ -9,7 +9,7 @@ import {
 import { UtensilsCrossed, List, Map as MapIcon, Phone, MapPin, Navigation } from 'lucide-react';
 import { Spinner } from '../components/ui/Spinner';
 import { Badge } from '../components/ui/Badge';
-import { RegionMap, type RegionPin } from 'kk-shared-ui';
+import { RegionMap, type RegionPin } from 'kk-shared-ui/map';
 
 // Community Table's public browse board. Follows Happenings/Fresh Today/Sale
 // Day/Pop-Ups' design language exactly (serif header, calm chip rows, white

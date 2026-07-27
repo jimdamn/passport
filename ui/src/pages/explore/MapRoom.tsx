@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTenant } from '../../context/TenantContext';
-import { RegionMap } from 'kk-shared-ui';
+import { RegionMap } from 'kk-shared-ui/map';
 import { ArrowLeft } from 'lucide-react';
 import LensRow from '../../components/explore/LensRow';
 import {

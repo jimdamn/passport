@@ -6,7 +6,7 @@ import { getPetPost, revealPetContact, speciesLabel, REGION_BOUNDS, type PetFeed
 import { PawPrint, Phone, Mail, MapPin, Share2 } from 'lucide-react';
 import { Spinner } from '../components/ui/Spinner';
 import { Alert } from '../components/ui/Alert';
-import { RegionMap } from 'kk-shared-ui';
+import { RegionMap } from 'kk-shared-ui/map';
 
 // Home Safe's public detail page - the shareable object. Donor: SaleDetail.tsx.
 // Diff: a contact block that is the primary action on the page, since contact

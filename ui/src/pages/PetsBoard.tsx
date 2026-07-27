@@ -9,7 +9,7 @@ import {
 import { PawPrint, List, Map as MapIcon, Phone, Mail, MapPin, Navigation } from 'lucide-react';
 import { Spinner } from '../components/ui/Spinner';
 import { Badge } from '../components/ui/Badge';
-import { RegionMap } from 'kk-shared-ui';
+import { RegionMap } from 'kk-shared-ui/map';
 
 // Home Safe's public browse board. Follows Happenings/Sale Day's design
 // language exactly (SaleDay.tsx is the visual donor) - serif header, calm

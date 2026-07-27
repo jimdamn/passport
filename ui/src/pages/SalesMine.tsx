@@ -11,7 +11,8 @@ import { geocodeAddress } from '../api/geocode';
 import { Signpost, Pencil, Trash2, Camera, X, Plus, Info } from 'lucide-react';
 import { Spinner } from '../components/ui/Spinner';
 import { Alert } from '../components/ui/Alert';
-import { RegionMap, resizeForUpload } from 'kk-shared-ui';
+import { RegionMap } from 'kk-shared-ui/map';
+import { resizeForUpload } from 'kk-shared-ui';
 
 // Sale Day's authenticated "My Sales" page. Follows FreshMine.tsx's visual
 // conventions exactly (serif header + amber icon, white .card rows with a

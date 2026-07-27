@@ -1,71 +1,76 @@
+import { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 import AppLayout from './layouts/AppLayout';
 import { Spinner } from './components/ui/Spinner';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
-// Pages
+// Pages - bottom-nav destinations and the scan loop stay eager (a spinner on
+// a nav tap would be a regression for the core flow); everything else is
+// lazy so the profile path doesn't pay for admin tooling, the map stack, or
+// Kwest that most visits never touch.
 import Home from './pages/Home';
 import SSOLanding from './pages/auth/SSOLanding';
 import LoginPage from './pages/auth/LoginPage';
 import MyStamps from './pages/MyStamps';
 import ScanPortal from './pages/ScanPortal';
 import MyProfile from './pages/profile/MyProfile';
-import ApplyMerchant from './pages/profile/ApplyMerchant';
-import AdminMerchants from './pages/profile/AdminMerchants';
-import AdminUsers from './pages/profile/AdminUsers';
-import AdminContent from './pages/profile/AdminContent';
-import AdminTestPlaque from './pages/profile/AdminTestPlaque';
-import AdminPlaques from './pages/profile/AdminPlaques';
-import AdminPrizes from './pages/profile/AdminPrizes';
-
-import PublicProfile from './pages/profile/PublicProfile';
-import RedeemClaim from './pages/RedeemClaim';
-import ClaimVisit from './pages/ClaimVisit';
-import MerchantDashboard from './pages/MerchantDashboard';
-import Help from './pages/Help';
-import EmbedDrawer from './pages/EmbedDrawer';
-import Explore from './pages/Explore';
-import MapRoom from './pages/explore/MapRoom';
 import Deals from './pages/Deals';
-import Happenings from './pages/Happenings';
-import FreshToday from './pages/FreshToday';
-import FreshStand from './pages/FreshStand';
-import FreshMine from './pages/FreshMine';
-import SaleDay from './pages/SaleDay';
-import SaleDetail from './pages/SaleDetail';
-import SalesMine from './pages/SalesMine';
-import PetsBoard from './pages/PetsBoard';
-import PetPost from './pages/PetPost';
-import PetsMine from './pages/PetsMine';
-import PopupsBoard from './pages/PopupsBoard';
-import PopupVendor from './pages/PopupVendor';
-import PopupsMine from './pages/PopupsMine';
-import MealsBoard from './pages/MealsBoard';
-import MealDetail from './pages/MealDetail';
-import KitchenPage from './pages/KitchenPage';
-import MealsMine from './pages/MealsMine';
-import LendAHand from './pages/LendAHand';
-import Splash from './pages/Splash';
-import AdminDeals from './pages/profile/AdminDeals';
-import AdminSupport from './pages/profile/AdminSupport';
-import AdminVolunteer from './pages/profile/AdminVolunteer';
-import AdminHappenings from './pages/profile/AdminHappenings';
-import AdminFresh from './pages/profile/AdminFresh';
-import AdminSplash from './pages/profile/AdminSplash';
-import AdminSales from './pages/profile/AdminSales';
-import AdminPets from './pages/profile/AdminPets';
-import AdminPopups from './pages/profile/AdminPopups';
-import AdminMeals from './pages/profile/AdminMeals';
-import KwestHome from './pages/kwest/KwestHome';
-import KwestHelp from './pages/kwest/KwestHelp';
-import KwestHunt from './pages/kwest/KwestHunt';
-import KwestRetro from './pages/kwest/KwestRetro';
-import AdminKwest from './pages/profile/AdminKwest';
-import AdminKwestEdit from './pages/profile/AdminKwestEdit';
-import AdminKwestFieldTest from './pages/profile/AdminKwestFieldTest';
-import AdminKwestDashboard from './pages/profile/AdminKwestDashboard';
-import AdminSponsors from './pages/profile/AdminSponsors';
+
+const ApplyMerchant = lazy(() => import('./pages/profile/ApplyMerchant'));
+const AdminMerchants = lazy(() => import('./pages/profile/AdminMerchants'));
+const AdminUsers = lazy(() => import('./pages/profile/AdminUsers'));
+const AdminContent = lazy(() => import('./pages/profile/AdminContent'));
+const AdminTestPlaque = lazy(() => import('./pages/profile/AdminTestPlaque'));
+const AdminPlaques = lazy(() => import('./pages/profile/AdminPlaques'));
+const AdminPrizes = lazy(() => import('./pages/profile/AdminPrizes'));
+
+const PublicProfile = lazy(() => import('./pages/profile/PublicProfile'));
+const RedeemClaim = lazy(() => import('./pages/RedeemClaim'));
+const ClaimVisit = lazy(() => import('./pages/ClaimVisit'));
+const MerchantDashboard = lazy(() => import('./pages/MerchantDashboard'));
+const Help = lazy(() => import('./pages/Help'));
+const EmbedDrawer = lazy(() => import('./pages/EmbedDrawer'));
+const Explore = lazy(() => import('./pages/Explore'));
+const MapRoom = lazy(() => import('./pages/explore/MapRoom'));
+const Happenings = lazy(() => import('./pages/Happenings'));
+const FreshToday = lazy(() => import('./pages/FreshToday'));
+const FreshStand = lazy(() => import('./pages/FreshStand'));
+const FreshMine = lazy(() => import('./pages/FreshMine'));
+const SaleDay = lazy(() => import('./pages/SaleDay'));
+const SaleDetail = lazy(() => import('./pages/SaleDetail'));
+const SalesMine = lazy(() => import('./pages/SalesMine'));
+const PetsBoard = lazy(() => import('./pages/PetsBoard'));
+const PetPost = lazy(() => import('./pages/PetPost'));
+const PetsMine = lazy(() => import('./pages/PetsMine'));
+const PopupsBoard = lazy(() => import('./pages/PopupsBoard'));
+const PopupVendor = lazy(() => import('./pages/PopupVendor'));
+const PopupsMine = lazy(() => import('./pages/PopupsMine'));
+const MealsBoard = lazy(() => import('./pages/MealsBoard'));
+const MealDetail = lazy(() => import('./pages/MealDetail'));
+const KitchenPage = lazy(() => import('./pages/KitchenPage'));
+const MealsMine = lazy(() => import('./pages/MealsMine'));
+const LendAHand = lazy(() => import('./pages/LendAHand'));
+const Splash = lazy(() => import('./pages/Splash'));
+const AdminDeals = lazy(() => import('./pages/profile/AdminDeals'));
+const AdminSupport = lazy(() => import('./pages/profile/AdminSupport'));
+const AdminVolunteer = lazy(() => import('./pages/profile/AdminVolunteer'));
+const AdminHappenings = lazy(() => import('./pages/profile/AdminHappenings'));
+const AdminFresh = lazy(() => import('./pages/profile/AdminFresh'));
+const AdminSplash = lazy(() => import('./pages/profile/AdminSplash'));
+const AdminSales = lazy(() => import('./pages/profile/AdminSales'));
+const AdminPets = lazy(() => import('./pages/profile/AdminPets'));
+const AdminPopups = lazy(() => import('./pages/profile/AdminPopups'));
+const AdminMeals = lazy(() => import('./pages/profile/AdminMeals'));
+const KwestHome = lazy(() => import('./pages/kwest/KwestHome'));
+const KwestHelp = lazy(() => import('./pages/kwest/KwestHelp'));
+const KwestHunt = lazy(() => import('./pages/kwest/KwestHunt'));
+const KwestRetro = lazy(() => import('./pages/kwest/KwestRetro'));
+const AdminKwest = lazy(() => import('./pages/profile/AdminKwest'));
+const AdminKwestEdit = lazy(() => import('./pages/profile/AdminKwestEdit'));
+const AdminKwestFieldTest = lazy(() => import('./pages/profile/AdminKwestFieldTest'));
+const AdminKwestDashboard = lazy(() => import('./pages/profile/AdminKwestDashboard'));
+const AdminSponsors = lazy(() => import('./pages/profile/AdminSponsors'));
 
 export default function App() {
   const { isLoading } = useAuth();
@@ -80,6 +85,7 @@ export default function App() {
 
   return (
     <ErrorBoundary>
+    <Suspense fallback={<div className="spinner-center"><Spinner size="lg" /></div>}>
     <Routes>
       <Route path="/embed/drawer" element={<EmbedDrawer />} />
       <Route element={<AppLayout />}>
@@ -145,6 +151,7 @@ export default function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
+    </Suspense>
     </ErrorBoundary>
   );
 }

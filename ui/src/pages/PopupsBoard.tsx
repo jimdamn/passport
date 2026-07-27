@@ -9,7 +9,7 @@ import {
 import { Truck, List, Map as MapIcon, Phone, MapPin, Navigation } from 'lucide-react';
 import { Spinner } from '../components/ui/Spinner';
 import { Badge } from '../components/ui/Badge';
-import { RegionMap, type RegionPin } from 'kk-shared-ui';
+import { RegionMap, type RegionPin } from 'kk-shared-ui/map';
 
 // Pop-Ups' public browse board. Follows Happenings/Fresh Today/Sale Day's
 // design language exactly (serif header, calm chip rows, white cards with a

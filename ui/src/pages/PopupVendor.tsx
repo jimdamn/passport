@@ -5,7 +5,7 @@ import { getPopupVendor, categoryLabel, REGION_BOUNDS, type PopupVendorDetail, t
 import { Truck, Phone, Share2 } from 'lucide-react';
 import { Spinner } from '../components/ui/Spinner';
 import { Badge } from '../components/ui/Badge';
-import { RegionMap, type RegionPin } from 'kk-shared-ui';
+import { RegionMap, type RegionPin } from 'kk-shared-ui/map';
 
 // Pop-Ups' public vendor page - the fan page and the shareable object
 // (POP-UPS-BUILD-PLAN.md §5.3). Donor: SaleDetail.tsx (Share buttons, map,

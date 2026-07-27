@@ -12,7 +12,8 @@ import { geocodeAddress } from '../api/geocode';
 import { Truck, Pencil, Trash2, Camera, X, Plus, MapPin, Info } from 'lucide-react';
 import { Spinner } from '../components/ui/Spinner';
 import { Alert } from '../components/ui/Alert';
-import { RegionMap, resizeForUpload } from 'kk-shared-ui';
+import { RegionMap } from 'kk-shared-ui/map';
+import { resizeForUpload } from 'kk-shared-ui';
 
 // Pop-Ups' authenticated "My Schedule" page (POP-UPS-BUILD-PLAN.md §5.4).
 // Follows FreshMine.tsx's nested stand->posts conventions (serif header +
