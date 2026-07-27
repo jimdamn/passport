@@ -464,6 +464,19 @@ img { max-width: 100%; display: block; }
 .btn:disabled { opacity: 0.55; cursor: not-allowed; }
 .btn:active { opacity: 0.85; }
 
+/* The default focus ring already renders (7.1's correction: outline:none is
+   scoped only to .nav-drawer and form inputs) - this replaces it with a
+   consistent, visible-on-dark ring instead of leaving it to each browser's
+   own default, which is inconsistent and near-invisible on the forest
+   surfaces (bottom nav, active persona card). */
+.btn:focus-visible,
+.stat-card--btn:focus-visible,
+.bottom-nav-tab:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
+
 .btn-primary { background: var(--green); color: var(--white); }
 .btn-primary:hover:not(:disabled) { background: var(--sage); color: var(--white); text-decoration: none; }
 

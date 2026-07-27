@@ -6,6 +6,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useTenant } from '../../context/TenantContext';
 import { useProfilePanel } from '../../context/ProfilePanelContext';
 import { getMe } from '../../api/auth';
+import { updatePersona } from '../../api/profile';
 import { getBalance } from '../../api/credits';
 import { getAdminSupportCount } from '../../api/support';
 import { getMyBusiness } from '../../api/merchant';
@@ -14,11 +15,12 @@ import { resolveBalance, balanceText } from '../../utils/balance';
 import { ledgerLabel } from '../../utils/ledgerLabels';
 import { formatDate } from '../../utils/dates';
 import { Spinner } from '../../components/ui/Spinner';
+import { Alert } from '../../components/ui/Alert';
 import StatsPanel, { type StatsPanelType } from '../../components/profile/StatsPanel';
 import BadgeStrip, { type Badge } from '../../components/ui/BadgeStrip';
 import QrDrawer from '../../components/ui/QrDrawer';
 import MerchantQrDrawer from '../../components/ui/MerchantQrDrawer';
-import { PersonaSelector } from '../../components/PersonaSelector';
+import { PersonaSelector } from 'kk-shared-ui';
 import { AnonymousPersonaDrawer } from '../../components/profile/AnonymousPersonaDrawer';
 import { PersonalPersonaDrawer } from '../../components/profile/PersonalPersonaDrawer';
 import { BusinessPersonaDrawer } from '../../components/profile/BusinessPersonaDrawer';
@@ -73,7 +75,29 @@ export default function MyProfile() {
   const [qrOpen, setQrOpen] = useState(false);
   const [merchantQrOpen, setMerchantQrOpen] = useState(false);
   const [personaDrawer, setPersonaDrawer] = useState<'anonymous' | 'personal' | 'business' | null>(null);
+  const [personaNotice, setPersonaNotice] = useState<string | null>(null);
+  const [personaError, setPersonaError] = useState<string | null>(null);
+  const [personaSwitching, setPersonaSwitching] = useState(false);
   const [interestsDrawerOpen, setInterestsDrawerOpen] = useState(false);
+
+  async function handlePersonaSwitch(persona: 'anonymous' | 'personal' | 'business') {
+    if (personaSwitching) return;
+    setPersonaSwitching(true);
+    setPersonaError(null);
+    setPersonaNotice(null);
+    try {
+      await updatePersona(persona);
+      updateUser({ active_persona: persona });
+      qc.invalidateQueries({ queryKey: ['me'] });
+      const label = persona === 'anonymous' ? 'Anonymous' : persona === 'personal' ? (profile?.display_name || 'Personal') : (user?.business_name || 'Business');
+      setPersonaNotice(`You now post as ${label}.`);
+      window.setTimeout(() => setPersonaNotice(null), 4000);
+    } catch (err: any) {
+      setPersonaError(err?.message || 'Failed to switch persona.');
+    } finally {
+      setPersonaSwitching(false);
+    }
+  }
 
   const interestsQueryKey = ['around-interests', tenant.id];
   const { data: interestsData, isLoading: interestsLoading, isError: interestsError, refetch: refetchInterests } = useQuery({
@@ -192,7 +216,7 @@ export default function MyProfile() {
             avatarUrl={currentAvatarUrl}
           />
           <div style={{ flex: 1, minWidth: 0 }}>
-            <h2 style={{ margin: '0 0 2px', fontSize: '1.15rem', fontFamily: 'var(--font-serif)' }}>{profile.display_name}</h2>
+            <h1 style={{ margin: '0 0 2px', fontSize: '1.15rem', fontFamily: 'var(--font-serif)' }}>{profile.display_name}</h1>
             <p style={{ margin: '0 0 4px', fontSize: '0.85rem', color: 'var(--muted)' }}>{profile.email}</p>
             {profile.location && (
               <p style={{ margin: '0 0 4px', fontSize: '0.85rem', color: 'var(--sage)' }}>
@@ -237,8 +261,15 @@ export default function MyProfile() {
         <PersonaSelector
           currentPersona={user.active_persona ?? 'anonymous'}
           businessVerified={user.business_status === 'verified'}
+          onSwitch={handlePersonaSwitch}
           onManage={(p) => setPersonaDrawer(p)}
         />
+        {personaNotice && (
+          <p role="status" style={{ margin: '10px 0 0', fontSize: '0.82rem', fontFamily: 'var(--font-sans)', color: 'var(--sage)', fontWeight: 600 }}>
+            {personaNotice}
+          </p>
+        )}
+        {personaError && <Alert type="error" style={{ marginTop: 10 }}>{personaError}</Alert>}
       </div>
 
       {/* ── Where Around Town opens (Around Town interest pick) ── */}
@@ -304,7 +335,7 @@ export default function MyProfile() {
         currentPersona={user.active_persona ?? 'anonymous'}
         tenantId={tenant!.id}
         onClose={() => setPersonaDrawer(null)}
-        onSwitch={() => { updateUser({ active_persona: 'anonymous' }); setPersonaDrawer(null); }}
+        onSwitch={() => { updateUser({ active_persona: 'anonymous' }); qc.invalidateQueries({ queryKey: ['me'] }); setPersonaDrawer(null); }}
       />
       <PersonalPersonaDrawer
         open={personaDrawer === 'personal'}
@@ -312,7 +343,7 @@ export default function MyProfile() {
         tenantId={tenant!.id}
         displayName={profile.display_name}
         onClose={() => setPersonaDrawer(null)}
-        onSwitch={() => { updateUser({ active_persona: 'personal' }); setPersonaDrawer(null); }}
+        onSwitch={() => { updateUser({ active_persona: 'personal' }); qc.invalidateQueries({ queryKey: ['me'] }); setPersonaDrawer(null); }}
       />
       <BusinessPersonaDrawer
         open={personaDrawer === 'business'}
@@ -320,7 +351,7 @@ export default function MyProfile() {
         businessStatus={user.business_status}
         businessName={user.business_name}
         onClose={() => setPersonaDrawer(null)}
-        onSwitch={() => { updateUser({ active_persona: 'business' }); setPersonaDrawer(null); }}
+        onSwitch={() => { updateUser({ active_persona: 'business' }); qc.invalidateQueries({ queryKey: ['me'] }); setPersonaDrawer(null); }}
       />
 
       <AroundInterestsDrawer
@@ -342,7 +373,7 @@ export default function MyProfile() {
 
       {(creditsLoading || (credits && credits.history.length > 0)) && (
         <div className="card" style={{ marginBottom: 16, minHeight: creditsLoading ? 100 : undefined }}>
-          <p className="card-title">{creditsName} Activity</p>
+          <h3 className="card-title">{creditsName} Activity</h3>
           {creditsLoading ? (
             <div style={{ display: 'flex', justifyContent: 'center', padding: '16px 0' }}>
               <Spinner size="md" />

@@ -1,6 +1,6 @@
-import { useEffect } from 'react';
 import { ClipboardList } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
+import { Drawer } from 'kk-shared-ui';
 import { useAuth } from '../../context/AuthContext';
 import { useTenant } from '../../context/TenantContext';
 import { getBalance } from '../../api/credits';
@@ -165,42 +165,9 @@ export default function StatsPanel({ open, type, onClose }: Props) {
   const creditsName = tenant?.config.credits_name ?? 'KrowdKredits';
   const tenantId    = tenant?.id ?? '';
 
-  // Lock body scroll while open - mirrors ProfilePanel
-  useEffect(() => {
-    document.body.style.overflow = open ? 'hidden' : '';
-    return () => { document.body.style.overflow = ''; };
-  }, [open]);
-
   return (
-    <>
-      {/* Overlay */}
-      <div
-        onClick={onClose}
-        style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
-          zIndex: 200, display: open ? 'block' : 'none',
-        }}
-      />
-
-      {/* Slide-in panel - from the LEFT */}
-      <aside
-        aria-label={type ? panelTitle(type, creditsName) : 'Stats'}
-        aria-hidden={!open}
-        {...(!open ? { inert: '' } : {})}
-        style={{
-          position: 'fixed', top: 0, left: 0, bottom: 0,
-          width: 'min(400px, 100vw)', background: 'var(--cream)',
-          zIndex: 201, display: 'flex', flexDirection: 'column',
-          paddingTop:    'max(16px, env(safe-area-inset-top))',
-          paddingLeft:   'max(16px, env(safe-area-inset-left))',
-          paddingBottom: 'max(16px, env(safe-area-inset-bottom))',
-          paddingRight: '16px',
-          overflowY: 'auto',
-          transform: open ? 'translateX(0)' : 'translateX(-100%)',
-          transition: 'transform 0.25s ease',
-        }}
-      >
-        {/* Header - close arrow points RIGHT (dismiss to left) */}
+    <Drawer open={open} onClose={onClose} side="right" ariaLabel={type ? panelTitle(type, creditsName) : 'Stats'}>
+        {/* Header - close arrow points LEFT, matching every other right-side drawer */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24, flexShrink: 0 }}>
           <button
             onClick={onClose}
@@ -213,11 +180,11 @@ export default function StatsPanel({ open, type, onClose }: Props) {
             }}
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="5" y1="12" x2="19" y2="12"/>
-              <polyline points="12 5 19 12 12 19"/>
+              <line x1="19" y1="12" x2="5" y2="12"/>
+              <polyline points="12 5 5 12 12 19"/>
             </svg>
           </button>
-          <h2 style={{
+          <h2 data-drawer-heading style={{
             fontFamily: 'var(--font-serif)', fontSize: '1.15rem',
             fontWeight: 'bold', color: 'var(--green)', margin: 0,
           }}>
@@ -229,7 +196,6 @@ export default function StatsPanel({ open, type, onClose }: Props) {
         {open && type === 'credits' && (
           <CreditsContent tenantId={tenantId} creditsName={creditsName} />
         )}
-      </aside>
-    </>
+    </Drawer>
   );
 }

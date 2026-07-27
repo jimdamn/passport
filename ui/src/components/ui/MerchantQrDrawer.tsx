@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { X, Compass, AlertCircle, Printer, Download, MapPin } from 'lucide-react';
+import { Drawer } from 'kk-shared-ui';
 import { useAuth } from '../../context/AuthContext';
 import { useTenant } from '../../context/TenantContext';
 import { getToken } from '../../api/client';
@@ -19,12 +20,6 @@ export default function MerchantQrDrawer({ open, onClose }: Props) {
   const [qrStatus, setQrStatus] = useState<QrStatus>('loading');
 
   const creditsName = tenant?.config.credits_name ?? 'KrowdKredits';
-
-  // Lock body scroll while open
-  useEffect(() => {
-    document.body.style.overflow = open ? 'hidden' : '';
-    return () => { document.body.style.overflow = ''; };
-  }, [open]);
 
   // Fetch the QR SVG with the Authorization header (never put the token in a
   // URL - query strings end up in logs and browser history). The blob object
@@ -141,54 +136,7 @@ export default function MerchantQrDrawer({ open, onClose }: Props) {
   };
 
   return (
-    <>
-      {/* Overlay Backdrop */}
-      <div
-        onClick={onClose}
-        style={{
-          position: 'fixed',
-          inset: 0,
-          background: 'rgba(0,0,0,0.6)',
-          backdropFilter: 'blur(2px)',
-          zIndex: 300,
-          display: open ? 'block' : 'none',
-          transition: 'opacity 0.25s ease',
-        }}
-      />
-
-      {/* Slide-Up Bottom Drawer */}
-      <aside
-        aria-label="Merchant Check-in QR Code"
-        style={{
-          position: 'fixed',
-          left: 0,
-          right: 0,
-          bottom: 0,
-          maxHeight: '85vh',
-          background: 'var(--cream)',
-          borderTopLeftRadius: 'var(--r-lg)',
-          borderTopRightRadius: 'var(--r-lg)',
-          borderTop: '1px solid var(--border)',
-          boxShadow: '0 -4px 24px rgba(0, 0, 0, 0.15)',
-          zIndex: 301,
-          display: 'flex',
-          flexDirection: 'column',
-          paddingBottom: 'calc(24px + env(safe-area-inset-bottom))',
-          transform: open ? 'translateY(0)' : 'translateY(100%)',
-          transition: 'transform 0.28s cubic-bezier(0.32, 0.94, 0.6, 1)',
-          overflow: 'hidden',
-        }}
-      >
-        {/* Grabber Drag Handle */}
-        <div style={{
-          width: 44,
-          height: 5,
-          background: '#ddd8cc',
-          borderRadius: 3,
-          margin: '10px auto 4px auto',
-          flexShrink: 0,
-        }} />
-
+    <Drawer open={open} onClose={onClose} side="bottom" ariaLabel="Merchant Check-in QR Code">
         {/* Header */}
         <div style={{
           display: 'flex',
@@ -200,7 +148,7 @@ export default function MerchantQrDrawer({ open, onClose }: Props) {
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Compass size={18} color="var(--green)" />
-            <h2 style={{
+            <h2 data-drawer-heading style={{
               fontFamily: 'var(--font-serif)',
               fontSize: '1.15rem',
               fontWeight: 'bold',
@@ -402,7 +350,6 @@ export default function MerchantQrDrawer({ open, onClose }: Props) {
             </p>
           </div>
         </div>
-      </aside>
-    </>
+    </Drawer>
   );
 }

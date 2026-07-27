@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Camera } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { Drawer } from 'kk-shared-ui';
 import { useAuth } from '../../context/AuthContext';
 import { useTenant } from '../../context/TenantContext';
 import { getMe } from '../../api/auth';
@@ -150,11 +151,6 @@ export default function ProfilePanel({ open, onClose, onSaved }: Props) {
       .finally(() => setIsFetching(false));
   }, [open]);
 
-  useEffect(() => {
-    document.body.style.overflow = open ? 'hidden' : '';
-    return () => { document.body.style.overflow = ''; };
-  }, [open]);
-
   const saveMutation = useMutation({
     mutationFn: (updates: Parameters<typeof updateProfile>[1]) =>
       updateProfile(tenant!.id, updates),
@@ -242,32 +238,7 @@ export default function ProfilePanel({ open, onClose, onSaved }: Props) {
   const name      = user?.display_name || user?.email || 'Me';
 
   return (
-    <>
-      <div
-        onClick={onClose}
-        style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
-          zIndex: 200, display: open ? 'block' : 'none',
-        }}
-      />
-
-      <aside
-        aria-label="Edit profile"
-        aria-hidden={!open}
-        {...(!open ? { inert: '' } : {})}
-        style={{
-          position: 'fixed', top: 0, right: 0, bottom: 0,
-          width: 'min(400px, 100vw)', background: 'var(--cream)',
-          zIndex: 201, display: 'flex', flexDirection: 'column',
-          paddingTop:    'max(16px, env(safe-area-inset-top))',
-          paddingRight:  'max(16px, env(safe-area-inset-right))',
-          paddingBottom: 'max(16px, env(safe-area-inset-bottom))',
-          paddingLeft: '16px',
-          overflowY: 'auto',
-          transform: open ? 'translateX(0)' : 'translateX(100%)',
-          transition: 'transform 0.25s ease',
-        }}
-      >
+    <Drawer open={open} onClose={onClose} side="right" ariaLabel="Edit profile">
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
           <button
             onClick={onClose}
@@ -284,7 +255,7 @@ export default function ProfilePanel({ open, onClose, onSaved }: Props) {
               <polyline points="12 19 5 12 12 5"/>
             </svg>
           </button>
-          <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: '1.15rem', fontWeight: 'bold', color: 'var(--green)', margin: 0 }}>
+          <h2 data-drawer-heading style={{ fontFamily: 'var(--font-serif)', fontSize: '1.15rem', fontWeight: 'bold', color: 'var(--green)', margin: 0 }}>
             My Profile
           </h2>
         </div>
@@ -423,7 +394,6 @@ export default function ProfilePanel({ open, onClose, onSaved }: Props) {
           </svg>
           Account Details
         </button>
-      </aside>
-    </>
+    </Drawer>
   );
 }

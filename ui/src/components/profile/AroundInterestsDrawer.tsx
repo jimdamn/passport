@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Compass } from 'lucide-react';
+import { Drawer } from 'kk-shared-ui';
 import { getAroundInterests, putAroundInterests, toggleInterest, LAST_LENS_KEY, type AroundInterests } from '../../api/around';
 import InterestChips from '../explore/InterestChips';
 import { Alert } from '../ui/Alert';
@@ -44,11 +45,6 @@ export function AroundInterestsDrawer({ open, tenantId, onClose, onSaved }: Prop
       .finally(() => setLoading(false));
   }, [open, tenantId]);
 
-  useEffect(() => {
-    document.body.style.overflow = open ? 'hidden' : '';
-    return () => { document.body.style.overflow = ''; };
-  }, [open]);
-
   async function handleSave() {
     setSaving(true);
     setErrorMsg(null);
@@ -71,27 +67,7 @@ export function AroundInterestsDrawer({ open, tenantId, onClose, onSaved }: Prop
   const isPending = loading || saving;
 
   return (
-    <>
-      <div
-        onClick={onClose}
-        style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 200, display: open ? 'block' : 'none' }}
-      />
-
-      <aside
-        aria-label="Where Around Town opens"
-        aria-hidden={!open}
-        {...(!open ? { inert: '' } : {})}
-        style={{
-          position: 'fixed', top: 0, right: 0, bottom: 0, width: 'min(400px, 100vw)',
-          background: 'var(--cream)', zIndex: 201, display: 'flex', flexDirection: 'column',
-          paddingTop: 'max(16px, env(safe-area-inset-top))',
-          paddingRight: 'max(16px, env(safe-area-inset-right))',
-          paddingBottom: 'max(16px, env(safe-area-inset-bottom))',
-          paddingLeft: '16px', overflowY: 'auto',
-          transform: open ? 'translateX(0)' : 'translateX(100%)',
-          transition: 'transform 0.25s ease',
-        }}
-      >
+    <Drawer open={open} onClose={onClose} side="right" ariaLabel="Where Around Town opens">
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
           <button
             onClick={onClose}
@@ -107,7 +83,7 @@ export function AroundInterestsDrawer({ open, tenantId, onClose, onSaved }: Prop
               <polyline points="12 19 5 12 12 5"/>
             </svg>
           </button>
-          <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: '1.15rem', fontWeight: 'bold', color: 'var(--green)', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <h2 data-drawer-heading style={{ fontFamily: 'var(--font-serif)', fontSize: '1.15rem', fontWeight: 'bold', color: 'var(--green)', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
             <Compass size={20} strokeWidth={2} aria-hidden="true" /> Where Around Town opens
           </h2>
         </div>
@@ -140,7 +116,6 @@ export function AroundInterestsDrawer({ open, tenantId, onClose, onSaved }: Prop
         <p style={{ margin: '12px 0 0', fontSize: '0.75rem', color: 'var(--muted)' }}>
           Change anytime from your profile.
         </p>
-      </aside>
-    </>
+    </Drawer>
   );
 }

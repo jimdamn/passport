@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Store } from 'lucide-react';
+import { Drawer } from 'kk-shared-ui';
 import { updatePersona } from '../../api/profile';
 import { Alert } from '../ui/Alert';
 
@@ -30,11 +31,6 @@ export function BusinessPersonaDrawer({
     }
   }, [open]);
 
-  useEffect(() => {
-    document.body.style.overflow = open ? 'hidden' : '';
-    return () => { document.body.style.overflow = ''; };
-  }, [open]);
-
   const handleSwitch = async () => {
     setSwitching(true);
     setErrorMsg(null);
@@ -50,42 +46,7 @@ export function BusinessPersonaDrawer({
   };
 
   return (
-    <>
-      <div
-        onClick={onClose}
-        style={{
-          position: 'fixed',
-          inset: 0,
-          background: 'rgba(0,0,0,0.5)',
-          zIndex: 200,
-          display: open ? 'block' : 'none',
-        }}
-      />
-
-      <aside
-        aria-label="Business Persona Settings"
-        aria-hidden={!open}
-        data-kk-drawer-open={open || undefined}
-        {...(!open ? { inert: '' } : {})}
-        style={{
-          position: 'fixed',
-          top: 0,
-          right: 0,
-          bottom: 0,
-          width: 'min(400px, 100vw)',
-          background: 'var(--cream)',
-          zIndex: 201,
-          display: 'flex',
-          flexDirection: 'column',
-          paddingTop: 'max(16px, env(safe-area-inset-top))',
-          paddingRight: 'max(16px, env(safe-area-inset-right))',
-          paddingBottom: 'max(16px, env(safe-area-inset-bottom))',
-          paddingLeft: '16px',
-          overflowY: 'auto',
-          transform: open ? 'translateX(0)' : 'translateX(100%)',
-          transition: 'transform 0.25s ease',
-        }}
-      >
+    <Drawer open={open} onClose={onClose} side="right" ariaLabel="Business Persona Settings">
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
           <button
             onClick={onClose}
@@ -109,7 +70,7 @@ export function BusinessPersonaDrawer({
               <polyline points="12 19 5 12 12 5"/>
             </svg>
           </button>
-          <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: '1.15rem', fontWeight: 'bold', color: 'var(--green)', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <h2 data-drawer-heading style={{ fontFamily: 'var(--font-serif)', fontSize: '1.15rem', fontWeight: 'bold', color: 'var(--green)', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
             <Store size={20} strokeWidth={2} aria-hidden="true" /> Business Persona
           </h2>
         </div>
@@ -187,7 +148,6 @@ export function BusinessPersonaDrawer({
             </Link>
           </div>
         )}
-      </aside>
-    </>
+    </Drawer>
   );
 }
