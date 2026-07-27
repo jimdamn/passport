@@ -90,7 +90,7 @@ export default function NextStepCard({
       <p style={{ margin: '0 0 12px', fontSize: '0.88rem', color: 'var(--green)', lineHeight: 1.5, fontFamily: 'var(--font-sans)' }}>
         {step.headline}
       </p>
-      <Link to={step.href} className="btn btn-primary btn-sm" style={{ textDecoration: 'none', display: 'inline-flex' }}>
+      <Link to={step.href} className="btn btn-primary btn-sm" style={{ textDecoration: 'none', display: 'inline-flex', color: 'var(--white)' }}>
         {step.cta}
       </Link>
     </div>
