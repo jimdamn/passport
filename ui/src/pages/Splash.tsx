@@ -134,6 +134,7 @@ function SubmitForm({ tenantId, business, onCancel, onSubmitted }: {
   const [working, setWorking] = useState(false);
   const [progress, setProgress] = useState('');
   const [error, setError] = useState('');
+  const { tenant } = useTenant();
 
   function resetFile() {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -276,6 +277,10 @@ function SubmitForm({ tenantId, business, onCancel, onSubmitted }: {
         By submitting, you confirm you took this {mode} at {business.business_name} and you allow {business.business_name} to
         review it. If they accept it, you receive KrowdKredits. If they offer to license it, you choose whether to agree -
         nothing is licensed without your OK. If they decline, your submission is permanently deleted.
+        {mode === 'photo' && (
+          <> Until {business.business_name} licenses it, they'll see it with "{tenant?.config.brand_name}" watermarked
+          across it - you'll always see your own copy without one.</>
+        )}
       </p>
 
       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center' }}>
