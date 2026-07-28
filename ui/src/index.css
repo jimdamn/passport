@@ -45,7 +45,12 @@ body {
 
 a { color: var(--green); text-decoration: none; }
 a:hover { text-decoration: underline; }
-.card a { color: var(--green); }
+/* Buttons are excluded deliberately. `.card a` (0,1,1) outranks `.btn-amber`
+   (0,1,0), so without :not(.btn) every amber link-button inside a card lost its
+   own white text and rendered green on amber - 3.02:1, an AA failure, in the
+   same stylesheet that defines --amber-fill precisely to guarantee 4.49:1.
+   The same applied to every other button variant used as a link in a card. */
+.card a:not(.btn) { color: var(--green); }
 
 img { max-width: 100%; display: block; }
 
