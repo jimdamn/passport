@@ -19,7 +19,7 @@ import type { Context } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import type { Env, KKAuthPayload, KKAuthProfile } from '../types';
 import { matchesInternalSecret, hmacHex } from '../lib/hmac';
-import { transferCredits, escrowUid } from '../lib/credits';
+import { transferCredits, escrowUid, fetchBalance } from '../lib/credits';
 import { notifySplash } from '../lib/splash-notify';
 import { sendSplashOfferEmail } from '../lib/email';
 import { logger } from '../lib/logger';
@@ -128,6 +128,19 @@ export async function getSplashInbox(c: AppContext) {
       },
     },
   });
+}
+
+/** GET /internal/splash/balance?tenant_id=&business_id= — the merchant's own
+ * KrowdKredits balance, so the Accept button can show what accepting a
+ * submission will cost before the merchant commits to it. */
+export async function getSplashMerchantBalance(c: AppContext) {
+  const tenantId = c.req.query('tenant_id') ?? '';
+  const businessId = c.req.query('business_id') ?? '';
+  const { merchantUid, bearerToken } = await requireMerchantBridge(c, businessId);
+  void tenantId; // reserved for parity with the other routes in this file; balance itself is not tenant-scoped
+
+  const balance = await fetchBalance(c.env, String(merchantUid), bearerToken);
+  return c.json({ data: { balance: balance ?? 0 } });
 }
 
 /** PUT /internal/splash/settings — body { tenant_id, business_id, opt_in, blurb } */

@@ -65,6 +65,7 @@ import {
 import {
   getSplashInbox, putSplashSettings, acceptSplash, declineSplash, getSplashInboxMediaView,
   createSplashOffer, withdrawSplashOffer, getSplashMediaDownload, markSplashOriginalUnlocked, internalSplashSweep,
+  getSplashMerchantBalance,
 } from '../../src/handlers/splash-internal';
 
 import { listExchangeOffers } from '../../src/handlers/exchange';
@@ -413,6 +414,7 @@ app.post('/api/internal/support/retention', internalSupportRetention);
 // re-verified merchant Bearer, checked per-handler - see requireMerchantBridge
 // in splash-internal.ts)
 app.get('/api/internal/splash/inbox', getSplashInbox);
+app.get('/api/internal/splash/balance', getSplashMerchantBalance);
 app.put('/api/internal/splash/settings', putSplashSettings);
 app.post('/api/internal/splash/:id/accept', acceptSplash);
 app.post('/api/internal/splash/:id/decline', declineSplash);
