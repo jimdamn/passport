@@ -152,10 +152,20 @@ export default function AdminPrizes() {
 
   const toggleActive = async (pr: AdminPrize) => {
     if (!tenant || working) return;
+    const willDeactivate = pr.is_active === 1;
+    let stewardNote: string | null | undefined;
+    if (willDeactivate && pr.merchant_id) {
+      const reason = window.prompt(
+        `Why is "${pr.name}" being turned off? This will be shown to the business that submitted it.`,
+        ''
+      );
+      if (reason === null) return; // admin cancelled the prompt
+      stewardNote = reason.trim() || null;
+    }
     setWorking(true);
     setError('');
     try {
-      await updateAdminPrize(tenant.id, pr.id, { is_active: pr.is_active !== 1 });
+      await updateAdminPrize(tenant.id, pr.id, { is_active: !willDeactivate, ...(stewardNote !== undefined ? { steward_note: stewardNote } : {}) });
       await fetchAll();
     } catch (err: any) {
       setError(err.message || 'Failed to update the prize.');
@@ -355,6 +365,11 @@ export default function AdminPrizes() {
                         </span>
                       )}
                     </div>
+                    {!isActive && pr.steward_note && (
+                      <p style={{ margin: '4px 0 0', fontSize: '0.78rem', color: 'var(--muted)' }}>
+                        Reason: {pr.steward_note}
+                      </p>
+                    )}
                     <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--muted)' }}>
                       {pr.plaque_name ? `At ${pr.plaque_name} only` : 'Available everywhere'}
                       {isPaced

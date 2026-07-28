@@ -78,6 +78,7 @@ export interface AdminPrize {
   plaque_name: string | null;
   merchant_id: string | null;
   is_paced: number;
+  steward_note: string | null;
   drops_total: number;
   drops_won: number;
 }
@@ -92,6 +93,7 @@ export interface PrizeInput {
   plaque_id?: string | null;
   is_paced?: boolean;
   is_active?: boolean;
+  steward_note?: string | null;
 }
 
 export function getAdminPrizes(tenant: string) {
