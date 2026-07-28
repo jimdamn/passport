@@ -358,6 +358,9 @@ export async function updatePrize(c: AppContext) {
   const details = body.details === null ? null : (cleanText(body.details, 500) ?? existing.details);
   const value = Number.isFinite(body.value) ? Math.max(0, Math.floor(body.value)) : existing.value;
   const isActive = body.is_active === undefined ? existing.is_active : (body.is_active ? 1 : 0);
+  const stewardNote = isActive === 1
+    ? null // reactivating clears any prior rejection reason
+    : (body.steward_note === undefined ? existing.steward_note : cleanText(body.steward_note, 500));
 
   let probability = existing.probability;
   let quantity = existing.quantity_left;
@@ -378,9 +381,9 @@ export async function updatePrize(c: AppContext) {
 
   await c.env.DB.prepare(`
     UPDATE passport_prizes
-    SET name = ?, details = ?, value = ?, probability = ?, quantity_left = ?, is_active = ?
+    SET name = ?, details = ?, value = ?, probability = ?, quantity_left = ?, is_active = ?, steward_note = ?
     WHERE id = ? AND tenant_id = ?
-  `).bind(name, details, value, probability, quantity, isActive, id, tenant.id).run();
+  `).bind(name, details, value, probability, quantity, isActive, stewardNote, id, tenant.id).run();
 
   const prize = await c.env.DB.prepare(`
     SELECT pr.*,

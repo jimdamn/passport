@@ -81,7 +81,8 @@ CREATE TABLE IF NOT EXISTS passport_prizes (
   is_active     INTEGER NOT NULL DEFAULT 1,
   plaque_id     TEXT,
   merchant_id   TEXT,
-  is_paced      INTEGER NOT NULL DEFAULT 0
+  is_paced      INTEGER NOT NULL DEFAULT 0,
+  steward_note  TEXT
 );
 
 -- Timed prize drops (event pacing)
@@ -267,6 +268,9 @@ CREATE INDEX IF NOT EXISTS idx_happenings_merchant ON passport_happenings(mercha
 --    [Create passport_happenings table + idx_happenings_feed + idx_happenings_merchant
 --     exactly as defined above — new table, no data migration needed. Attached deals
 --     reuse the existing passport_deals.event_id column, so no deals migration is needed.]
+--
+-- 2f. If the database predates the prize-review-reason column (July 2026), run:
+--    ALTER TABLE passport_prizes ADD COLUMN steward_note TEXT;
 --
 -- 3. Migrate passport_scans table structure and copy data:
 --    ALTER TABLE passport_scans RENAME TO scans_old;
