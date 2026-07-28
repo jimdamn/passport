@@ -139,8 +139,12 @@ export async function getSplashMerchantBalance(c: AppContext) {
   const { merchantUid, bearerToken } = await requireMerchantBridge(c, businessId);
   void tenantId; // reserved for parity with the other routes in this file; balance itself is not tenant-scoped
 
+  // null (not 0) when KKCredits is unreachable - a real outage, not a zero
+  // balance, matching credits.ts and auth.ts. Coercing here put "Your balance:
+  // 0 KrowdKredits" beside a button that spends 25 of them, so a merchant with
+  // credits would read it as fact and decline a real submission.
   const balance = await fetchBalance(c.env, String(merchantUid), bearerToken);
-  return c.json({ data: { balance: balance ?? 0 } });
+  return c.json({ data: { balance } });
 }
 
 /** PUT /internal/splash/settings — body { tenant_id, business_id, opt_in, blurb } */
