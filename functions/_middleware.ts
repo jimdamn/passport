@@ -170,6 +170,15 @@ const FRESH_BANNER_PATH = '/site-assets/og/fresh-today-social-banner.jpg';
 // Same growth rail as Fresh Today - a sale link shared into a county Facebook
 // group (the US-12 corridor weekend is the point). Sale ids are nanoid strings.
 const SALE_PATTERN = /^\/sales\/sale\/([\w-]+)$/;
+// The board itself (not a specific sale) - exact path only, so it never
+// swallows /sales/sale/:id or /sales/mine. Sale Day was the only board without
+// one, so /sales shared worse than /fresh for no reason.
+const SALE_BOARD_PATTERN = /^\/sales\/?$/;
+// Static illustrated banner (uploaded to SITE_ASSETS at og/sale-day-social-banner.jpg) -
+// used for the board's own share preview, and as the fallback image for any
+// sale that hasn't uploaded its own photo. Same fallback contract as
+// FRESH_BANNER_PATH below.
+const SALE_DAY_BANNER_PATH = '/site-assets/og/sale-day-social-banner.jpg';
 
 // ─── Community Table meal-page crawler bypass + OG meta ─────────────────────
 // Same growth rail as Fresh Today/Sale Day - a meal link shared into a county
@@ -609,23 +618,93 @@ function pageShell(brandName: string, bodyContent: string): string {
 // The hub runs browser geolocation and issues the kk_geo_trust cookie that
 // will let them back in here on the next visit.
 
-function geoGatePage(brandName: string): Response {
+function escapeAttr(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+/**
+ * Facebook, Instagram and Messenger open links in their own in-app browser,
+ * where navigator.geolocation only works if the host app itself holds OS
+ * location permission - frequently it does not.
+ *
+ * This is an ENHANCEMENT ONLY. It moves the guidance earlier for the visitors
+ * we can recognise. The recovery state on the apps hub shows the same advice to
+ * everyone who fails, so a missed detection costs one extra step, never the
+ * visitor. Do not make anything depend on this returning true - the real-world
+ * behaviour cannot be tested from here (Jim does not use Facebook on a phone,
+ * 2026-07-29).
+ */
+function isInAppBrowser(request: Request): boolean {
+  const ua = request.headers.get('User-Agent') ?? '';
+  return /\bFBAN\b|\bFBAV\b|\bFB_IAB\b|Instagram|\bFBSV\b/i.test(ua);
+}
+
+/**
+ * Plain language, never the product name. Someone arriving from a Facebook
+ * group has never heard of "Home Safe"; "a lost pet post" tells them why to
+ * bother. Names the KIND of post only - never a title, photo or body, which
+ * would be a new read path through the fence.
+ */
+interface GatePageOptions {
+  /** Absolute URL the visitor was trying to reach, passed to the hub so it can
+   *  send them back after verification. Omitted for non-share traffic. */
+  returnTo?: string;
+  /** e.g. "a lost pet post". Null when the request is not for a shareable item. */
+  sharedLabel?: string | null;
+  inAppBrowser?: boolean;
+}
+
+// ─── Geo-gate page: no valid trust token ─────────────────────────────────────
+// Directs the visitor to the apps hub to complete location verification.
+// The hub runs browser geolocation and issues the kk_geo_trust cookie that
+// will let them back in here on the next visit.
+
+function geoGatePage(brandName: string, opts: GatePageOptions = {}): Response {
+  const hubHref = opts.returnTo
+    ? `${APPS_HUB_URL}/?return_to=${encodeURIComponent(opts.returnTo)}`
+    : APPS_HUB_URL;
+
+  const sharedLine = opts.sharedLabel
+    ? `<p><strong>Someone shared ${escapeAttr(opts.sharedLabel)} with you.</strong></p>`
+    : '';
+
+  // Shown before they tap, for the in-app browsers we can recognise.
+  const inAppHint = opts.inAppBrowser
+    ? `<p style="border-left:3px solid #c8860a;padding:8px 10px;background:#f4f1ea;text-align:left">
+         The app you came from often blocks location in its built-in browser.
+         If nothing happens when you tap below, open this page in Safari or Chrome.
+       </p>`
+    : '';
+
+  const landingLine = opts.returnTo
+    ? ' Then you go straight to what was shared with you.'
+    : '';
+
   const body = `
     <div class="card">
       ${logoHtml(brandName)}
-      <h1>Location Verification Required</h1>
+      <h1>One quick check before you go in</h1>
+      ${sharedLine}
       <p>
-        The ${brandName} Passport is available to members of the Tri-State
-        Lakes Region — northeast Indiana, south-central Michigan, and
-        northwest Ohio.
+        ${brandName} is a private network for the Tri-State Lakes Region:
+        northeast Indiana, south-central Michigan, and northwest Ohio.
       </p>
+      ${inAppHint}
       <p>
-        Please verify your location through the apps hub to continue.
-        Existing members traveling outside the region can sign in there as well.
+        We check your location once to confirm you are in the region. Your
+        coordinates are used for that check only. They are not stored, not
+        logged, and never shared.${landingLine}
       </p>
-      <a href="${APPS_HUB_URL}" class="btn" style="display:block;text-align:center;text-decoration:none;margin-top:8px">
-        Verify My Location
+      <a href="${escapeAttr(hubHref)}" class="btn" style="display:block;text-align:center;text-decoration:none;margin-top:8px;min-height:44px;line-height:28px">
+        Confirm my location and continue
       </a>
+      <p style="font-size:0.85rem;color:#777;margin-top:14px">
+        Already a member and travelling? <a href="${escapeAttr(hubHref)}">Sign in instead.</a>
+      </p>
     </div>`;
   return new Response(pageShell(brandName, body), {
     status: 200,
@@ -653,6 +732,7 @@ export const onRequest: PagesFunction<Env & { GEO_TOKEN_SECRET: string }> = asyn
   const freshStandMatch = url.pathname.match(FRESH_STAND_PATTERN);
   const freshBoardMatch = url.pathname.match(FRESH_BOARD_PATTERN);
   const saleMatch       = url.pathname.match(SALE_PATTERN);
+  const saleBoardMatch  = url.pathname.match(SALE_BOARD_PATTERN);
   const popupVendorMatch = url.pathname.match(POPUP_VENDOR_PATTERN);
   const popupBoardMatch = url.pathname.match(POPUP_BOARD_PATTERN);
   const mealMatch       = url.pathname.match(MEAL_PATTERN);
@@ -684,7 +764,7 @@ export const onRequest: PagesFunction<Env & { GEO_TOKEN_SECRET: string }> = asyn
       // who has no region-trust cookie; we mint a short-lived bypass below.
       if (await isActiveEventScan(url, context.env)) {
         mintEventBypass = true;
-      } else if ((freshStandMatch || freshBoardMatch || saleMatch || popupVendorMatch || popupBoardMatch || mealMatch || mealBoardMatch || petPostMatch || petBoardMatch) && isPagePreviewCrawler(context.request)) {
+      } else if ((freshStandMatch || freshBoardMatch || saleMatch || saleBoardMatch || popupVendorMatch || popupBoardMatch || mealMatch || mealBoardMatch || petPostMatch || petBoardMatch) && isPagePreviewCrawler(context.request)) {
         // Narrow, read-only exception: a confirmed link-preview crawler
         // (Facebook, Slack, etc. - see isPagePreviewCrawler) fetching a
         // specific Fresh Today stand, Sale Day sale, Pop-Ups vendor,
@@ -696,7 +776,23 @@ export const onRequest: PagesFunction<Env & { GEO_TOKEN_SECRET: string }> = asyn
         // field-notes' crawlerPreviewAllowed exception for /story/:id
         // exactly.
       } else {
-        return geoGatePage('Lake & Locals');
+        // The pattern matches above already tell us what was asked for. Naming
+        // the KIND of post gives a stranger a reason to grant location, and
+        // reveals nothing the share card did not already show them on Facebook.
+        // Never resolve the item itself here - no titles, no photos, no bodies.
+        const sharedLabel =
+            (petPostMatch || petBoardMatch)         ? 'a lost pet post'
+          : (saleMatch || saleBoardMatch)           ? 'a yard sale post'
+          : (freshStandMatch || freshBoardMatch)    ? 'a farm stand post'
+          : (mealMatch || mealBoardMatch)           ? 'a community supper post'
+          : (popupVendorMatch || popupBoardMatch)   ? 'a pop-up vendor post'
+          : null;
+
+        return geoGatePage('Lake & Locals', {
+          returnTo: url.toString(),
+          sharedLabel,
+          inAppBrowser: isInAppBrowser(context.request),
+        });
       }
     }
   }
@@ -777,13 +873,22 @@ export const onRequest: PagesFunction<Env & { GEO_TOKEN_SECRET: string }> = asyn
     }
   }
 
+  if (saleBoardMatch) {
+    ogTitle = 'Sale Day - Lake & Locals';
+    ogDescription = "Yard sales, moving sales and barn sales across the region - what's on this weekend.";
+    ogImage = `${url.origin}${SALE_DAY_BANNER_PATH}`;
+  }
+
   if (saleMatch) {
     const tenantSlug = REGIONAL_DOMAINS[hostname] ?? 'lake-locals';
     const sale = await resolveSaleMeta(saleMatch[1], tenantSlug, context.env);
     if (sale) {
       ogTitle = `${truncate(sale.title, 70)} - Sale Day`;
       ogDescription = truncate(`${friendlyDateLabel(sale.firstDate)} - ${sale.body}`, 160);
-      ogImage = sale.photoUrl;
+      // No uploaded photo - the illustrated board banner stands in, matching
+      // the fallback contract every other board already had. Sale Day was the
+      // only one without it, so a photo-less sale produced an imageless card.
+      ogImage = sale.photoUrl ?? `${url.origin}${SALE_DAY_BANNER_PATH}`;
     }
   }
 
