@@ -540,179 +540,29 @@ async function resolveTenantMeta(hostname: string, env: Env): Promise<TenantMeta
   }
 }
 
-// ─── Shared HTML helpers ──────────────────────────────────────────────────────
-
-function logoHtml(brandName: string): string {
-  // Split on & to colorize the ampersand in amber (matches Topbar treatment)
-  const parts  = brandName.split('&');
-  const nameHtml = parts.length > 1
-    ? parts.map(p => p.trim()).join(' <span style="color:#c8860a">&amp;</span> ')
-    : brandName;
-  return `
-    <div style="text-align:center;margin-bottom:32px">
-      <div style="font-family:Georgia,serif;font-size:1.5rem;font-weight:bold;color:#1e3320;line-height:1.2">
-        ${nameHtml}
-      </div>
-      <div style="font-family:Georgia,serif;font-size:0.72rem;color:#507850;letter-spacing:0.08em;text-transform:uppercase;margin-top:3px">
-        Passport
-      </div>
-    </div>`;
-}
-
-function pageShell(brandName: string, bodyContent: string): string {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
-  <title>${brandName} Passport</title>
-  <style>
-    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-    body{
-      font-family:Georgia,'Times New Roman',serif;
-      background:#f4f1ea;color:#1e3320;
-      min-height:100vh;
-      display:flex;flex-direction:column;
-      align-items:center;justify-content:center;
-      padding:32px 16px;
-    }
-    .card{
-      background:#fff;border:1px solid #ddd8cc;
-      border-radius:12px;padding:36px 32px;
-      max-width:480px;width:100%;
-      text-align:center;
-    }
-    h1{font-size:1.15rem;font-weight:bold;margin-bottom:14px;line-height:1.4}
-    p{font-family:system-ui,-apple-system,sans-serif;font-size:0.92rem;
-      color:#555;line-height:1.65;margin-bottom:12px}
-    .form-group{margin-bottom:14px;text-align:left}
-    label{display:block;font-family:system-ui,sans-serif;font-size:0.82rem;
-      font-weight:600;color:#1e3320;margin-bottom:5px}
-    input{width:100%;padding:10px 12px;border:1px solid #ddd8cc;
-      border-radius:8px;font-size:0.92rem;font-family:system-ui,sans-serif;
-      color:#1e3320;background:#fff;outline:none}
-    input:focus{border-color:#c8860a;box-shadow:0 0 0 3px rgba(200,134,10,0.12)}
-    .btn{display:block;width:100%;padding:12px;background:#1e3320;color:#f4f1ea;
-      border:none;border-radius:8px;font-family:system-ui,sans-serif;
-      font-size:0.92rem;font-weight:600;cursor:pointer;margin-top:8px;
-      transition:background 0.15s}
-    .btn:hover{background:#2d4d32}
-    .btn:disabled{opacity:0.6;cursor:not-allowed}
-    .msg{display:none;padding:10px 14px;border-radius:8px;
-      font-family:system-ui,sans-serif;font-size:0.87rem;margin-top:12px}
-    .msg-success{background:rgba(42,106,42,0.1);color:#2a6a2a;border:1px solid rgba(42,106,42,0.25)}
-    .msg-error{background:rgba(176,0,0,0.08);color:#b00000;border:1px solid rgba(176,0,0,0.2)}
-    .powered{font-family:system-ui,sans-serif;font-size:0.68rem;
-      color:#aaa;margin-top:28px;text-align:center}
-  </style>
-</head>
-<body>
-  ${bodyContent}
-  <p class="powered">Powered by KrowdKraft</p>
-</body>
-</html>`;
-}
 
 // ─── Geo-gate page: no valid trust token ─────────────────────────────────────
 // Directs the visitor to the apps hub to complete location verification.
 // The hub runs browser geolocation and issues the kk_geo_trust cookie that
 // will let them back in here on the next visit.
 
-function escapeAttr(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/"/g, '&quot;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-}
-
 /**
- * Facebook, Instagram and Messenger open links in their own in-app browser,
- * where navigator.geolocation only works if the host app itself holds OS
- * location permission - frequently it does not.
+ * Hand the visitor to the apps hub, which is the only page that can actually
+ * verify a location.
  *
- * This is an ENHANCEMENT ONLY. It moves the guidance earlier for the visitors
- * we can recognise. The recovery state on the apps hub shows the same advice to
- * everyone who fails, so a missed detection costs one extra step, never the
- * visitor. Do not make anything depend on this returning true - the real-world
- * behaviour cannot be tested from here (Jim does not use Facebook on a phone,
- * 2026-07-29).
+ * This used to render an explainer card here and then send them to the hub,
+ * which asked about location a second time - two cards for one decision, and
+ * the first button promised an action it could not perform. The hub now carries
+ * the whole message, so there is one card and one ask.
+ *
+ * `shared` is a KEY, never free text: this value crosses a domain boundary and
+ * is rendered on our page, so the hub maps known keys to copy and ignores
+ * anything else.
  */
-function isInAppBrowser(request: Request): boolean {
-  const ua = request.headers.get('User-Agent') ?? '';
-  return /\bFBAN\b|\bFBAV\b|\bFB_IAB\b|Instagram|\bFBSV\b/i.test(ua);
-}
-
-/**
- * Plain language, never the product name. Someone arriving from a Facebook
- * group has never heard of "Home Safe"; "a lost pet post" tells them why to
- * bother. Names the KIND of post only - never a title, photo or body, which
- * would be a new read path through the fence.
- */
-interface GatePageOptions {
-  /** Absolute URL the visitor was trying to reach, passed to the hub so it can
-   *  send them back after verification. Omitted for non-share traffic. */
-  returnTo?: string;
-  /** e.g. "a lost pet post". Null when the request is not for a shareable item. */
-  sharedLabel?: string | null;
-  inAppBrowser?: boolean;
-}
-
-// ─── Geo-gate page: no valid trust token ─────────────────────────────────────
-// Directs the visitor to the apps hub to complete location verification.
-// The hub runs browser geolocation and issues the kk_geo_trust cookie that
-// will let them back in here on the next visit.
-
-function geoGatePage(brandName: string, opts: GatePageOptions = {}): Response {
-  const hubHref = opts.returnTo
-    ? `${APPS_HUB_URL}/?return_to=${encodeURIComponent(opts.returnTo)}`
-    : APPS_HUB_URL;
-
-  const sharedLine = opts.sharedLabel
-    ? `<p><strong>Someone shared ${escapeAttr(opts.sharedLabel)} with you.</strong></p>`
-    : '';
-
-  // Shown before they tap, for the in-app browsers we can recognise.
-  const inAppHint = opts.inAppBrowser
-    ? `<p style="border-left:3px solid #c8860a;padding:8px 10px;background:#f4f1ea;text-align:left">
-         The app you came from often blocks location in its built-in browser.
-         If nothing happens when you tap below, open this page in Safari or Chrome.
-       </p>`
-    : '';
-
-  const landingLine = opts.returnTo
-    ? ' Then you go straight to what was shared with you.'
-    : '';
-
-  const body = `
-    <div class="card">
-      ${logoHtml(brandName)}
-      <h1>One quick check before you go in</h1>
-      ${sharedLine}
-      <p>
-        ${brandName} is a private network for the Tri-State Lakes Region:
-        northeast Indiana, south-central Michigan, and northwest Ohio.
-      </p>
-      ${inAppHint}
-      <p>
-        We check your location once to confirm you are in the region. Your
-        coordinates are used for that check only. They are not stored, not
-        logged, and never shared.${landingLine}
-      </p>
-      <a href="${escapeAttr(hubHref)}" class="btn" style="display:block;text-align:center;text-decoration:none;margin-top:8px;min-height:44px;line-height:28px">
-        Confirm my location and continue
-      </a>
-      <p style="font-size:0.85rem;color:#777;margin-top:14px">
-        Already a member and travelling? <a href="${escapeAttr(hubHref)}">Sign in instead.</a>
-      </p>
-    </div>`;
-  return new Response(pageShell(brandName, body), {
-    status: 200,
-    headers: {
-      'Content-Type': 'text/html;charset=UTF-8',
-      'Cache-Control': 'no-cache',
-    },
-  });
+function handOffToHub(url: URL, sharedKey: string | null): Response {
+  const params = new URLSearchParams({ return_to: url.toString() });
+  if (sharedKey) params.set('shared', sharedKey);
+  return Response.redirect(`${APPS_HUB_URL}/?${params.toString()}`, 302);
 }
 
 // ─── Main middleware ──────────────────────────────────────────────────────────
@@ -780,19 +630,15 @@ export const onRequest: PagesFunction<Env & { GEO_TOKEN_SECRET: string }> = asyn
         // the KIND of post gives a stranger a reason to grant location, and
         // reveals nothing the share card did not already show them on Facebook.
         // Never resolve the item itself here - no titles, no photos, no bodies.
-        const sharedLabel =
-            (petPostMatch || petBoardMatch)         ? 'a lost pet post'
-          : (saleMatch || saleBoardMatch)           ? 'a yard sale post'
-          : (freshStandMatch || freshBoardMatch)    ? 'a farm stand post'
-          : (mealMatch || mealBoardMatch)           ? 'a community supper post'
-          : (popupVendorMatch || popupBoardMatch)   ? 'a pop-up vendor post'
+        const sharedKey =
+            (petPostMatch || petBoardMatch)         ? 'pet'
+          : (saleMatch || saleBoardMatch)           ? 'sale'
+          : (freshStandMatch || freshBoardMatch)    ? 'fresh'
+          : (mealMatch || mealBoardMatch)           ? 'meal'
+          : (popupVendorMatch || popupBoardMatch)   ? 'popup'
           : null;
 
-        return geoGatePage('Lake & Locals', {
-          returnTo: url.toString(),
-          sharedLabel,
-          inAppBrowser: isInAppBrowser(context.request),
-        });
+        return handOffToHub(url, sharedKey);
       }
     }
   }
