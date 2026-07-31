@@ -254,15 +254,42 @@ Seeded by migration from the 2026-07-30 applied values. 34 rows.
   `volunteer_shift_confirmed`, `krowdlift`). Zero-value rows are included deliberately: the page's
   job is to show the complete earning surface, and "this pays nothing" is information.
 - **Quests (10)** — including the retired `q_reliable_neighbor`, shown as inactive.
-- **KrowdKwest (5)** — `step_reward_default`, `rank2_10_kredits`, `rank11_20_kredits`,
-  `grand_prize_kredits`, `minigame_max_award`. **Per-hunt**, so the count grows with each hunt. The
-  seeder enumerates hunts rather than hardcoding hunt 1, and hunt creation in `kwest-admin.ts` gains
-  a hook that registers the new hunt's five values against the *current* modifier, so a hunt created
-  while the dial sits at 0.5 starts correctly scaled instead of at baseline. The completeness test
-  (§12) is the backstop if that hook is ever missed.
+- **KrowdKwest defaults (5)** — `step_reward_default`, `rank2_10_kredits`, `rank11_20_kredits`,
+  `grand_prize_kredits`, `minigame_max_award`. **These are hunt-creation defaults, not per-hunt
+  values.** See §9.1.
 - **Hunt payout tiers (1)** — the tier table scaled as a unit.
 - **Onboarding (3)** — Passport `welcome_credits`, Exchange `welcome_credits`, Exchange
   `upgrade_credits`.
+
+### 9.1 The registry holds hunt DEFAULTS, never hunt instances
+
+An earlier draft registered each hunt's five credit fields. That was wrong on two counts, neither of
+them database size (growth is linear at 5 rows per hunt — roughly 1,100 rows a year even at a hunt a
+month across all 19 target regions, which D1 would not notice):
+
+1. **The page becomes unreadable.** Against 29 non-hunt rows, twenty hunts would make 100 of ~129
+   rows KrowdKwest, most from hunts that ended months ago. The one view meant to make the economy
+   legible turns into an archive.
+2. **Rescaling an existing hunt is wrong.** A finished hunt's awards already happened and its budget
+   is spent, so changing its numbers only corrupts the record. A *running* hunt is worse: entrants
+   started on the understanding that the grand prize was 25, and the modifier must never be able to
+   halve it mid-flight.
+
+**Therefore:** the registry holds one fixed set of five hunt-creation defaults, stored in
+`tenants.config.kwest` (consistent with D7 and the 2026-07-26 tunable-config rule). A hunt snapshots
+those values at creation and is **never** touched by the modifier afterwards.
+
+Consequences:
+- The registry is a fixed 34 rows and does not grow, ever.
+- The modifier sets what *future* hunts are worth, which is what an economy dial should do.
+- Live and completed hunts are immune by construction, not by a check someone has to remember.
+- Hunt 1 keeps its current values. Changing that specific hunt is an ordinary edit in the existing
+  KrowdKwest admin.
+
+**This is not the KKGame second-writer problem (§8.1), despite looking similar.** The KrowdKwest
+admin editing a hunt's prizes writes that hunt's own instance values; the registry holds creation
+defaults. Two different values. KKGame's admin was a genuine conflict because it wrote the exact
+same column the modifier writes.
 
 ### Clues
 
@@ -320,13 +347,23 @@ Reuses Passport's existing `/profile/admin/*` gate. No new role. Every write rec
 
 ---
 
-## 14. Open item for the plan
+## 14. Increment split (decided by Jim, 2026-07-31)
 
-**Sequencing of the hunt migration (D7) relative to the rest.** It is the only part of this work that
-changes a live read path — `loadConfig` in `kkgame/src/routers/hunt.ts` stops reading KV and starts
-reading Passport — so it is the only part carrying real deploy risk, and the treasure hunt is the
-single largest source of credits in the economy. It may deserve to be its own increment behind its
-own gate rather than shipping with the admin route.
+**The hunt migration (D7) is its own increment, behind its own gate.** It is the only part of this
+work that changes a live read path — `loadConfig` in `kkgame/src/routers/hunt.ts` stops reading KV
+and starts reading Passport — so it is the only part carrying real deploy risk, against the single
+largest source of credits in the economy. Everything else is additive and cannot affect minting.
+
+- **Increment 1 — the economy route.** Registry, modifier, preview, apply, drift, guards panel,
+  clues, and the KKGame admin lockdown (§8.1). Covers actions, quests, KrowdKwest defaults and
+  onboarding: **33 of the registry's 34 rows**, every source except the hunt payout tiers.
+- **Increment 2 — the hunt migration.** KV to `tenants.config`, the payout/guard split (§8.2), the
+  `loadConfig` change, and the hunt tier row joining the registry. Ships behind its own gate; the KV
+  key is deleted only after the D1 path is verified in production.
+
+Increment 1 therefore reaches everything except the treasure hunt, which is 32.8% of all credits ever
+minted. That gap is deliberate and temporary, and it is the reason increment 2 should follow closely
+rather than being parked.
 
 Resolved during spec review, recorded here so the plan does not re-open them:
 
