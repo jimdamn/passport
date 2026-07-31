@@ -114,9 +114,43 @@ describe('readLiveValues', () => {
 
 describe('describeGuards', () => {
   it('does not flag when the ratio is unchanged', () => {
-    expect(describeGuards(100, 100)[0].outOfBand).toBe(false);
+    expect(describeGuards(100, 100, 1000, 1000)[0].outOfBand).toBe(false);
   });
   it('flags when the largest award shrinks far below baseline', () => {
-    expect(describeGuards(25, 100)[0].outOfBand).toBe(true);
+    expect(describeGuards(25, 100, 1000, 1000)[0].outOfBand).toBe(true);
+  });
+
+  it('does not flag the daily-ceiling rows when total daily mint is unchanged from baseline', () => {
+    const rows = describeGuards(100, 100, 5000, 5000);
+    const ceilingRows = rows.filter((r) => r.key !== 'KWEST_MAX_SINGLE_AWARD');
+    expect(ceilingRows.length).toBeGreaterThan(0);
+    expect(ceilingRows.every((r) => r.outOfBand === false)).toBe(true);
+  });
+
+  // Regression test for the 2026-07-30 incident: reward values fell roughly
+  // 10x while every ceiling stayed at its old absolute number, so the
+  // ceiling-to-mint ratio silently grew by roughly the same factor. With the
+  // ceilings fixed and total daily mint collapsing well below half its
+  // baseline, every daily-ceiling row (including the fallback) must flag.
+  it('flags the daily-ceiling rows when ceilings are fixed and total mint collapses', () => {
+    const rows = describeGuards(100, 100, 10000, 1000);
+    const ceilingRows = rows.filter((r) => r.key !== 'KWEST_MAX_SINGLE_AWARD');
+    expect(ceilingRows.length).toBeGreaterThan(0);
+    expect(ceilingRows.every((r) => r.outOfBand === true)).toBe(true);
+
+    const fallback = rows.find((r) => r.key === 'FALLBACK_CEILING');
+    expect(fallback?.outOfBand).toBe(true);
+  });
+
+  it('yields null ratios and no flag when total computed mint is zero, with no NaN leaking out', () => {
+    const rows = describeGuards(100, 100, 1000, 0);
+    const ceilingRows = rows.filter((r) => r.key !== 'KWEST_MAX_SINGLE_AWARD');
+    expect(ceilingRows.length).toBeGreaterThan(0);
+    for (const row of ceilingRows) {
+      expect(row.ratioNow).toBeNull();
+      expect(row.outOfBand).toBe(false);
+      expect(row.value).not.toContain('NaN');
+    }
+    expect(rows.some((r) => JSON.stringify(r).includes('NaN'))).toBe(false);
   });
 });
