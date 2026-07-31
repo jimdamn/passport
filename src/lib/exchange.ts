@@ -26,7 +26,7 @@ export interface ExchangeMarketOffer extends ExchangeOffer {
   persona_type: string;
 }
 
-function exchangeBaseUrl(env: Env): string {
+export function exchangeBaseUrl(env: Env): string {
   return env.EXCHANGE_BASE_URL || DEFAULT_EXCHANGE_BASE_URL;
 }
 
