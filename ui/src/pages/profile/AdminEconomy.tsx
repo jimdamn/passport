@@ -224,6 +224,11 @@ export default function AdminEconomy() {
       setGuards(res.data.guards);
       savedViewRef.current = { rows: res.data.values, guards: res.data.guards };
       setPreviewedModifier(res.data.modifier);
+      // A stale non-'applied' outcome from a previous tenant/user must not
+      // arm retry or render a failure alert for a tenant that never failed
+      // (finding 3, second pass) - fetchAll re-runs on every tenant/user
+      // change, and applyResult otherwise survives across it untouched.
+      setApplyResult(null);
     } catch (err: any) {
       setError(err.message || 'Failed to load the economy view.');
     } finally {
@@ -317,7 +322,21 @@ export default function AdminEconomy() {
   const retryEligible =
     applyResult !== null && applyResult.outcome !== 'applied' &&
     candidate !== null && savedModifier !== null && candidate === savedModifier;
-  const canSave = readyToSave || retryEligible;
+  // Durable counterpart to retryEligible (finding 1, second pass): `applyResult`
+  // is plain component state, so it is gone after a page reload or an
+  // SPA unmount/remount (eg. navigating away to check on the failed service
+  // and coming back) - exactly the moment a real operator is most likely to
+  // return and press Save again. `rows` comes back from the server on every
+  // fetchAll/preview/apply, so a live row that is reachable ('ok', not
+  // 'unavailable' or 'orphaned' - neither of those is evidence anything is
+  // actually wrong at this modifier) but still drifted from its computed
+  // value survives reload and remount and proves the mix-up independently of
+  // any client-side memory. Still only arms for the exact server-confirmed
+  // savedModifier, same as retryEligible - never an unpreviewed typed value.
+  const driftRetryEligible =
+    candidate !== null && savedModifier !== null && candidate === savedModifier &&
+    rows.some((r) => r.status === 'ok' && r.drift);
+  const canSave = readyToSave || retryEligible || driftRetryEligible;
 
   async function save() {
     if (!tenant || candidate === null || saving || !canSave) return;
@@ -327,21 +346,31 @@ export default function AdminEconomy() {
     setApplyResult(null);
     try {
       const res = await applyEconomy(tenant.id, candidate);
-      if (seq !== requestSeqRef.current) return; // a newer action started meanwhile
-      setSavedModifier(res.data.modifier);
-      setDraft(String(res.data.modifier));
-      setRows(res.data.values);
-      setGuards(res.data.guards);
-      savedViewRef.current = { rows: res.data.values, guards: res.data.guards };
-      setPreviewedModifier(res.data.modifier);
-      const failedTargets = Object.entries(res.data.per_target)
-        .filter(([, status]) => status === 'failed')
-        .map(([target]) => target);
-      setApplyResult({ outcome: res.data.outcome, failedTargets });
+      // A newer action (another preview or save) has started meanwhile -
+      // skip writing this now-stale response over it, but still fall
+      // through to `finally` so `saving` always clears (finding 2, second
+      // pass). The old early `return` here skipped the seq-gated
+      // `setSaving(false)` too, which could leave Save stuck disabled with
+      // a spinner - visually indistinguishable from the finding-1 stranded
+      // state - until a full reload.
+      if (seq === requestSeqRef.current) {
+        setSavedModifier(res.data.modifier);
+        setDraft(String(res.data.modifier));
+        setRows(res.data.values);
+        setGuards(res.data.guards);
+        savedViewRef.current = { rows: res.data.values, guards: res.data.guards };
+        setPreviewedModifier(res.data.modifier);
+        const failedTargets = Object.entries(res.data.per_target)
+          .filter(([, status]) => status === 'failed')
+          .map(([target]) => target);
+        setApplyResult({ outcome: res.data.outcome, failedTargets });
+      }
     } catch (err: any) {
       setError(err.message || 'Failed to save the modifier.');
     } finally {
-      if (seq === requestSeqRef.current) setSaving(false);
+      // Unconditional: whatever else this response is or is not allowed to
+      // update, the in-flight indicator for THIS click must always clear.
+      setSaving(false);
     }
   }
 
@@ -384,6 +413,7 @@ export default function AdminEconomy() {
               type="text"
               inputMode="decimal"
               value={draft}
+              disabled={saving}
               onChange={(e) => { setDraft(e.target.value); setApplyResult(null); }}
             />
           </div>
