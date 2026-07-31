@@ -173,7 +173,13 @@ export default function AdminEconomy() {
   const navigate = useNavigate();
 
   const [savedModifier, setSavedModifier] = useState<number | null>(null);
-  const [savedView, setSavedView] = useState<ViewSnapshot>(EMPTY_SNAPSHOT);
+  // Last-known saved snapshot, used only to revert the table when the
+  // modifier field is cleared or invalid (finding 4). Kept in a ref rather
+  // than state: it does not drive any rendering itself, and as state it was
+  // a fresh object on every write, which put a needless extra entry in the
+  // preview effect's dependency array and scheduled a redundant preview each
+  // time fetchAll or save ran (finding 2, round 2).
+  const savedViewRef = useRef<ViewSnapshot>(EMPTY_SNAPSHOT);
 
   const [draft, setDraft] = useState('');
   const [rows, setRows] = useState<EconomyValueRow[]>([]);
@@ -216,7 +222,7 @@ export default function AdminEconomy() {
       setDraft(String(res.data.modifier));
       setRows(res.data.values);
       setGuards(res.data.guards);
-      setSavedView({ rows: res.data.values, guards: res.data.guards });
+      savedViewRef.current = { rows: res.data.values, guards: res.data.guards };
       setPreviewedModifier(res.data.modifier);
     } catch (err: any) {
       setError(err.message || 'Failed to load the economy view.');
@@ -241,8 +247,8 @@ export default function AdminEconomy() {
       setInputError('');
       requestSeqRef.current++;
       setPreviewing(false);
-      setRows(savedView.rows);
-      setGuards(savedView.guards);
+      setRows(savedViewRef.current.rows);
+      setGuards(savedViewRef.current.guards);
       setPreviewedModifier(savedModifier);
       return;
     }
@@ -250,8 +256,8 @@ export default function AdminEconomy() {
       setInputError('Enter a number from 0 to 5, at most two decimal places.');
       requestSeqRef.current++;
       setPreviewing(false);
-      setRows(savedView.rows);
-      setGuards(savedView.guards);
+      setRows(savedViewRef.current.rows);
+      setGuards(savedViewRef.current.guards);
       setPreviewedModifier(savedModifier);
       return;
     }
@@ -266,7 +272,11 @@ export default function AdminEconomy() {
         if (seq !== requestSeqRef.current) return; // a newer request has since started - stale
         setRows(res.data.values);
         setGuards(res.data.guards);
-        setPreviewedModifier(candidate);
+        // From the response, not the locally-captured `candidate` (finding 3,
+        // round 2) - identical today since the server validates without
+        // normalizing, but this keeps previewedModifier honest if that ever
+        // changes.
+        setPreviewedModifier(res.data.modifier);
       } catch (err: any) {
         if (seq !== requestSeqRef.current) return;
         setError(err.message || 'Preview failed.');
@@ -277,7 +287,7 @@ export default function AdminEconomy() {
 
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draft, tenant?.id, savedModifier, savedView]);
+  }, [draft, tenant?.id, savedModifier]);
 
   // Whether the currently-typed value has a matching, resolved preview yet.
   const previewPending = candidate !== null && !inputError && previewedModifier !== candidate;
@@ -306,7 +316,7 @@ export default function AdminEconomy() {
       setDraft(String(res.data.modifier));
       setRows(res.data.values);
       setGuards(res.data.guards);
-      setSavedView({ rows: res.data.values, guards: res.data.guards });
+      savedViewRef.current = { rows: res.data.values, guards: res.data.guards };
       setPreviewedModifier(res.data.modifier);
       const failedTargets = Object.entries(res.data.per_target)
         .filter(([, status]) => status === 'failed')
@@ -395,7 +405,11 @@ export default function AdminEconomy() {
         )}
         {applyResult && applyResult.outcome !== 'applied' && (
           <Alert type="error" style={{ marginTop: 10 }}>
-            Modifier saved, but {applyResult.outcome === 'failed' ? 'every target' : 'not every target'} updated:{' '}
+            {/* 'failed' = zero targets succeeded; 'partial' = some did, some
+                did not. Each arm must read as true on its own (finding 1,
+                round 2) - the old copy said "every target updated" on the
+                total-failure path, which contradicted itself. */}
+            Modifier saved, but {applyResult.outcome === 'failed' ? 'no target' : 'not every target'} updated:{' '}
             {applyResult.failedTargets.map(targetLabel).join(', ')} failed to receive the new values.
             This is safe to retry - apply always recomputes from baseline, so pressing Save again will not double up.
           </Alert>
