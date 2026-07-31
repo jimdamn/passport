@@ -9,7 +9,8 @@
     "db:create": "wrangler d1 create krowdkraft-passport",
     "db:migrate": "wrangler d1 execute krowdkraft-passport --file=./schema.sql --remote",
     "db:seed": "wrangler d1 execute krowdkraft-passport --file=./seed.sql --remote",
-    "db:reset": "wrangler d1 execute krowdkraft-passport --file=./schema.sql --remote && wrangler d1 execute krowdkraft-passport --file=./seed.sql --remote"
+    "db:reset": "wrangler d1 execute krowdkraft-passport --file=./schema.sql --remote && wrangler d1 execute krowdkraft-passport --file=./seed.sql --remote",
+    "test": "vitest run"
   },
   "dependencies": {
     "hono": "^4.12.27",
@@ -20,6 +21,7 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240909.0",
     "typescript": "^5.5.0",
+    "vitest": "^4.1.10",
     "wrangler": "^4.92.0"
   },
   "overrides": {
