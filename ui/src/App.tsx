@@ -58,6 +58,7 @@ const AdminVolunteer = lazy(() => import('./pages/profile/AdminVolunteer'));
 const AdminHappenings = lazy(() => import('./pages/profile/AdminHappenings'));
 const AdminFresh = lazy(() => import('./pages/profile/AdminFresh'));
 const AdminSplash = lazy(() => import('./pages/profile/AdminSplash'));
+const AdminEconomy = lazy(() => import('./pages/profile/AdminEconomy'));
 const AdminSales = lazy(() => import('./pages/profile/AdminSales'));
 const AdminPets = lazy(() => import('./pages/profile/AdminPets'));
 const AdminPopups = lazy(() => import('./pages/profile/AdminPopups'));
@@ -134,6 +135,7 @@ export default function App() {
         <Route path="/profile/admin/happenings" element={<AdminHappenings />} />
         <Route path="/profile/admin/fresh" element={<AdminFresh />} />
         <Route path="/profile/admin/splash" element={<AdminSplash />} />
+        <Route path="/profile/admin/economy" element={<AdminEconomy />} />
         <Route path="/profile/admin/sales" element={<AdminSales />} />
         <Route path="/profile/admin/pets" element={<AdminPets />} />
         <Route path="/profile/admin/popups" element={<AdminPopups />} />
