@@ -38,11 +38,50 @@ async function kkgameApply(env: Env, values: Array<{ ref: string; kind: string; 
 
 // - Exchange - a Cloudflare Pages project, not a Worker, so it has no
 // Service Binding target (see src/lib/exchange.ts). Reached over public
-// HTTPS instead, same as every other Passport-to-Exchange call in this repo. -
+// HTTPS instead, same as every other Passport-to-Exchange call in this repo.
+//
+// Auth is X-Economy-Key / ECONOMY_API_KEY, NOT X-Internal-Secret. A security
+// review found that sending the fleet-wide INTERNAL_SECRET over a public
+// HTTPS call to an operator-settable URL meant that one secret also
+// authorised rewriting every tenant's credit config - far more reach than
+// this one call needs. Exchange's economy endpoints now only accept
+// X-Economy-Key, so this client must use the same dedicated key. -
+
+const ECONOMY_ALLOWED_HOST_SUFFIX = '.lakeandlocals.com';
+
+/**
+ * Guards the Exchange base URL before any economy call leaves this process.
+ * EXCHANGE_BASE_URL is an operator-settable override with no allowlist of
+ * its own (see src/lib/exchange.ts) - without this check, a mis-set env var
+ * would send X-Economy-Key to an arbitrary host. Exported so it is directly
+ * testable.
+ *
+ * The suffix check is `endsWith('.lakeandlocals.com')` with the leading dot,
+ * not `includes('lakeandlocals.com')` - a naive includes() would accept
+ * `https://lakeandlocals.com.evil.com`, whose hostname merely contains the
+ * allowed domain as a substring rather than actually being a subdomain of it.
+ */
+export function assertAllowedEconomyHost(rawUrl: string): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    console.error(`[economy] rejected unparseable Exchange base URL: ${rawUrl}`);
+    throw new Error('Exchange base URL is not a valid URL.');
+  }
+
+  const allowed = parsed.protocol === 'https:' && parsed.hostname.endsWith(ECONOMY_ALLOWED_HOST_SUFFIX);
+  if (!allowed) {
+    console.error(`[economy] rejected disallowed Exchange host: ${parsed.protocol}//${parsed.hostname}`);
+    throw new Error(`Exchange base URL is not an allowed lakeandlocals.com host: ${parsed.hostname}`);
+  }
+}
 
 async function exchangeRead(env: Env): Promise<Array<{ ref: string; tenant_id: string; credits: number }>> {
-  const res = await fetch(`${exchangeBaseUrl(env)}/api/internal/economy/values`, {
-    headers: { 'X-Internal-Secret': env.INTERNAL_SECRET },
+  const baseUrl = exchangeBaseUrl(env);
+  assertAllowedEconomyHost(baseUrl);
+  const res = await fetch(`${baseUrl}/api/internal/economy/values`, {
+    headers: { 'X-Economy-Key': env.ECONOMY_API_KEY },
   });
   if (!res.ok) throw new Error(`Exchange economy read failed: ${res.status}`);
   const json = await res.json<{ data: { values: Array<{ ref: string; tenant_id: string; credits: number }> } }>();
@@ -50,9 +89,11 @@ async function exchangeRead(env: Env): Promise<Array<{ ref: string; tenant_id: s
 }
 
 async function exchangeApply(env: Env, values: Array<{ ref: string; tenant_id: string; credits: number }>): Promise<void> {
-  const res = await fetch(`${exchangeBaseUrl(env)}/api/internal/economy/apply`, {
+  const baseUrl = exchangeBaseUrl(env);
+  assertAllowedEconomyHost(baseUrl);
+  const res = await fetch(`${baseUrl}/api/internal/economy/apply`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Internal-Secret': env.INTERNAL_SECRET },
+    headers: { 'Content-Type': 'application/json', 'X-Economy-Key': env.ECONOMY_API_KEY },
     body: JSON.stringify({ values }),
   });
   if (!res.ok) throw new Error(`Exchange economy apply failed: ${res.status}`);

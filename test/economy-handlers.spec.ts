@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { HTTPException } from 'hono/http-exception';
 import { parseModifier, classifyEconomyValue } from '../src/handlers/economy';
+import { assertAllowedEconomyHost } from '../src/lib/economy-clients';
 import type { PlanEntry } from '../src/lib/economy-scale';
 
 function expectRejected(raw: unknown): void {
@@ -80,5 +81,30 @@ describe('classifyEconomyValue', () => {
     expect(drifted.status).toBe('ok');
     expect(drifted.live).toBe(4);
     expect(drifted.drift).toBe(true);
+  });
+});
+
+describe('assertAllowedEconomyHost', () => {
+  it('accepts a real lakeandlocals.com subdomain over https', () => {
+    expect(() => assertAllowedEconomyHost('https://exchange.lakeandlocals.com')).not.toThrow();
+  });
+
+  it('rejects the right host over the wrong protocol', () => {
+    expect(() => assertAllowedEconomyHost('http://exchange.lakeandlocals.com')).toThrow();
+  });
+
+  it('rejects an unrelated host entirely', () => {
+    expect(() => assertAllowedEconomyHost('https://evil.example.com')).toThrow();
+  });
+
+  it('rejects suffix confusion - a hostname that merely contains the allowed domain as a substring', () => {
+    // A naive `includes('lakeandlocals.com')` check would wrongly accept
+    // this: the string is present, but the actual hostname is a subdomain of
+    // evil.com, not of lakeandlocals.com.
+    expect(() => assertAllowedEconomyHost('https://lakeandlocals.com.evil.com')).toThrow();
+  });
+
+  it('rejects a string that does not parse as a URL', () => {
+    expect(() => assertAllowedEconomyHost('not a url')).toThrow();
   });
 });
