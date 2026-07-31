@@ -32,6 +32,7 @@ export default function AdminPortalCard({ newSupportCount }: { newSupportCount: 
   const items: AdminItem[] = [
     { label: 'Review Merchant Applications', to: '/profile/admin/merchants' },
     { label: 'Users', to: '/profile/admin/users' },
+    { label: 'Economy', to: '/profile/admin/economy' },
     { label: 'Content', to: '/profile/admin/content' },
     { label: 'Plaques & Events', to: '/profile/admin/plaques' },
     { label: 'Prize Pools', to: '/profile/admin/prizes' },
