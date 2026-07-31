@@ -29,4 +29,19 @@ describe('computePlan', () => {
       source_kind: 'exchange_tenant_config', source_ref: 'welcome_credits', tenant_id: 'lake-locals',
     });
   });
+
+  it('derives the computed value from baseline alone, ignoring decoy fields', () => {
+    const decoyRow = {
+      id: 'd', source_kind: 'kkgame_action', source_ref: 'decoy', tenant_id: null,
+      baseline: 10, current: 999, live: 999,
+    } as RegistryRow;
+    const plan = computePlan([decoyRow], 0.5);
+    expect(plan[0].computed).toBe(5);
+  });
+
+  it('does not mutate the input rows', () => {
+    const clone = structuredClone(rows);
+    computePlan(rows, 0.5);
+    expect(rows).toEqual(clone);
+  });
 });
