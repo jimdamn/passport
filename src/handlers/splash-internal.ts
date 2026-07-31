@@ -18,6 +18,7 @@
 import type { Context } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import type { Env, KKAuthPayload, KKAuthProfile } from '../types';
+import { nanoid } from 'nanoid';
 import { matchesInternalSecret, hmacHex } from '../lib/hmac';
 import { transferCredits, escrowUid, fetchBalance } from '../lib/credits';
 import { notifySplash } from '../lib/splash-notify';
@@ -29,6 +30,17 @@ import { getSplashConfig } from '../lib/splash-config';
 type AppContext = Context<{ Bindings: Env }>;
 
 const MEDIA_VIEW_TTL_SECONDS = 5 * 60;
+
+/**
+ * The ref_id used on every leg of an offer's escrow (in, refund, settlement).
+ * Migration 0019 backfilled escrow_ref for every pre-existing offer with its
+ * own id, matching the keys those rows' ledger entries were already written
+ * under - so the fallback here should never fire, and if it ever does it
+ * reproduces the legacy key rather than minting a new one and double-paying.
+ */
+export function offerEscrowRef(offer: { id: number; escrow_ref?: string | null }): string {
+  return offer.escrow_ref ?? String(offer.id);
+}
 
 function cleanText(value: unknown, maxLen: number): string | null {
   if (typeof value !== 'string') return null;
@@ -360,13 +372,28 @@ export async function createSplashOffer(c: AppContext) {
     if (!certDescription) throw new HTTPException(400, { message: 'A description is required for a gift certificate.' });
   }
 
+  // One opaque escrow ref per offer, minted BEFORE the money moves. This is the
+  // ref_id for every leg of this offer's escrow - in, refund, and settlement.
+  // It must NOT be derived from the submission id: a submission can host more
+  // than one offer in sequence, and a shared key makes the second escrow-in
+  // replay as a no-op while its refund still pays out. See 0019 migration.
+  const escrowRef = nanoid(16);
+
   if (considerationType === 'credits') {
     try {
-      await transferCredits(
+      const { replayed } = await transferCredits(
         c.env, merchantUid, escrowUid(c.env), creditsAmount!,
-        'Social Splash offer escrow', 'splash_offer_escrow', String(id), bearerToken
+        'Social Splash offer escrow', 'splash_offer_escrow', escrowRef, bearerToken
       );
+      // A freshly minted ref can never legitimately match an existing ledger
+      // entry. If KKCredits says it did, no money moved and this offer is
+      // unfunded - refuse rather than record a funded offer that isn't.
+      if (replayed) {
+        logger.error(`Splash escrow replayed on a fresh ref ${escrowRef} (submission ${id}) - offer refused, nothing was charged.`);
+        throw new HTTPException(502, { message: 'Offer could not be created - you were not charged. Try again.' });
+      }
     } catch (err) {
+      if (err instanceof HTTPException) throw err;
       const msg = (err as Error).message;
       if (msg.includes('Insufficient')) {
         throw new HTTPException(402, { message: `You need at least ${creditsAmount} KrowdKredits to make this offer.` });
@@ -380,17 +407,17 @@ export async function createSplashOffer(c: AppContext) {
   try {
     const inserted = await c.env.DB.prepare(`
       INSERT INTO splash_offers
-        (tenant_id, submission_id, business_id, merchant_uid, consideration_type, credits_amount, cert_value_cents, cert_description, status, expires_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open', ?)
+        (tenant_id, submission_id, business_id, merchant_uid, consideration_type, credits_amount, cert_value_cents, cert_description, status, expires_at, escrow_ref)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?)
       RETURNING id
-    `).bind(tenantId, id, businessId, merchantUid, considerationType, creditsAmount, certValueCents, certDescription, expiresAt).first<{ id: number }>();
+    `).bind(tenantId, id, businessId, merchantUid, considerationType, creditsAmount, certValueCents, certDescription, expiresAt, escrowRef).first<{ id: number }>();
     offerId = inserted!.id;
   } catch (err) {
     if (considerationType === 'credits') {
       await transferCredits(
         c.env, escrowUid(c.env), merchantUid, creditsAmount!,
-        'Social Splash offer failed - refunded', 'splash_offer_refund', String(id)
-      ).catch(e => logger.error(`Splash offer refund failed for submission ${id}: ${(e as Error).message}`));
+        'Social Splash offer failed - refunded', 'splash_offer_refund', escrowRef
+      ).catch(e => logger.error(`Splash offer refund failed for escrow ref ${escrowRef} (submission ${id}): ${(e as Error).message}`));
     }
     if (String((err as Error).message).includes('UNIQUE')) {
       throw new HTTPException(400, { message: 'There is already an open offer on this submission.' });
@@ -427,8 +454,8 @@ export async function withdrawSplashOffer(c: AppContext) {
   await requireMerchantBridge(c, businessId);
 
   const offer = await c.env.DB.prepare(
-    'SELECT id, business_id, merchant_uid, consideration_type, credits_amount, status FROM splash_offers WHERE id = ? AND tenant_id = ?'
-  ).bind(offerId, tenantId).first<{ id: number; business_id: string; merchant_uid: number; consideration_type: string; credits_amount: number | null; status: string }>();
+    'SELECT id, business_id, merchant_uid, consideration_type, credits_amount, status, escrow_ref FROM splash_offers WHERE id = ? AND tenant_id = ?'
+  ).bind(offerId, tenantId).first<{ id: number; business_id: string; merchant_uid: number; consideration_type: string; credits_amount: number | null; status: string; escrow_ref: string | null }>();
   if (!offer) throw new HTTPException(404, { message: 'Offer not found' });
   if (offer.business_id !== businessId) throw new HTTPException(403, { message: 'This offer does not belong to your business.' });
 
@@ -440,7 +467,7 @@ export async function withdrawSplashOffer(c: AppContext) {
   if (offer.consideration_type === 'credits' && offer.credits_amount) {
     await transferCredits(
       c.env, escrowUid(c.env), offer.merchant_uid, offer.credits_amount,
-      'Social Splash offer withdrawn - refunded', 'splash_offer_refund', String(offerId)
+      'Social Splash offer withdrawn - refunded', 'splash_offer_refund', offerEscrowRef(offer)
     ).catch(e => logger.error(`Splash offer refund failed for offer ${offerId}: ${(e as Error).message}`));
   }
 
@@ -555,21 +582,21 @@ export async function markSplashOriginalUnlocked(c: AppContext) {
 // batch comes back empty (passport-cron's runBatchedSweep pattern).
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function refundOpenOffer(env: Env, offer: { id: number; merchant_uid: number; consideration_type: string; credits_amount: number | null }, note: string): Promise<void> {
+async function refundOpenOffer(env: Env, offer: { id: number; merchant_uid: number; consideration_type: string; credits_amount: number | null; escrow_ref: string | null }, note: string): Promise<void> {
   if (offer.consideration_type === 'credits' && offer.credits_amount) {
     await transferCredits(
-      env, escrowUid(env), offer.merchant_uid, offer.credits_amount, note, 'splash_offer_refund', String(offer.id)
+      env, escrowUid(env), offer.merchant_uid, offer.credits_amount, note, 'splash_offer_refund', offerEscrowRef(offer)
     ).catch(e => logger.error(`Splash offer refund failed for offer ${offer.id}: ${(e as Error).message}`));
   }
 }
 
 async function sweepExpiredSplashOffers(env: Env): Promise<number> {
   const { results } = await env.DB.prepare(`
-    SELECT id, merchant_uid, consideration_type, credits_amount
+    SELECT id, merchant_uid, consideration_type, credits_amount, escrow_ref
     FROM splash_offers
     WHERE status = 'open' AND expires_at <= unixepoch()
     LIMIT 20
-  `).all<{ id: number; merchant_uid: number; consideration_type: string; credits_amount: number | null }>();
+  `).all<{ id: number; merchant_uid: number; consideration_type: string; credits_amount: number | null; escrow_ref: string | null }>();
 
   let processed = 0;
   for (const offer of results ?? []) {
@@ -603,8 +630,8 @@ async function sweepExpiredSplashHolds(env: Env): Promise<number> {
       // this is the one case sweepExpiredSplashOffers above can't catch on
       // its own, since the offer's own expires_at may still be in the future.
       const openOffer = await env.DB.prepare(
-        "SELECT id, merchant_uid, consideration_type, credits_amount FROM splash_offers WHERE submission_id = ? AND status = 'open'"
-      ).bind(sub.id).first<{ id: number; merchant_uid: number; consideration_type: string; credits_amount: number | null }>();
+        "SELECT id, merchant_uid, consideration_type, credits_amount, escrow_ref FROM splash_offers WHERE submission_id = ? AND status = 'open'"
+      ).bind(sub.id).first<{ id: number; merchant_uid: number; consideration_type: string; credits_amount: number | null; escrow_ref: string | null }>();
       if (openOffer) {
         const flip = await env.DB.prepare(
           "UPDATE splash_offers SET status = 'expired' WHERE id = ? AND status = 'open'"

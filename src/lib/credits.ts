@@ -67,6 +67,14 @@ export async function awardCredits(
  * bearerToken is the SENDER's token. Omit it only when the sender is the
  * deals escrow account (env.DEALS_ESCROW_UID) — KKCredits authorizes
  * escrow-out transfers by app key alone.
+ *
+ * `replayed` is TRUE when KKCredits matched an existing (ref_type, ref_id)
+ * and returned the original rows WITHOUT moving any money. Callers that only
+ * need the end state (retried refunds, settlements) can ignore it. Callers
+ * that require money to move NOW — anything taking funds INTO escrow — must
+ * check it: a replayed escrow-in means the account was never debited, and
+ * proceeding as if it had been is how credits get created from nothing.
+ * See the 2026-07-26 Social Splash escrow incident.
  */
 export async function transferCredits(
   env: Env,
@@ -77,7 +85,7 @@ export async function transferCredits(
   refType: string,
   refId: string,
   bearerToken?: string
-): Promise<{ balance_after_from: number; balance_after_to: number }> {
+): Promise<{ balance_after_from: number; balance_after_to: number; replayed: boolean }> {
   const res = await env.KKCREDITS.fetch(
     new Request('https://kkcredits/transfer', {
       method: 'POST',
@@ -105,10 +113,13 @@ export async function transferCredits(
     throw new Error(body.error ?? body.message ?? `KKCredits transfer failed: ${res.status}`);
   }
 
-  const json = await res.json<{ data: { debit: { balance_after: number }; credit: { balance_after: number } } }>();
+  const json = await res.json<{
+    data: { debit: { balance_after: number }; credit: { balance_after: number }; replayed?: boolean }
+  }>();
   return {
     balance_after_from: json.data.debit.balance_after,
     balance_after_to: json.data.credit.balance_after,
+    replayed: json.data.replayed === true,
   };
 }
 

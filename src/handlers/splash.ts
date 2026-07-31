@@ -20,6 +20,7 @@ import { nanoid } from 'nanoid';
 import type { Env, Tenant } from '../types';
 import { hmacHex, timingSafeEqual } from '../lib/hmac';
 import { transferCredits, escrowUid } from '../lib/credits';
+import { offerEscrowRef } from './splash-internal';
 import { sendSplashCertificateEmail } from '../lib/email';
 import { notifySplash } from '../lib/splash-notify';
 import { createDirectUpload, getVideoDetails, mintSignedPlaybackToken, signedIframeUrl } from '../lib/stream';
@@ -509,7 +510,7 @@ export async function respondToSplashOffer(c: AppContext) {
 
   const offer = await c.env.DB.prepare(`
     SELECT o.id, o.submission_id, o.business_id, o.merchant_uid, o.consideration_type,
-           o.credits_amount, o.cert_value_cents, o.cert_description, o.status,
+           o.credits_amount, o.cert_value_cents, o.cert_description, o.status, o.escrow_ref,
            s.kkauth_uid, s.status AS submission_status, s.business_name
     FROM splash_offers o JOIN splash_submissions s ON s.id = o.submission_id
     WHERE o.id = ? AND o.tenant_id = ?
@@ -527,7 +528,7 @@ export async function respondToSplashOffer(c: AppContext) {
     if (offer.consideration_type === 'credits') {
       await transferCredits(
         c.env, escrowUid(c.env), offer.merchant_uid, offer.credits_amount,
-        'Social Splash offer passed - refunded', 'splash_offer_refund', String(offerId)
+        'Social Splash offer passed - refunded', 'splash_offer_refund', offerEscrowRef(offer)
       ).catch(() => {}); // best-effort; the merchant-side withdraw route logs failures, this path mirrors it silently since the guest has no reason to see a refund-plumbing error
     }
     c.executionCtx.waitUntil(notifySplash(c.env, offer.merchant_uid, 'Offer passed', 'The guest passed on your offer for their photo.'));
@@ -540,7 +541,7 @@ export async function respondToSplashOffer(c: AppContext) {
     try {
       await transferCredits(
         c.env, escrowUid(c.env), offer.kkauth_uid, offer.credits_amount,
-        'Social Splash license agreed', 'splash_license', String(offerId)
+        'Social Splash license agreed', 'splash_license', offerEscrowRef(offer)
       );
     } catch {
       throw new HTTPException(502, { message: 'Could not complete this - try again.' });
