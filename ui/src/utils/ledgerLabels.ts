@@ -8,6 +8,11 @@ export const LEDGER_REASON_LABEL: Record<string, string> = {
   splash_offer_refund: 'Offer not taken - returned to you',
   splash_license: 'Photo licensed - payment received',
   deal_refund: 'Deal payment returned to you',
+  // Administrative reversal of an earlier entry. The stored `reason` on these
+  // rows names the specific defect and ledger ids for audit purposes, which is
+  // engineering language - this keeps that out of a member's history view
+  // without altering what the append-only ledger actually records.
+  ledger_correction: 'Correction to an earlier entry',
 };
 
 export function ledgerLabel(entry: { reason: string; ref_type?: string | null }): string {
