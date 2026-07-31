@@ -1,0 +1,80 @@
+[
+  {
+    "source_ref": "bd_member_linked"
+  },
+  {
+    "source_ref": "local_purchase"
+  },
+  {
+    "source_ref": "exchange_referral_bonus"
+  },
+  {
+    "source_ref": "exchange_referral_welcome"
+  },
+  {
+    "source_ref": "passport_scan"
+  },
+  {
+    "source_ref": "exchange_trade_complete"
+  },
+  {
+    "source_ref": "field_notes_submitted"
+  },
+  {
+    "source_ref": "field_notes_published"
+  },
+  {
+    "source_ref": "exchange_post"
+  },
+  {
+    "source_ref": "account_created"
+  },
+  {
+    "source_ref": "profile_complete"
+  },
+  {
+    "source_ref": "volunteer_signup"
+  },
+  {
+    "source_ref": "volunteer_task_complete"
+  },
+  {
+    "source_ref": "volunteer_shift_confirmed"
+  },
+  {
+    "source_ref": "krowdlift"
+  },
+  {
+    "source_ref": "q_pathfinders_journey"
+  },
+  {
+    "source_ref": "q_community_pillar"
+  },
+  {
+    "source_ref": "q_trade_veteran"
+  },
+  {
+    "source_ref": "q_stamped_all_over"
+  },
+  {
+    "source_ref": "q_local_expert"
+  },
+  {
+    "source_ref": "q_reliable_neighbor"
+  },
+  {
+    "source_ref": "q_cross_region_scout"
+  },
+  {
+    "source_ref": "q_first_steps"
+  },
+  {
+    "source_ref": "q_first_helper"
+  },
+  {
+    "source_ref": "q_wanderers_mark"
+  },
+  {
+    "source_ref": "exchange_five_star_rating"
+  }
+]

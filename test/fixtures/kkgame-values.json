@@ -1,0 +1,102 @@
+[
+  {
+    "results": [
+      {
+        "id": "account_created"
+      },
+      {
+        "id": "bd_member_linked"
+      },
+      {
+        "id": "exchange_five_star_rating"
+      },
+      {
+        "id": "exchange_post"
+      },
+      {
+        "id": "exchange_referral_bonus"
+      },
+      {
+        "id": "exchange_referral_welcome"
+      },
+      {
+        "id": "exchange_trade_complete"
+      },
+      {
+        "id": "field_notes_published"
+      },
+      {
+        "id": "field_notes_submitted"
+      },
+      {
+        "id": "krowdlift"
+      },
+      {
+        "id": "local_purchase"
+      },
+      {
+        "id": "passport_scan"
+      },
+      {
+        "id": "profile_complete"
+      },
+      {
+        "id": "volunteer_shift_confirmed"
+      },
+      {
+        "id": "volunteer_signup"
+      },
+      {
+        "id": "volunteer_task_complete"
+      },
+      {
+        "id": "q_community_pillar"
+      },
+      {
+        "id": "q_cross_region_scout"
+      },
+      {
+        "id": "q_first_helper"
+      },
+      {
+        "id": "q_first_steps"
+      },
+      {
+        "id": "q_local_expert"
+      },
+      {
+        "id": "q_pathfinders_journey"
+      },
+      {
+        "id": "q_reliable_neighbor"
+      },
+      {
+        "id": "q_stamped_all_over"
+      },
+      {
+        "id": "q_trade_veteran"
+      },
+      {
+        "id": "q_wanderers_mark"
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "ENAM",
+      "served_by_colo": "ORD",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.6832
+      },
+      "duration": 0.6832,
+      "changes": 0,
+      "last_row_id": 0,
+      "changed_db": false,
+      "size_after": 204800,
+      "rows_read": 26,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  }
+]
