@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { computePlan, type RegistryRow } from '../src/lib/economy-scale';
 import { applyPlan, readLiveValues, type EconomyClients } from '../src/lib/economy-registry';
+import { describeGuards } from '../src/lib/economy-guards';
 
 const rows: RegistryRow[] = [
   { id: 'a', source_kind: 'kkgame_action', source_ref: 'passport_scan', tenant_id: null, baseline: 5 },
@@ -108,5 +109,14 @@ describe('readLiveValues', () => {
 
     expect(reachable.kkgame).toBe(true);
     expect(reachable.exchange).toBe(false);
+  });
+});
+
+describe('describeGuards', () => {
+  it('does not flag when the ratio is unchanged', () => {
+    expect(describeGuards(100, 100)[0].outOfBand).toBe(false);
+  });
+  it('flags when the largest award shrinks far below baseline', () => {
+    expect(describeGuards(25, 100)[0].outOfBand).toBe(true);
   });
 });
