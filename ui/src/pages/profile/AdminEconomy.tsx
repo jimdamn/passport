@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useTenant } from '../../context/TenantContext';
 import {
   getEconomy, previewEconomy, applyEconomy,
-  type EconomyValueRow, type EconomyGuardRow,
+  type EconomyValueRow, type EconomyGuardRow, type EconomyApplyOutcome,
 } from '../../api/economy';
 import { ArrowLeft, Gauge, ShieldAlert, TriangleAlert, CircleOff, Save } from 'lucide-react';
 import { Alert } from '../../components/ui/Alert';
@@ -17,6 +17,35 @@ import { Badge } from '../../components/ui/Badge';
 // server-side function (src/handlers/economy.ts -> economy-scale.ts), which
 // is the whole point: two implementations that could drift is the exact
 // shape of the 2026-07-30 incident this feature exists to prevent.
+//
+// Fix round 1: Save is gated on `previewedModifier` (what the server actually
+// returned), never on the typed `candidate` - a keystroke can never enable
+// Save before its preview has round-tripped. A request-sequence counter
+// discards any preview response that is no longer the latest one in flight,
+// so a fast second keystroke can't have an earlier response land after it.
+// An empty or invalid field reverts the table to the last-known saved
+// snapshot rather than leaving a stale preview on screen under a "matches
+// saved" message. Drift styling is suppressed while the displayed rows are a
+// hypothetical (previewed-but-not-saved) state, because comparing a
+// candidate's computed value against a live value that reflects the OLD
+// modifier is not real drift - it is just the size of the proposed change.
+
+interface ViewSnapshot {
+  rows: EconomyValueRow[];
+  guards: EconomyGuardRow[];
+}
+
+const EMPTY_SNAPSHOT: ViewSnapshot = { rows: [], guards: [] };
+
+const TARGET_LABELS: Record<string, string> = {
+  kkgame: 'the Game Engine',
+  exchange: 'the Exchange',
+  passport: 'Passport',
+};
+
+function targetLabel(key: string): string {
+  return TARGET_LABELS[key] ?? key;
+}
 
 const GROUP_LABELS: Record<string, string> = {
   actions: 'Actions',
@@ -56,17 +85,18 @@ function parseModifierInput(raw: string): number | null {
   return n;
 }
 
-function LiveValue({ row }: { row: EconomyValueRow }) {
+function LiveValue({ row, suppressDrift }: { row: EconomyValueRow; suppressDrift: boolean }) {
   if (row.status === 'unavailable') {
     return <span style={{ color: 'var(--muted)', fontStyle: 'italic' }}>unavailable</span>;
   }
   if (row.status === 'orphaned') {
     return <span style={{ color: 'var(--error)', fontStyle: 'italic' }}>orphaned</span>;
   }
-  return <span style={row.drift ? { color: 'var(--error)', fontWeight: 600 } : undefined}>{row.live}</span>;
+  const showDrift = row.drift && !suppressDrift;
+  return <span style={showDrift ? { color: 'var(--error)', fontWeight: 600 } : undefined}>{row.live}</span>;
 }
 
-function StatusNote({ row }: { row: EconomyValueRow }) {
+function StatusNote({ row, suppressDrift }: { row: EconomyValueRow; suppressDrift: boolean }) {
   if (row.status === 'unavailable') {
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.72rem', color: 'var(--muted)', marginTop: 2 }}>
@@ -81,7 +111,7 @@ function StatusNote({ row }: { row: EconomyValueRow }) {
       </div>
     );
   }
-  if (row.drift) {
+  if (row.drift && !suppressDrift) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.72rem', color: 'var(--error)', marginTop: 2 }}>
         <TriangleAlert size={11} /> Live value disagrees with computed
@@ -143,18 +173,30 @@ export default function AdminEconomy() {
   const navigate = useNavigate();
 
   const [savedModifier, setSavedModifier] = useState<number | null>(null);
+  const [savedView, setSavedView] = useState<ViewSnapshot>(EMPTY_SNAPSHOT);
+
   const [draft, setDraft] = useState('');
   const [rows, setRows] = useState<EconomyValueRow[]>([]);
   const [guards, setGuards] = useState<EconomyGuardRow[]>([]);
+  // The modifier that `rows`/`guards` currently, actually reflect - set only
+  // from a server response, never from the input as it is typed. This is
+  // what Save is gated on (finding 1) and what "unsaved" messaging describes,
+  // rather than the possibly-still-in-flight `candidate`.
+  const [previewedModifier, setPreviewedModifier] = useState<number | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [previewing, setPreviewing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [inputError, setInputError] = useState('');
-  const [saved, setSaved] = useState(false);
+  const [applyResult, setApplyResult] = useState<{ outcome: EconomyApplyOutcome; failedTargets: string[] } | null>(null);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Bumped on every new preview attempt (and on save). A response is only
+  // applied to state if this counter still matches the value captured when
+  // that request started - an older response arriving after a newer one is
+  // simply dropped (finding 2).
+  const requestSeqRef = useRef(0);
 
   useEffect(() => {
     if (!user) { navigate('/auth/login'); return; }
@@ -169,10 +211,13 @@ export default function AdminEconomy() {
     setError('');
     try {
       const res = await getEconomy(tenant.id);
+      requestSeqRef.current++; // invalidate anything already in flight
       setSavedModifier(res.data.modifier);
       setDraft(String(res.data.modifier));
       setRows(res.data.values);
       setGuards(res.data.guards);
+      setSavedView({ rows: res.data.values, guards: res.data.guards });
+      setPreviewedModifier(res.data.modifier);
     } catch (err: any) {
       setError(err.message || 'Failed to load the economy view.');
     } finally {
@@ -184,54 +229,93 @@ export default function AdminEconomy() {
 
   // Debounced preview - fires 250ms after the input settles, only when the
   // draft parses to a valid number. Renders exactly what the server sends;
-  // no scaling math happens in this component.
+  // no scaling math happens in this component. When the field is empty or
+  // invalid, the table reverts to the last saved snapshot rather than being
+  // left showing a stale preview under a message that no longer describes it
+  // (finding 4).
   useEffect(() => {
     if (!tenant?.id || savedModifier === null) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
-    if (draft.trim() === '') { setInputError(''); return; }
+    if (draft.trim() === '') {
+      setInputError('');
+      requestSeqRef.current++;
+      setPreviewing(false);
+      setRows(savedView.rows);
+      setGuards(savedView.guards);
+      setPreviewedModifier(savedModifier);
+      return;
+    }
     if (candidate === null) {
       setInputError('Enter a number from 0 to 5, at most two decimal places.');
+      requestSeqRef.current++;
+      setPreviewing(false);
+      setRows(savedView.rows);
+      setGuards(savedView.guards);
+      setPreviewedModifier(savedModifier);
       return;
     }
     setInputError('');
 
     debounceRef.current = setTimeout(async () => {
+      const seq = ++requestSeqRef.current;
       setPreviewing(true);
       setError('');
       try {
         const res = await previewEconomy(tenant.id, candidate);
+        if (seq !== requestSeqRef.current) return; // a newer request has since started - stale
         setRows(res.data.values);
         setGuards(res.data.guards);
+        setPreviewedModifier(candidate);
       } catch (err: any) {
+        if (seq !== requestSeqRef.current) return;
         setError(err.message || 'Preview failed.');
       } finally {
-        setPreviewing(false);
+        if (seq === requestSeqRef.current) setPreviewing(false);
       }
     }, 250);
 
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draft, tenant?.id, savedModifier]);
+  }, [draft, tenant?.id, savedModifier, savedView]);
 
+  // Whether the currently-typed value has a matching, resolved preview yet.
+  const previewPending = candidate !== null && !inputError && previewedModifier !== candidate;
+  // Whether what's on screen right now (previewedModifier) differs from what
+  // is actually saved - this, not the typed candidate, is what "unsaved"
+  // means and what suppresses drift styling (finding 5): comparing a
+  // hypothetical candidate's computed value against a live value still
+  // reflecting the OLD saved modifier is not real drift.
+  const previewDiffersFromSaved = previewedModifier !== null && savedModifier !== null && previewedModifier !== savedModifier;
   const dirty = candidate !== null && savedModifier !== null && candidate !== savedModifier;
+  // Save only ever fires against a modifier the server has actually
+  // previewed for us - never against whatever happens to be in the text
+  // field at the moment of the click (finding 1).
+  const readyToSave = dirty && !previewPending && !previewing && previewedModifier === candidate;
 
   async function save() {
-    if (!tenant || candidate === null || saving) return;
+    if (!tenant || candidate === null || saving || !readyToSave) return;
+    const seq = ++requestSeqRef.current; // invalidate any preview still in flight
     setSaving(true);
     setError('');
-    setSaved(false);
+    setApplyResult(null);
     try {
       const res = await applyEconomy(tenant.id, candidate);
+      if (seq !== requestSeqRef.current) return; // a newer action started meanwhile
       setSavedModifier(res.data.modifier);
       setDraft(String(res.data.modifier));
       setRows(res.data.values);
       setGuards(res.data.guards);
-      setSaved(true);
+      setSavedView({ rows: res.data.values, guards: res.data.guards });
+      setPreviewedModifier(res.data.modifier);
+      const failedTargets = Object.entries(res.data.per_target)
+        .filter(([, status]) => status === 'failed')
+        .map(([target]) => target);
+      setApplyResult({ outcome: res.data.outcome, failedTargets });
     } catch (err: any) {
       setError(err.message || 'Failed to save the modifier.');
     } finally {
-      setSaving(false);
+      if (seq === requestSeqRef.current) setSaving(false);
     }
   }
 
@@ -274,29 +358,53 @@ export default function AdminEconomy() {
               type="text"
               inputMode="decimal"
               value={draft}
-              onChange={(e) => { setDraft(e.target.value); setSaved(false); }}
+              onChange={(e) => { setDraft(e.target.value); setApplyResult(null); }}
             />
           </div>
-          <button className="btn btn-amber btn-sm" disabled={!dirty || saving || !!inputError} onClick={save} style={{ minHeight: 34, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <button className="btn btn-amber btn-sm" disabled={!readyToSave || saving} onClick={save} style={{ minHeight: 34, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             {saving ? <Spinner size="sm" /> : <><Save size={14} /> Save</>}
           </button>
-          {previewing && <span style={{ fontSize: '0.78rem', color: 'var(--muted)', display: 'inline-flex', alignItems: 'center', gap: 6 }}><Spinner size="sm" /> Previewing...</span>}
+          {previewPending && <span style={{ fontSize: '0.78rem', color: 'var(--muted)', display: 'inline-flex', alignItems: 'center', gap: 6 }}><Spinner size="sm" /> Previewing {candidate}...</span>}
         </div>
+
         {inputError && <div style={{ marginTop: 8, fontSize: '0.78rem', color: 'var(--error)' }}>{inputError}</div>}
-        {!inputError && dirty && (
-          <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+
+        {!inputError && draft.trim() === '' && (
+          <div style={{ marginTop: 10, fontSize: '0.78rem', color: 'var(--muted)' }}>
+            Showing the saved value. Type a modifier to preview a change.
+          </div>
+        )}
+
+        {!inputError && draft.trim() !== '' && !previewPending && previewDiffersFromSaved && (
+          <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
             <Badge variant="amber">Unsaved</Badge>
             <span style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>
-              Saved value is {savedModifier}. The table below shows what {candidate} would produce - nothing is written until you press Save.
+              Saved value is {savedModifier}. The table below shows what {previewedModifier} would produce - nothing is written until you press Save.
             </span>
           </div>
         )}
-        {!inputError && !dirty && saved && (
-          <Alert type="success" style={{ marginTop: 10 }}>Saved.</Alert>
-        )}
-        {!inputError && !dirty && !saved && savedModifier !== null && (
+
+        {!inputError && draft.trim() !== '' && !previewPending && !previewDiffersFromSaved && (
           <div style={{ marginTop: 10, fontSize: '0.78rem', color: 'var(--muted)' }}>
             Matches the saved value ({savedModifier}). Nothing to apply.
+          </div>
+        )}
+
+        {applyResult && applyResult.outcome === 'applied' && (
+          <Alert type="success" style={{ marginTop: 10 }}>Saved. Every target updated.</Alert>
+        )}
+        {applyResult && applyResult.outcome !== 'applied' && (
+          <Alert type="error" style={{ marginTop: 10 }}>
+            Modifier saved, but {applyResult.outcome === 'failed' ? 'every target' : 'not every target'} updated:{' '}
+            {applyResult.failedTargets.map(targetLabel).join(', ')} failed to receive the new values.
+            This is safe to retry - apply always recomputes from baseline, so pressing Save again will not double up.
+          </Alert>
+        )}
+
+        {previewDiffersFromSaved && (
+          <div style={{ marginTop: 10, fontSize: '0.72rem', color: 'var(--muted)' }}>
+            Drift indicators below are hidden while previewing an unsaved change - they compare against
+            the value each service has right now, which still reflects the saved modifier.
           </div>
         )}
       </div>
@@ -323,12 +431,12 @@ export default function AdminEconomy() {
                       <div style={{ fontWeight: 600, color: 'var(--green)' }}>{row.label ?? row.id}</div>
                       {row.clue && <div style={{ fontSize: '0.76rem', color: 'var(--muted)', marginTop: 2 }}>{row.clue}</div>}
                       {row.rate_note && <div style={{ fontSize: '0.72rem', color: 'var(--muted)', marginTop: 2 }}>{row.rate_note}</div>}
-                      <StatusNote row={row} />
+                      <StatusNote row={row} suppressDrift={previewDiffersFromSaved} />
                     </td>
                     <td style={{ padding: '10px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{row.baseline}</td>
                     <td style={{ padding: '10px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{row.computed}</td>
                     <td style={{ padding: '10px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-                      <LiveValue row={row} />
+                      <LiveValue row={row} suppressDrift={previewDiffersFromSaved} />
                     </td>
                   </tr>
                 ))}

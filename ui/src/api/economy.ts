@@ -47,9 +47,11 @@ export interface EconomyView {
   guards: EconomyGuardRow[];
 }
 
+export type EconomyApplyOutcome = 'applied' | 'partial' | 'failed';
+
 export interface EconomyApplyResult extends EconomyView {
-  outcome: string;
-  per_target: unknown;
+  outcome: EconomyApplyOutcome;
+  per_target: Record<string, 'ok' | 'failed'>;
 }
 
 export function getEconomy(tenant: string) {
