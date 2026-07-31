@@ -13,3 +13,36 @@ export function scaleValue(baseline: number, modifier: number): number {
   if (baseline === 0) return 0;
   return Math.max(1, Math.ceil(baseline * modifier));
 }
+
+export type SourceKind =
+  | 'kkgame_action' | 'kkgame_quest' | 'kwest_defaults'
+  | 'passport_tenant_config' | 'exchange_tenant_config' | 'hunt_tiers';
+
+export interface RegistryRow {
+  id: string;
+  source_kind: SourceKind;
+  source_ref: string;
+  tenant_id: string | null;
+  baseline: number;
+  // Display fields. Optional so the pure tests can build rows without them,
+  // but always present on rows read from the database.
+  group_key?: string;
+  label?: string;
+  clue?: string;
+  rate_note?: string | null;
+  sort_order?: number;
+}
+
+export interface PlanEntry extends RegistryRow {
+  computed: number;
+}
+
+/**
+ * Every entry is derived from `baseline`, never from a current or previously
+ * computed value. That is what makes apply idempotent, which in turn is what
+ * makes retry-after-partial-failure safe across three services with no
+ * distributed transaction.
+ */
+export function computePlan(rows: RegistryRow[], modifier: number): PlanEntry[] {
+  return rows.map((r) => ({ ...r, computed: scaleValue(r.baseline, modifier) }));
+}
