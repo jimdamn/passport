@@ -291,8 +291,15 @@ export default function Help() {
 
       {/* ── The Prize Matrix ── */}
       <Section title="The Explorer Prize Matrix">
-        <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.92rem', lineHeight: 1.6, marginBottom: 16 }}>
-          Scanning a QR code isn't just about the stamp - it carries a guaranteed prize payout! Here is what's loaded into the regional prize matrix:
+        <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.92rem', lineHeight: 1.6, marginBottom: 12 }}>
+          Scanning a QR code isn't just about the stamp - it carries a guaranteed payout. Here is what's loaded into the regional prize matrix:
+        </p>
+        <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.88rem', lineHeight: 1.6, marginBottom: 16, color: 'var(--muted)' }}>
+          These numbers are measured in effort, not dollars. The yardstick we set
+          everything against: a typical member deal costs about 25 {creditsName},
+          and ordinary month-to-month exploring earns somewhere around 50 to 70.
+          So one scan is roughly a fifth of a deal, and a few weeks of getting out
+          is a deal you can actually spend.
         </p>
 
         <div style={{
@@ -303,11 +310,12 @@ export default function Help() {
           marginBottom: 16,
         }}>
           {[
-            { action: 'Base Payout (minimum payout)', amount: '10 KrowdKredits' },
-            { action: 'Local Merchant Coupons & Deals', amount: 'Active Discounts' },
-            { action: 'Jackpot Windfalls (Rare)', amount: '500 - 1,000 Credits' },
-            { action: 'Gift Certificates (Merchant specific)', amount: 'Varies' },
-            { action: 'Cash Prizes (street events)', amount: '$100 cash on the spot' },
+            { action: 'Base payout (every scan, guaranteed)', amount: `5 ${creditsName}` },
+            { action: 'Your first scan ever', amount: `10 ${creditsName}` },
+            { action: 'Local merchant coupons and deals', amount: 'Active discounts' },
+            { action: 'Jackpot windfalls (rare)', amount: `Up to 100 ${creditsName}` },
+            { action: 'Gift certificates (merchant specific)', amount: 'Varies' },
+            { action: 'Cash prizes (street events)', amount: 'Set by the event' },
           ].map((row, i, arr) => (
             <div
               key={i}
@@ -347,7 +355,7 @@ export default function Help() {
         <Tip
           icon={Gem}
           title="Every Chest Pays"
-          body={`There are no empty chests. If one appears, you have already won - most hold 5 to 10 ${creditsName}, and lucky finds pay up to 25.`}
+          body={`There are no empty chests. If one appears, you have already won - most hold one or two ${creditsName}, and a lucky find pays up to five.`}
         />
         <Tip
           icon={Sparkles}
@@ -635,7 +643,7 @@ export default function Help() {
       {/* ── Deferred claims ── */}
       <Section title="Street Scans & Deferred Claims">
         <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.92rem', lineHeight: 1.6, marginBottom: 16 }}>
-          Made a winning scan in the middle of a parade or crowded event? You don't have to stop and create an account in a crowd. We've designed a **frictionless deferred claim flow**:
+          Made a winning scan in the middle of a parade or crowded event? You don't have to stop and create an account in a crowd. Your prize waits for you:
         </p>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
@@ -647,7 +655,7 @@ export default function Help() {
           }}>
             <p style={{ fontWeight: 'bold', marginBottom: 4 }}>1. Scan &amp; Win Instantly</p>
             <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.87rem', color: 'var(--muted)', lineHeight: 1.5 }}>
-              Scan the street team QR code. You instantly see your prize and receive a 7-day `claim_token` code without needing to log in.
+              Scan the street team QR code. You instantly see your prize and get a claim code, good for 7 days, without needing to log in.
             </p>
           </div>
           <div style={{
@@ -714,7 +722,7 @@ export default function Help() {
         <Tip
           icon={Trophy}
           title="Watch for Milestones"
-          body="Our automatic badge engine monitors your accumulated scans and credit gains. Crossing thresholds automatically unlocks milestones like the 'Welcome Explorer' and 'Century Club' badges!"
+          body="Badges arrive on their own as your total earned KrowdKredits and completed trades add up. Cross a threshold and one unlocks - Century at 100 KrowdKredits earned, then Five Hundred and Grand, with Welcome and Local Anchor awarded by hand."
         />
       </Section>
 

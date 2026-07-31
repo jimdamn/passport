@@ -29,7 +29,13 @@ type DrawnPrize = {
 
 // Floor prize display value mirrors KKGame's passport_scan base_credits. The real
 // KrowdKredits award is issued by KKGame; prize.value is shown to the user only.
-const FLOOR_PRIZE_VALUE = 25;
+// The guaranteed floor payout shown on a scan. This MUST equal what kkgame
+// actually pays for the `passport_scan` action (5 base / 10 first-ever), because
+// ScanPortal renders this number as "+N KrowdKredits" while the wallet is
+// credited entirely separately by recordGameAction. When the two drifted apart,
+// the scan card promised 25 and paid 5. Anchor: a typical deal costs 25, so one
+// scan is about a fifth of a deal. See CREDIT-ECONOMY-EVALUATION.md §7.
+const FLOOR_PRIZE_VALUE = 5;
 
 // Every winning scan must award something. The probability matrix falls through to
 // the kredits_base "floor" prize, so a tenant with no active floor prize would 500
