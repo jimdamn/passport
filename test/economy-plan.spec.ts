@@ -153,4 +153,21 @@ describe('describeGuards', () => {
     }
     expect(rows.some((r) => JSON.stringify(r).includes('NaN'))).toBe(false);
   });
+
+  // The threshold's own stated value (2x) must itself flag: an exact
+  // halving of every reward is an ordinary mistake, not an edge case to
+  // wave through. Both the single-award row (largest award halved) and the
+  // daily-ceiling rows (total mint halved) land at exactly ratioNow ===
+  // ratioBaseline * 2 here, so this also proves the >= comparison is doing
+  // the work, not just a larger collapse that would pass under either
+  // operator.
+  it('flags on an exact 2x collapse, not just a collapse beyond it', () => {
+    const rows = describeGuards(50, 100, 2000, 1000);
+
+    expect(rows[0].outOfBand).toBe(true);
+
+    const ceilingRows = rows.filter((r) => r.key !== 'KWEST_MAX_SINGLE_AWARD');
+    expect(ceilingRows.length).toBeGreaterThan(0);
+    expect(ceilingRows.every((r) => r.outOfBand === true)).toBe(true);
+  });
 });

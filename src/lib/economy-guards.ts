@@ -31,14 +31,17 @@ function ratio(guard: number, denominator: number): number | null {
   return denominator > 0 ? guard / denominator : null;
 }
 
-// Threshold is 2x the baseline ratio. The 2026-07-30 incident was a 4x
-// weakening: KWEST_MAX_SINGLE_AWARD sat at 5x the largest award at baseline
-// and drifted to 20x it once rewards fell, without the guard itself ever
-// changing. Flagging at 2x catches that case (and anything worse) with
-// margin, while a small day-to-day fluctuation in reward sizing does not
-// double the ratio and so does not trip a false alarm.
+// A guard is out of band when it is at least 2x weaker than at baseline.
+// The 2026-07-30 incident was a 4x weakening: KWEST_MAX_SINGLE_AWARD sat at
+// 5x the largest award at baseline and drifted to 20x it once rewards fell,
+// without the guard itself ever changing. Flagging at 2x catches that case
+// (and anything worse) with margin, while a small day-to-day fluctuation in
+// reward sizing does not double the ratio and so does not trip a false
+// alarm. The comparison is inclusive (>=) because an exact halving of every
+// reward is an ordinary kind of mistake for this panel to miss, not an edge
+// case to wave through.
 function isOutOfBand(ratioNow: number | null, ratioBaseline: number | null): boolean {
-  return ratioNow !== null && ratioBaseline !== null && ratioNow > ratioBaseline * 2;
+  return ratioNow !== null && ratioBaseline !== null && ratioNow >= ratioBaseline * 2;
 }
 
 /**
