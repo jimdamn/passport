@@ -12,6 +12,7 @@ export interface Env {
   CLAIM_TOKEN_SECRET?: string; // shared with kk-business: verifies visit-claim tokens (P-1/J-5)
   INTERNAL_SECRET: string;   // Shared secret for KKAuth internal calls
   INTERNAL_SECRET_SECONDARY?: string; // retired key accepted during dual-key rotation (ARCHITECTURE.md §J)
+  ECONOMY_API_KEY: string;   // Dedicated key for Exchange's public economy endpoints (X-Economy-Key) - deliberately NOT the fleet-wide INTERNAL_SECRET, since those endpoints are reachable over public HTTPS rather than a Service Binding
   HUB_URL?: string;          // Business Hub origin (member business links)
   COOKIE_DOMAIN: string;     // e.g. .lakeandlocals.com — shared across all KrowdKraft apps
   ENVIRONMENT: string;

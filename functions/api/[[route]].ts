@@ -96,6 +96,7 @@ import {
   adminEndSponsor, adminDeleteSponsor, adminGetSponsorFeature, adminSetSponsorFeature,
   adminGetInlineSponsorsFeature, adminSetInlineSponsorsFeature,
 } from '../../src/handlers/sponsors';
+import { getEconomy, previewEconomy, applyEconomy } from '../../src/handlers/economy';
 
 import { logger } from '../../src/lib/logger';
 
@@ -351,6 +352,11 @@ tenantApp.get('/admin/sponsors/feature', adminGetSponsorFeature);
 tenantApp.post('/admin/sponsors/feature', adminSetSponsorFeature);
 tenantApp.get('/admin/sponsors/inline-feature', adminGetInlineSponsorsFeature);
 tenantApp.post('/admin/sponsors/inline-feature', adminSetInlineSponsorsFeature);
+
+// Economy admin (increment 1) - registry read, preview and apply.
+tenantApp.get('/admin/economy', getEconomy);
+tenantApp.post('/admin/economy/preview', previewEconomy);
+tenantApp.post('/admin/economy/apply', applyEconomy);
 
 // KrowdKwest - guest progress migrates onto the account on sign-in.
 tenantApp.post('/kwest/attach', attachKwestGuest);

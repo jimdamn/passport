@@ -12,6 +12,7 @@ import { HTTPException } from 'hono/http-exception';
 import type { Env } from '../types';
 import { awardWithBudget } from '../lib/kwest-economy';
 import { distanceMeters } from '../lib/geo';
+import { getKwestDefaults } from '../lib/kwest-defaults';
 
 type AppContext = Context<{ Bindings: Env }>;
 
@@ -101,6 +102,22 @@ export async function adminCreateHunt(c: AppContext) {
     throw new HTTPException(400, { message: 'A valid starts_at before ends_at is required.' });
   }
 
+  // Hunt-creation defaults live in tenants.config (kwest-defaults.ts). They
+  // only fill fields the caller omitted - a hunt snapshots whatever values
+  // land in this INSERT and is never rescaled afterwards, so an explicit
+  // value from the create form always wins over the default.
+  const defaults = await getKwestDefaults(c.env, tenant.id);
+  const grandPrizeKredits = body.grand_prize_kredits !== undefined
+    ? Number(body.grand_prize_kredits) || 0 : defaults.grand_prize_kredits;
+  const rank2_10Kredits = body.rank2_10_kredits !== undefined
+    ? Number(body.rank2_10_kredits) || 0 : defaults.rank2_10_kredits;
+  const rank11_20Kredits = body.rank11_20_kredits !== undefined
+    ? Number(body.rank11_20_kredits) || 0 : defaults.rank11_20_kredits;
+  const stepRewardDefault = body.step_reward_default !== undefined
+    ? Number(body.step_reward_default) || 0 : defaults.step_reward_default;
+  const minigameMaxAward = body.minigame_max_award !== undefined
+    ? Number(body.minigame_max_award) || 0 : defaults.minigame_max_award;
+
   try {
     await c.env.DB.prepare(`
       INSERT INTO kwest_hunts
@@ -111,10 +128,10 @@ export async function adminCreateHunt(c: AppContext) {
     `).bind(
       tenant.id, slug, name, cleanText(body.narrative, 2000) ?? '', scope, cleanText(body.location_label, 120),
       startsAt, endsAt, cleanText(body.sponsor_name, 120) ?? 'Lake & Locals',
-      Number(body.grand_prize_kredits) || 0, grandPrizeDescription,
-      Number(body.rank2_10_kredits) || 50, Number(body.rank11_20_kredits) || 10,
-      Number(body.step_reward_default) || 10, Number(body.minigame_offer_bp) || 1500,
-      Number(body.minigame_max_award) || 10, Number(body.kk_budget_cap) || 5000,
+      grandPrizeKredits, grandPrizeDescription,
+      rank2_10Kredits, rank11_20Kredits,
+      stepRewardDefault, Number(body.minigame_offer_bp) || 1500,
+      minigameMaxAward, Number(body.kk_budget_cap) || 5000,
     ).run();
   } catch {
     throw new HTTPException(400, { message: 'A hunt with that slug already exists.' });
