@@ -13,7 +13,7 @@
 import type { Context } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import type { Env } from '../types';
-import { computePlan, type PlanEntry, type RegistryRow, type SourceKind } from '../lib/economy-scale';
+import { computePlan, targetForSourceKind, type PlanEntry, type RegistryRow } from '../lib/economy-scale';
 import { readRegistry, readLiveValues, applyPlan } from '../lib/economy-registry';
 import { describeGuards, type GuardRow } from '../lib/economy-guards';
 import { buildEconomyClients } from '../lib/economy-clients';
@@ -27,41 +27,70 @@ function requireAdmin(c: AppContext) {
   }
 }
 
-/** 0 <= modifier <= 5, at most 2 decimal places. 0.00 is the explicit kill switch. */
-function parseModifier(raw: unknown): number {
-  const n = Number(raw);
-  if (!Number.isFinite(n) || n < 0 || n > 5) {
+/**
+ * 0 <= modifier <= 5, at most 2 decimal places. 0.00 is the explicit kill
+ * switch, and credits cannot be clawed back, so this rejects hard rather than
+ * coercing anything it isn't certain about.
+ *
+ * Only a genuine JS `number` is accepted - `Number(raw)` is never called.
+ * `Number(null)` is `0`, `Number('')` is `0`, `Number([])` is `0`, and
+ * `Number(false)` is `0`: every one of those would otherwise sail through the
+ * range check and silently fire the platform-wide kill switch on a null or
+ * empty field. The client sends JSON and can send a real number, so a numeric
+ * string is rejected too, not coerced.
+ *
+ * The 2-decimal check uses an epsilon rather than exact equality because
+ * `1.15 * 100` is `114.99999999999999` in IEEE-754 floating point - an exact
+ * `Math.round(n * 100) !== n * 100` comparison would reject valid inputs like
+ * 0.07, 1.15 and 2.01.
+ */
+export function parseModifier(raw: unknown): number {
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) {
+    throw new HTTPException(400, { message: 'Modifier must be a number.' });
+  }
+  if (raw < 0 || raw > 5) {
     throw new HTTPException(400, { message: 'Modifier must be between 0 and 5.' });
   }
-  if (Math.round(n * 100) !== n * 100) {
+  if (Math.abs(raw * 100 - Math.round(raw * 100)) > 1e-9) {
     throw new HTTPException(400, { message: 'Modifier can have at most 2 decimal places.' });
   }
-  return n;
+  return raw;
 }
 
-/** Which of the three fan-out targets a registry row's live value lives on. Mirrors readLiveValues' own grouping in economy-registry.ts. */
-function targetForSourceKind(kind: SourceKind): 'kkgame' | 'exchange' | 'passport' {
-  if (kind === 'kkgame_action' || kind === 'kkgame_quest') return 'kkgame';
-  if (kind === 'exchange_tenant_config') return 'exchange';
-  return 'passport'; // passport_tenant_config, kwest_defaults, hunt_tiers (increment 2)
-}
-
-type EconomyValueView = PlanEntry & {
+export type EconomyValueView = PlanEntry & {
   live: number | null;
   drift: boolean;
   status: 'ok' | 'unavailable' | 'orphaned';
 };
 
 /**
- * Reads the registry, computes every value at `modifier`, and fans out to
- * live values - shared by all three handlers so preview and apply can never
- * compute this differently from what the read path shows.
+ * Pure classification for one row: is its target reachable, and if so does
+ * it still have a value there. Pulled out of buildEconomyView so it can be
+ * unit tested directly rather than only indirectly through a handler that
+ * needs live D1/Service Binding fan-out.
  *
  * live === null never renders as 0: an unreachable service must not look
  * like an award that pays nothing. `status` distinguishes that case
  * ('unavailable' - the service itself didn't answer) from a row whose
  * service answered but no longer has that ref ('orphaned' - the row is
  * stale, not the service).
+ */
+export function classifyEconomyValue(
+  entry: PlanEntry, liveValue: number | null, isReachable: boolean,
+): EconomyValueView {
+  if (!isReachable) {
+    return { ...entry, live: null, drift: false, status: 'unavailable' };
+  }
+  if (liveValue === null) {
+    return { ...entry, live: null, drift: false, status: 'orphaned' };
+  }
+  return { ...entry, live: liveValue, drift: liveValue !== entry.computed, status: 'ok' };
+}
+
+/**
+ * Reads the registry, computes every value at `modifier`, and fans out to
+ * live values - shared by all three handlers so preview and apply can never
+ * compute this differently from what the read path shows.
  */
 async function buildEconomyView(
   env: Env, rows: RegistryRow[], modifier: number,
@@ -73,14 +102,7 @@ async function buildEconomyView(
   const values: EconomyValueView[] = plan.map((entry) => {
     const isReachable = reachable[targetForSourceKind(entry.source_kind)];
     const liveValue = live.get(entry.id) ?? null;
-
-    if (!isReachable) {
-      return { ...entry, live: null, drift: false, status: 'unavailable' };
-    }
-    if (liveValue === null) {
-      return { ...entry, live: null, drift: false, status: 'orphaned' };
-    }
-    return { ...entry, live: liveValue, drift: liveValue !== entry.computed, status: 'ok' };
+    return classifyEconomyValue(entry, liveValue, isReachable);
   });
 
   // Guards are judged against the whole registry's current shape: the

@@ -1,4 +1,4 @@
-import type { PlanEntry, RegistryRow } from './economy-scale';
+import { targetForSourceKind, type PlanEntry, type RegistryRow } from './economy-scale';
 
 export interface EconomyClients {
   kkgame: {
@@ -46,10 +46,11 @@ export async function readLiveValues(
 
   for (const row of rows) {
     let value: number | null = null;
-    if (row.source_kind === 'kkgame_action' || row.source_kind === 'kkgame_quest') {
+    const target = targetForSourceKind(row.source_kind);
+    if (target === 'kkgame') {
       const want = row.source_kind === 'kkgame_action' ? 'action' : 'quest';
       value = kk?.find((v) => v.ref === row.source_ref && v.kind === want)?.credits ?? null;
-    } else if (row.source_kind === 'exchange_tenant_config') {
+    } else if (target === 'exchange') {
       value = ex?.find((v) => v.ref === row.source_ref && v.tenant_id === row.tenant_id)?.credits ?? null;
     } else {
       value = pp?.find((v) => v.ref === row.source_ref && v.tenant_id === row.tenant_id)?.credits ?? null;
@@ -75,13 +76,13 @@ export async function applyPlan(plan: PlanEntry[], clients: EconomyClients) {
 
   const targets: Array<[string, () => Promise<void>]> = [
     ['kkgame', () => clients.kkgame.apply(
-      plan.filter((p) => p.source_kind === 'kkgame_action' || p.source_kind === 'kkgame_quest')
+      plan.filter((p) => targetForSourceKind(p.source_kind) === 'kkgame')
           .map((p) => ({ ref: p.source_ref, kind: p.source_kind === 'kkgame_action' ? 'action' : 'quest', credits: p.computed })))],
     ['exchange', () => clients.exchange.apply(
-      plan.filter((p) => p.source_kind === 'exchange_tenant_config')
+      plan.filter((p) => targetForSourceKind(p.source_kind) === 'exchange')
           .map((p) => ({ ref: p.source_ref, tenant_id: p.tenant_id!, credits: p.computed })))],
     ['passport', () => clients.passport.apply(
-      plan.filter((p) => p.source_kind === 'passport_tenant_config' || p.source_kind === 'kwest_defaults')
+      plan.filter((p) => targetForSourceKind(p.source_kind) === 'passport')
           .map((p) => ({ ref: p.source_ref, tenant_id: p.tenant_id!, credits: p.computed })))],
   ];
 

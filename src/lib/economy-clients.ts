@@ -12,7 +12,7 @@ import { KWEST_DEFAULTS, setKwestDefaults, type KwestDefaults } from './kwest-de
 
 const KWEST_DEFAULT_KEYS = Object.keys(KWEST_DEFAULTS) as Array<keyof KwestDefaults>;
 
-// ── KKGame — reachable via Service Binding ──────────────────────────────────
+// - KKGame - reachable via Service Binding -
 
 async function kkgameRead(env: Env): Promise<Array<{ ref: string; kind: string; credits: number }>> {
   const res = await env.KKGAME.fetch(
@@ -36,9 +36,9 @@ async function kkgameApply(env: Env, values: Array<{ ref: string; kind: string; 
   if (!res.ok) throw new Error(`KKGame economy apply failed: ${res.status}`);
 }
 
-// ── Exchange — a Cloudflare Pages project, not a Worker, so it has no
+// - Exchange - a Cloudflare Pages project, not a Worker, so it has no
 // Service Binding target (see src/lib/exchange.ts). Reached over public
-// HTTPS instead, same as every other Passport-to-Exchange call in this repo. ──
+// HTTPS instead, same as every other Passport-to-Exchange call in this repo. -
 
 async function exchangeRead(env: Env): Promise<Array<{ ref: string; tenant_id: string; credits: number }>> {
   const res = await fetch(`${exchangeBaseUrl(env)}/api/internal/economy/values`, {
@@ -58,12 +58,12 @@ async function exchangeApply(env: Env, values: Array<{ ref: string; tenant_id: s
   if (!res.ok) throw new Error(`Exchange economy apply failed: ${res.status}`);
 }
 
-// ── Passport — local D1. Two different homes share this one target:
+// - Passport - local D1. Two different homes share this one target:
 // kwest_defaults (tenants.config.kwest, via getKwestDefaults/setKwestDefaults)
 // and passport_tenant_config (top-level tenants.config fields, e.g.
 // welcome_credits). Both must go through a read-modify-write plus the same
 // dual KV invalidation resolveTenant relies on - writing the column directly
-// would leave a stale tenant cache and the change would not take effect. ──
+// would leave a stale tenant cache and the change would not take effect. -
 
 async function passportRead(env: Env): Promise<Array<{ ref: string; tenant_id: string; credits: number }>> {
   const { results } = await env.DB.prepare('SELECT id, config FROM tenants').all<{ id: string; config: string }>();
