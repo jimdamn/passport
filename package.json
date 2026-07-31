@@ -10,7 +10,8 @@
     "db:migrate": "wrangler d1 execute krowdkraft-passport --file=./schema.sql --remote",
     "db:seed": "wrangler d1 execute krowdkraft-passport --file=./seed.sql --remote",
     "db:reset": "wrangler d1 execute krowdkraft-passport --file=./schema.sql --remote && wrangler d1 execute krowdkraft-passport --file=./seed.sql --remote",
-    "test": "vitest run"
+    "test": "vitest run",
+    "check:economy": "node scripts/check-economy-registry.mjs"
   },
   "dependencies": {
     "hono": "^4.12.27",
