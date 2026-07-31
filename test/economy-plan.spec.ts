@@ -59,14 +59,18 @@ describe('applyPlan', () => {
   const plan = computePlan(rows, 0.5);
 
   it('reports applied when every target succeeds', async () => {
-    expect((await applyPlan(plan, clients())).outcome).toBe('applied');
+    const r = await applyPlan(plan, clients());
+    expect(r.outcome).toBe('applied');
+    expect(Object.keys(r.perTarget).sort()).toEqual(['exchange', 'kkgame', 'passport']);
   });
 
   it('reports partial and names the failing target', async () => {
     const r = await applyPlan(plan, clients('exchange'));
     expect(r.outcome).toBe('partial');
+    expect(Object.keys(r.perTarget).sort()).toEqual(['exchange', 'kkgame', 'passport']);
     expect(r.perTarget.exchange).toBe('failed');
     expect(r.perTarget.kkgame).toBe('ok');
+    expect(r.perTarget.passport).toBe('ok');
   });
 
   it('converges on retry once the target recovers', async () => {
