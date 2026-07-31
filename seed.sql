@@ -15,7 +15,7 @@ INSERT OR REPLACE INTO tenants (id, hostname, name, region, config) VALUES (
     "brand_color_accent": "#c8860a",
     "credits_name": "KrowdKredits",
     "member_login_url": "https://www.lakeandlocals.com/login",
-    "welcome_credits": 25,
+    "welcome_credits": 10,
     "upgrade_credits": 25,
     "trade_complete_credits": 10,
     "five_star_bonus_credits": 5,
