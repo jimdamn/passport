@@ -188,6 +188,15 @@ export async function applyEconomy(c: AppContext) {
   const resultJson = JSON.stringify(Object.fromEntries(plan.map((p) => [p.id, p.computed])));
 
   await c.env.DB.batch([
+    // Written unconditionally, even on outcome 'failed' or 'partial': this
+    // column is the operator's intended/goal modifier, not a claim that
+    // every target is actually running it. That gap is exactly what
+    // `outcome`/`per_target` above and the admin UI's retry path exist to
+    // surface and let the operator close - see the retry fix in
+    // AdminEconomy.tsx (finding 1, final review). Do NOT make this
+    // conditional on outcome === 'applied': recording the goal state here is
+    // what makes retrying with the same modifier converge instead of
+    // leaving the stored dial pointing at whatever partially landed.
     c.env.DB.prepare('UPDATE economy_modifier SET modifier = ?, updated_at = unixepoch(), updated_by = ? WHERE id = 1')
       .bind(modifier, appliedBy),
     c.env.DB.prepare(

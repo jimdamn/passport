@@ -302,9 +302,25 @@ export default function AdminEconomy() {
   // previewed for us - never against whatever happens to be in the text
   // field at the moment of the click (finding 1).
   const readyToSave = dirty && !previewPending && !previewing && previewedModifier === candidate;
+  // After a non-'applied' outcome (partial or failed), the field is left
+  // showing the exact modifier that was just attempted - fetchAll/save both
+  // set draft/savedModifier/previewedModifier to the same server-returned
+  // value, so `dirty` (and therefore readyToSave) goes false even though the
+  // economy is left mixed. Without this, Save is disabled and nothing the
+  // operator does - retyping the same number, reloading - re-enables it
+  // (finding 1, final review). This only ever re-arms the button for the
+  // SAME value that was already attempted: the moment the operator edits the
+  // field to something new, `candidate !== savedModifier` and this goes
+  // false immediately, handing control back to the ordinary readyToSave path
+  // above, which still requires a fresh round-tripped preview. It never
+  // fires on an unpreviewed value.
+  const retryEligible =
+    applyResult !== null && applyResult.outcome !== 'applied' &&
+    candidate !== null && savedModifier !== null && candidate === savedModifier;
+  const canSave = readyToSave || retryEligible;
 
   async function save() {
-    if (!tenant || candidate === null || saving || !readyToSave) return;
+    if (!tenant || candidate === null || saving || !canSave) return;
     const seq = ++requestSeqRef.current; // invalidate any preview still in flight
     setSaving(true);
     setError('');
@@ -371,7 +387,7 @@ export default function AdminEconomy() {
               onChange={(e) => { setDraft(e.target.value); setApplyResult(null); }}
             />
           </div>
-          <button className="btn btn-amber btn-sm" disabled={!readyToSave || saving} onClick={save} style={{ minHeight: 34, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <button className="btn btn-amber btn-sm" disabled={!canSave || saving} onClick={save} style={{ minHeight: 34, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             {saving ? <Spinner size="sm" /> : <><Save size={14} /> Save</>}
           </button>
           {previewPending && <span style={{ fontSize: '0.78rem', color: 'var(--muted)', display: 'inline-flex', alignItems: 'center', gap: 6 }}><Spinner size="sm" /> Previewing {candidate}...</span>}

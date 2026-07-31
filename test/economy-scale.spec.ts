@@ -30,4 +30,12 @@ describe('scaleValue', () => {
   it('scales up as well as down', () => {
     expect(scaleValue(10, 2.5)).toBe(25);
   });
+
+  it('does not inflate by one credit on IEEE-754-lossy modifiers', () => {
+    // 100 * 1.1 === 110.00000000000001 and 100 * 0.07 === 7.000000000000001
+    // in raw floating point - a naive Math.ceil(baseline * modifier) rounds
+    // those up to 111 and 8. Both must land on the exact intended value.
+    expect(scaleValue(100, 1.1)).toBe(110);
+    expect(scaleValue(100, 0.07)).toBe(7);
+  });
 });

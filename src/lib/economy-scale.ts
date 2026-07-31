@@ -11,7 +11,16 @@
 export function scaleValue(baseline: number, modifier: number): number {
   if (modifier === 0) return 0;
   if (baseline === 0) return 0;
-  return Math.max(1, Math.ceil(baseline * modifier));
+  // Round the modifier to whole cents before multiplying, then divide back
+  // down, rather than multiplying the raw float. `baseline * modifier`
+  // alone is subject to IEEE-754 error on ordinary two-decimal modifiers
+  // (100 * 1.1 === 110.00000000000001, 100 * 0.07 === 7.000000000000001),
+  // which the outer Math.ceil then rounds up to a wrong-by-one integer
+  // (111, 8). Modifiers are always validated to at most two decimal places
+  // (parseModifier), so rounding modifier * 100 to the nearest integer
+  // recovers the intended cents exactly before the division reintroduces
+  // any (now harmless, sub-integer) floating point noise ahead of ceil.
+  return Math.max(1, Math.ceil((baseline * Math.round(modifier * 100)) / 100));
 }
 
 export type SourceKind =

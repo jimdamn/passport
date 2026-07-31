@@ -49,6 +49,11 @@ STREAM_PLAYBACK_DOMAIN = "https://customer-hqbke3zzo85ur2y9.cloudflarestream.com
 #                    Must match the value set in kk-apps-hub and kk-login.
 # KKAUTH_APP_KEY   — API key registered in KKAuth apps table for this Worker (also used as X-App-Key for KKCredits)
 # KKGAME_APP_KEY   — API key registered in KKAuth apps table for this Worker (used as X-App-Key for KKGame)
+# ECONOMY_API_KEY  - Dedicated key for Passport's calls to Exchange's public economy endpoints (X-Economy-Key
+#                    header), used by the Economy admin screen's apply/preview fan-out. Must match the value
+#                    set on the Exchange Pages project (ECONOMY_API_KEY there too) - it is deliberately NOT
+#                    the fleet-wide INTERNAL_SECRET, since Exchange's economy endpoints are reachable over
+#                    public HTTPS rather than a Service Binding.
 # QR_SIGNING_SECRET — HMAC-SHA256 signing secret for standardized QR payloads
 # RESEND_API_KEY   — Resend API key for guest claim-code emails (optional; claim emails skip if unset)
 # SPLASH_MEDIA_SECRET — HMAC secret for Social Splash's short-TTL signed media-view URLs (Pages secret - needs a redeploy to take effect)
