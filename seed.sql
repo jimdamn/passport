@@ -44,10 +44,23 @@ INSERT OR REPLACE INTO categories (id, niche_id, slug, name, icon, sort_order) V
 
 -- Guaranteed floor prize. Every winning scan falls through to the kredits_base
 -- prize when no upgraded prize is rolled, so this row MUST exist or scans 500.
--- value is display-only (the real KrowdKredits award is issued by KKGame's
--- passport_scan action); -1 quantity = unlimited; probability 0 = never in the
--- weighted roll, only the fallback.
+-- value MUST equal what kkgame's passport_scan action actually pays (5 base,
+-- 10 first-ever) - when the two drifted apart the card promised 25 and paid 5.
+-- -1 quantity = unlimited; probability 0 = never in the weighted roll, only
+-- the fallback.
 INSERT OR IGNORE INTO passport_prizes
   (id, tenant_id, name, prize_type, value, details, probability, quantity_left, is_active, is_paced)
 VALUES
-  ('kredits-base-lake-locals', 'lake-locals', 'KrowdKredits', 'kredits_base', 25, NULL, 0, -1, 1, 0);
+  ('kredits-base-lake-locals', 'lake-locals', 'KrowdKredits', 'kredits_base', 5, NULL, 0, -1, 1, 0);
+
+-- Jackpot ladder. The supply lever is value * quantity_left, because
+-- KrowdKredits never expire: a big value is only safe on tiny stock. Kept in
+-- step with src/lib/prize-ladder.ts and migration 0021.
+INSERT OR IGNORE INTO passport_prizes
+  (id, tenant_id, name, prize_type, value, details, probability, quantity_left, is_active, is_paced)
+VALUES
+  ('kredits-jackpot-1-lake-locals', 'lake-locals', 'Free Deal',     'kredits_jackpot',  25, NULL, 0.030, 15, 1, 0),
+  ('kredits-jackpot-2-lake-locals', 'lake-locals', 'Big Win',       'kredits_jackpot',  50, NULL, 0.020, 10, 1, 0),
+  ('kredits-jackpot-3-lake-locals', 'lake-locals', 'Jackpot',       'kredits_jackpot', 100, NULL, 0.012,  6, 1, 0),
+  ('kredits-jackpot-4-lake-locals', 'lake-locals', 'Grand Jackpot', 'kredits_jackpot', 250, NULL, 0.005,  3, 1, 0),
+  ('kredits-jackpot-5-lake-locals', 'lake-locals', 'Legendary',     'kredits_jackpot', 500, NULL, 0.002,  1, 1, 0);
