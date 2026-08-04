@@ -88,6 +88,7 @@ import {
   adminGetKwestFeature, adminSetKwestFeature,
 } from '../../src/handlers/kwest-admin';
 import { internalKwestLifecycle, internalKwestRetention } from '../../src/handlers/kwest-internal';
+import { internalExpireJackpotClaims } from '../../src/handlers/passport-internal';
 import {
   submitSupport, getMySupport, adminListSupport, adminSupportCount, adminUpdateSupport,
   internalSubmitSupport, internalSupportRetention,
@@ -422,6 +423,9 @@ app.post('/api/internal/members/provision', provisionMember);
 // Cron backstop for KrowdKwest lifecycle + retention (X-Internal-Secret protected)
 app.post('/api/internal/kwest/lifecycle', internalKwestLifecycle);
 app.post('/api/internal/kwest/retention', internalKwestRetention);
+// Cron backstop returning prize units reserved by guest claims that lapsed
+// unclaimed (X-Internal-Secret protected)
+app.post('/api/internal/passport/expire-jackpot-claims', internalExpireJackpotClaims);
 // Support inbox forwarding (kk-business) + retention sweep (X-Internal-Secret protected)
 app.post('/api/internal/support', internalSubmitSupport);
 app.post('/api/internal/support/retention', internalSupportRetention);
