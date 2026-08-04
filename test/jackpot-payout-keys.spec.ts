@@ -62,4 +62,14 @@ describe('jackpot payout wiring', () => {
   it('restores the reserved unit when the logged-in award throws', () => {
     expect(SRC).toMatch(/catch[\s\S]{0,500}restoreQuantity\(/);
   });
+
+  it('closes the guest claim only after the awards have been made', () => {
+    // If the claim closed first, a KKCredits failure would burn the code
+    // having paid nothing. Awards are idempotent, so paying first and closing
+    // last is safe under a concurrent double-deposit.
+    const awardIdx = SRC.indexOf('claim.scan_id,');
+    const closeIdx = SRC.indexOf("SET status = 'claimed'");
+    expect(awardIdx).toBeGreaterThan(-1);
+    expect(closeIdx).toBeGreaterThan(awardIdx);
+  });
 });

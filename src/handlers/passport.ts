@@ -567,15 +567,32 @@ export async function attachClaim(c: AppContext) {
   }
 
   if (isKredits) {
-    // Close the claim atomically so the same code can't be deposited twice.
-    const closed = await c.env.DB.prepare(`
-      UPDATE passport_claims SET status = 'claimed', contact_info = ?
-      WHERE token_hash = ? AND status = 'pending' AND expires_at > unixepoch()
-    `).bind(user.email, tokenHash).run();
-    if (closed.meta.changes === 0) {
-      throw new HTTPException(409, { message: 'This claim code has already been used or expired.' });
+    // The jackpot is paid BEFORE the claim is closed, keyed on the SAME
+    // scan_id the original guest roll used. That makes it exactly-once across
+    // both entry points, and it means a KKCredits failure leaves the claim
+    // pending and retryable rather than closing a code that paid nothing.
+    let jackpotBadges: string[] = [];
+    if (isJackpot(claim.prize_type)) {
+      try {
+        const jackpot = await awardCredits(
+          c.env,
+          tenant.id,
+          String(userId),
+          claim.prize_value,
+          'passport_jackpot',
+          JACKPOT_REF_TYPE,
+          claim.scan_id,
+        );
+        jackpotBadges = jackpot.new_badges;
+      } catch (err) {
+        console.error('[attachClaim] jackpot award failed:', err);
+        throw new HTTPException(502, {
+          message: 'We could not deposit your win just now. Your claim code is still good - please try again in a moment.',
+        });
+      }
     }
 
+    // Runs after the jackpot, so this result's balance already includes it.
     const gameResult = await recordGameAction(c.env, {
       user_id: userId,
       action_id: 'passport_scan',
@@ -586,13 +603,24 @@ export async function attachClaim(c: AppContext) {
       ref_id: claim.plaque_id,
     });
 
+    // Close last. Both awards above are idempotent on their refs, so under a
+    // concurrent double-deposit neither pays twice, and whichever close wins
+    // the other is a harmless no-op that surfaces as the 409 below.
+    const closed = await c.env.DB.prepare(`
+      UPDATE passport_claims SET status = 'claimed', contact_info = ?
+      WHERE token_hash = ? AND status = 'pending' AND expires_at > unixepoch()
+    `).bind(user.email, tokenHash).run();
+    if (closed.meta.changes === 0) {
+      throw new HTTPException(409, { message: 'This claim code has already been used or expired.' });
+    }
+
     return c.json({
       data: {
         deposited: true,
         prize: { name: claim.prize_name, prize_type: claim.prize_type, value: claim.prize_value },
         user: {
           balance: gameResult?.credits_balance ?? 0,
-          new_badges: gameResult?.new_badges ?? [],
+          new_badges: mergeBadges(jackpotBadges, gameResult?.new_badges ?? []),
         },
         message: `Deposited! ${claim.prize_name} is now in your account, and the stamp is in your passport.`,
       },
