@@ -112,6 +112,23 @@ export async function ensureMerchantPlaque(env: Env, biz: MerchantBusiness): Pro
 
   const category = biz.category && PLAQUE_CATEGORIES.has(biz.category) ? biz.category : 'services';
 
+  // PRIVACY - FAIL CLOSED. passport_plaques.location_name is public: it is
+  // returned in the scan response and rendered on the reward card. A
+  // home-based business that set hide_address was still having its street
+  // address copied here, and because this function is INSERT OR REPLACE and
+  // runs lazily on EVERY merchant QR-code request, repairing the row by hand
+  // did nothing - the next QR fetch re-stamped the address.
+  //
+  // Only publish the street address when the business has positively told us
+  // it may be shown. A missing flag means we do not know, and guessing wrong
+  // publishes someone's home address, so the fallback is always the business
+  // name. KKAuth supplies hide_address on every path that reaches here
+  // (/me/merchant-qr-code selects it explicitly; the businesses endpoints
+  // return SELECT *), so failing closed costs nothing today and protects any
+  // caller added later.
+  const mayShowAddress = biz.hide_address === 0 || biz.hide_address === false;
+  const locationName = (mayShowAddress && biz.address) ? biz.address : biz.name;
+
   await env.DB.prepare(`
     INSERT OR REPLACE INTO passport_plaques (id, tenant_id, merchant_id, name, location_name, lat, lon, category, is_active, skip_geofence)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
@@ -120,7 +137,7 @@ export async function ensureMerchantPlaque(env: Env, biz: MerchantBusiness): Pro
     tenant.id,
     String(biz.id),
     biz.name,
-    biz.address || biz.name,
+    locationName,
     biz.lat,
     biz.lon,
     category,
