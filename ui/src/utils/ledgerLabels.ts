@@ -8,6 +8,7 @@ export const LEDGER_REASON_LABEL: Record<string, string> = {
   splash_offer_refund: 'Offer not taken - returned to you',
   splash_license: 'Photo licensed - payment received',
   deal_refund: 'Deal payment returned to you',
+  passport_jackpot: 'Passport jackpot',
   // Administrative reversal of an earlier entry. The stored `reason` on these
   // rows names the specific defect and ledger ids for audit purposes, which is
   // engineering language - this keeps that out of a member's history view

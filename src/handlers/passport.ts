@@ -6,6 +6,8 @@ import { hmacHex, timingSafeEqual } from '../lib/hmac';
 import { recordGameAction } from '../lib/game';
 import { sendClaimEmail } from '../lib/email';
 import { distanceKm } from '../lib/geo';
+import { awardCredits } from '../lib/credits';
+import { isJackpot, mergeBadges, restoreQuantity, JACKPOT_REF_TYPE } from '../lib/jackpot';
 
 type AppContext = Context<{ Bindings: Env }>;
 
@@ -330,9 +332,47 @@ export async function scanPlaque(c: AppContext) {
       ref_id: plaque_id,
     });
 
-    const freshBalance = gameResult?.credits_balance ?? 0;
-    const newBadges = gameResult?.new_badges ?? [];
+    let freshBalance = gameResult?.credits_balance ?? 0;
+    let newBadges = gameResult?.new_badges ?? [];
     const xpAwarded = gameResult?.xp_awarded ?? {};
+
+    // A rolled jackpot is paid as its own award on top of the base scan above.
+    // Runs AFTER recordGameAction, so this award's returned balance is the
+    // later of the two and is what the member should see.
+    if (isJackpot(rolledPrize.prize_type)) {
+      try {
+        const jackpot = await awardCredits(
+          c.env,
+          tenant.id,
+          String(userId),
+          rolledPrize.value,
+          'passport_jackpot',
+          JACKPOT_REF_TYPE,
+          scanId,
+        );
+        freshBalance = jackpot.balance;
+        newBadges = mergeBadges(newBadges, jackpot.new_badges);
+
+        // Show and store what KKCredits actually ISSUED, not what we asked for.
+        // Identical today (the halving multiplier is 1). If halving ever
+        // activates, this is what stops the card promising more than it paid -
+        // the exact defect this whole change exists to remove.
+        if (jackpot.issued_amount !== rolledPrize.value) {
+          rolledPrize = { ...rolledPrize, value: jackpot.issued_amount };
+          await c.env.DB.prepare('UPDATE passport_scans SET credits_won = ? WHERE id = ?')
+            .bind(jackpot.issued_amount, scanId).run();
+        }
+      } catch (err) {
+        // Never promise what we did not pay. Put the reserved unit back, patch
+        // the scan record, and downgrade the response to the floor prize. The
+        // member still keeps the base award from recordGameAction above.
+        console.error('[scanPlaque] jackpot award failed:', err);
+        await restoreQuantity(c.env, rolledPrize.id);
+        rolledPrize = await ensureFloorPrize(c.env, tenant.id);
+        await c.env.DB.prepare('UPDATE passport_scans SET credits_won = ? WHERE id = ?')
+          .bind(rolledPrize.value, scanId).run();
+      }
+    }
 
     // Social Splash: whether this plaque's business has opted in, so
     // ScanPortal can offer "Share a photo with them" right after the reward
