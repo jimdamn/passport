@@ -723,3 +723,41 @@ export async function adminSetWeatherPause(c: AppContext) {
   ).bind(body.paused ? 1 : 0, huntId, tenant.id).run();
   return c.json({ data: { weather_paused: !!body.paused } });
 }
+
+// ============================================================
+// FEATURE TOGGLE — KrowdKwest dormancy (2026-08-04)
+// ============================================================
+// Same shape and dual-KV-invalidation pattern as adminGetSponsorFeature /
+// adminSetSponsorFeature in sponsors.ts, deliberately duplicated rather than
+// parameterized (board-module "copy, never share code" convention). Default
+// is 'off' (dormant): the member tile, pages, and player API stay hidden
+// until this is flipped on. Admin surfaces and cron sweeps run regardless.
+
+/** GET /api/t/:tenant/admin/kwest/feature — the dormancy toggle. */
+export async function adminGetKwestFeature(c: AppContext) {
+  requireAdmin(c);
+  const tenant = c.get('tenant');
+  return c.json({ data: { on: (tenant.config as { kwest_enabled?: string }).kwest_enabled === 'on' } });
+}
+
+/** POST /api/t/:tenant/admin/kwest/feature { on } — flips tenants.config.kwest_enabled. */
+export async function adminSetKwestFeature(c: AppContext) {
+  requireAdmin(c);
+  const tenant = c.get('tenant');
+  const body = await c.req.json<{ on?: boolean }>().catch(() => ({}) as { on?: boolean });
+  const on = !!body.on;
+
+  const row = await c.env.DB.prepare('SELECT config, hostname FROM tenants WHERE id = ?').bind(tenant.id).first<any>();
+  if (!row) throw new HTTPException(404, { message: 'Tenant not found.' });
+
+  const config = JSON.parse(row.config || '{}');
+  config.kwest_enabled = on ? 'on' : 'off';
+
+  await c.env.DB.prepare('UPDATE tenants SET config = ? WHERE id = ?').bind(JSON.stringify(config), tenant.id).run();
+  await Promise.all([
+    c.env.PASSPORT_CONFIG.delete(`tenant:slug:${tenant.id}`),
+    c.env.PASSPORT_CONFIG.delete(`tenant:host:${row.hostname}`),
+  ]);
+
+  return c.json({ data: { on } });
+}

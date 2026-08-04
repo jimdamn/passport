@@ -92,6 +92,12 @@ export interface TenantConfig {
   bd_signing_secret?: string;
   sponsor_drawer?: 'on' | 'off';
   inline_sponsors?: 'on' | 'off';
+  /** KrowdKwest dormancy switch (2026-08-04). Default 'off': member-facing
+   * kwest surfaces (tile, pages, player API) are hidden/gated. Admin routes,
+   * cron sweeps, and all kwest data stay live. Top-level on purpose —
+   * setKwestDefaults overwrites config.kwest wholesale, so the flag must not
+   * live inside it. Flip via POST /admin/kwest/feature, no deploy needed. */
+  kwest_enabled?: 'on' | 'off';
   splash?: Partial<{
     accept_award_k: number;
     hold_days: number;

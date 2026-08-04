@@ -1,9 +1,19 @@
 import { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
+import { useTenant } from './context/TenantContext';
 import AppLayout from './layouts/AppLayout';
 import { Spinner } from './components/ui/Spinner';
 import { ErrorBoundary } from './components/ErrorBoundary';
+
+/** KrowdKwest dormancy gate (2026-08-04). While the tenant flag is off, the
+ * member kwest routes fall back to Home — matching the gated API (404) and
+ * hidden Home tile. Admin kwest routes stay reachable regardless. */
+function KwestGate({ children }: { children: React.ReactElement }) {
+  const { tenant } = useTenant();
+  const kwestOn = tenant?.config.kwest_enabled === 'on';
+  return kwestOn ? children : <Navigate to="/" replace />;
+}
 
 // Pages - bottom-nav destinations and the scan loop stay eager (a spinner on
 // a nav tap would be a regression for the core flow); everything else is
@@ -115,10 +125,10 @@ export default function App() {
         <Route path="/meals/mine" element={<MealsMine />} />
         <Route path="/lend-a-hand" element={<LendAHand />} />
         <Route path="/splash" element={<Splash />} />
-        <Route path="/kwest" element={<KwestHome />} />
-        <Route path="/kwest/help" element={<KwestHelp />} />
-        <Route path="/kwest/:slug/retro" element={<KwestRetro />} />
-        <Route path="/kwest/:slug" element={<KwestHunt />} />
+        <Route path="/kwest" element={<KwestGate><KwestHome /></KwestGate>} />
+        <Route path="/kwest/help" element={<KwestGate><KwestHelp /></KwestGate>} />
+        <Route path="/kwest/:slug/retro" element={<KwestGate><KwestRetro /></KwestGate>} />
+        <Route path="/kwest/:slug" element={<KwestGate><KwestHunt /></KwestGate>} />
         <Route path="/my-stamps" element={<MyStamps />} />
         <Route path="/scan" element={<ScanPortal />} />
         <Route path="/profile" element={<MyProfile />} />

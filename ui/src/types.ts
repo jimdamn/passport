@@ -29,6 +29,9 @@ export interface Tenant {
     credits_name: string;
     active_niches: string[];
     member_login_url?: string;
+    /** KrowdKwest dormancy switch (2026-08-04): member kwest surfaces render
+     * only when this is 'on'. Flipped via POST /admin/kwest/feature. */
+    kwest_enabled?: 'on' | 'off';
   };
 }
 

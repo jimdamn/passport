@@ -9,6 +9,13 @@ import {
   type SupportMessage,
 } from '../api/support';
 
+// Ambient treasure-chest hunt (kkgame digital hunt) — dormant 2026-08-04.
+// The engine-side switch is the kkgame KV config (digital_hunt_config:
+// lake-locals, enabled:false); this constant keeps the Help page from
+// promising chests that no longer appear. Flip back to true when the KV
+// config is re-enabled.
+const TREASURE_CHESTS_LIVE = false;
+
 // ─── Section component ────────────────────────────────────────────────────────────────────────────────
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -343,7 +350,8 @@ export default function Help() {
         </div>
       </Section>
 
-      {/* ── Hidden Treasure Chests ── */}
+      {/* ── Hidden Treasure Chests — hidden while the game layer is dormant ── */}
+      {TREASURE_CHESTS_LIVE && (
       <Section title="Hidden Treasure Chests">
         <p style={{ fontFamily: 'var(--font-sans)', fontSize: '0.92rem', lineHeight: 1.6, marginBottom: 16 }}>
           Every once in a while, just from browsing the Passport while signed in, a
@@ -363,6 +371,7 @@ export default function Help() {
           body="Chests appear at random as you move between pages. There is no trick to summon one; browsing deals, happenings, and member pages like you normally would is the whole game."
         />
       </Section>
+      )}
 
       {/* ── Your Around Town board ── */}
       <Section title="Your Around Town board">

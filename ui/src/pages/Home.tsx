@@ -27,6 +27,9 @@ export default function Home() {
 
   const hotDeals = deals.filter(d => d.is_hot_deal === 1);
   const creditsName = tenant?.config.credits_name ?? 'KrowdKredits';
+  // KrowdKwest dormancy (2026-08-04): the tile is the only member-visible
+  // entry into kwest; it renders only when the tenant flag is 'on'.
+  const kwestOn = tenant?.config.kwest_enabled === 'on';
 
   const actionCards = [
     {
@@ -49,12 +52,13 @@ export default function Home() {
       blurb: 'Today’s events, markets, and live updates - posted by local businesses.',
       to: '/happenings',
     },
-    {
+    // KrowdKwest — hidden while dormant (kwest_enabled !== 'on')
+    ...(kwestOn ? [{
       icon: <Compass size={28} style={{ color: 'var(--amber)' }} />,
       title: 'KrowdKwest',
       blurb: 'Real-world clue hunts - solve, travel, and confirm you made it.',
       to: '/kwest',
-    },
+    }] : []),
     {
       icon: <Award size={28} style={{ color: 'var(--amber)' }} />,
       title: 'Stamps',

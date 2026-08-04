@@ -26,6 +26,23 @@ import { logger } from '../lib/logger';
 
 type AppContext = Context<{ Bindings: Env }>;
 
+/**
+ * KrowdKwest dormancy gate (2026-08-04). Runs after resolveTenant on every
+ * player-facing kwest route. Default is dormant: unless the tenant config
+ * carries kwest_enabled: 'on', the surface answers 404 — matching what a
+ * member sees in the UI (no tile, no routes). Admin routes and the
+ * X-Internal-Secret cron endpoints are deliberately NOT gated: the claims
+ * queue must stay reachable and the lifecycle/retention sweeps must keep
+ * running while dormant. Flip via POST /admin/kwest/feature (no deploy).
+ */
+export async function requireKwestEnabled(c: AppContext, next: () => Promise<void>): Promise<Response | void> {
+  const tenant = c.get('tenant') as { config?: { kwest_enabled?: string } } | undefined;
+  if (tenant?.config?.kwest_enabled !== 'on') {
+    throw new HTTPException(404, { message: 'Not found' });
+  }
+  await next();
+}
+
 interface KwestHuntRow {
   id: number;
   tenant_id: string;

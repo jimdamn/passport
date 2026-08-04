@@ -78,12 +78,14 @@ import { rollHunt } from '../../src/lib/game';
 import {
   listKwestHunts, getKwestHunt, getKwestRules, startKwest, ackKwest, getKwestState, revealKwest,
   getKwestRetro, attachKwestGuest, setKwestDisplayChoice, getMyKwestProgress, playKwestMinigame,
+  requireKwestEnabled,
 } from '../../src/handlers/kwest';
 import {
   adminListHunts, adminCreateHunt, adminGetHunt, adminUpdateHunt, adminDeleteHunt,
   adminListSteps, adminCreateStep, adminUpdateStep, adminDeleteStep, adminReorderSteps, adminRecordFieldTest,
   adminSetHuntStatus, adminCreateTestRun, adminGetDashboard, adminPlayerLookup, adminHealthCheck,
   adminListClaims, adminUpdateClaim, adminSetRetroPublished, adminSetWeatherPause,
+  adminGetKwestFeature, adminSetKwestFeature,
 } from '../../src/handlers/kwest-admin';
 import { internalKwestLifecycle, internalKwestRetention } from '../../src/handlers/kwest-internal';
 import {
@@ -359,8 +361,9 @@ tenantApp.post('/admin/economy/preview', previewEconomy);
 tenantApp.post('/admin/economy/apply', applyEconomy);
 
 // KrowdKwest - guest progress migrates onto the account on sign-in.
-tenantApp.post('/kwest/attach', attachKwestGuest);
-tenantApp.post('/kwest/:slug/display-choice', setKwestDisplayChoice);
+// Dormancy gate (2026-08-04): player routes 404 unless kwest_enabled = 'on'.
+tenantApp.post('/kwest/attach', requireKwestEnabled, attachKwestGuest);
+tenantApp.post('/kwest/:slug/display-choice', requireKwestEnabled, setKwestDisplayChoice);
 // NOTE: GET /kwest/mine is registered on the root app, BEFORE the
 // guest-friendly GET /kwest/:slug pattern below - Hono resolves overlapping
 // patterns by registration order (first match wins), not static-over-dynamic
@@ -370,6 +373,12 @@ tenantApp.post('/kwest/:slug/display-choice', setKwestDisplayChoice);
 // KrowdKwest admin (increment 4)
 tenantApp.get('/admin/kwest', adminListHunts);
 tenantApp.post('/admin/kwest', adminCreateHunt);
+// Dormancy toggle — registered BEFORE the :id pattern below (the "mine"
+// gotcha, Section 7 of ARCHITECTURE.md: first registration wins, so 'feature'
+// would otherwise be swallowed as an :id). Admin-only, not gated by
+// requireKwestEnabled — this is the switch that ends the dormancy.
+tenantApp.get('/admin/kwest/feature', adminGetKwestFeature);
+tenantApp.post('/admin/kwest/feature', adminSetKwestFeature);
 tenantApp.get('/admin/kwest/:id', adminGetHunt);
 tenantApp.put('/admin/kwest/:id', adminUpdateHunt);
 tenantApp.delete('/admin/kwest/:id', adminDeleteHunt);
@@ -499,20 +508,22 @@ app.get('/api/t/:tenant/network-members', resolveTenant, getNetworkMembers);
 app.get('/api/t/:tenant/members/:id', resolveTenant, getMember);
 // KrowdKwest - real-world GPS clue hunt. Guest-friendly (no account
 // required to play); a finish requires signing in (see attach, above).
-app.get('/api/t/:tenant/kwest', resolveTenant, listKwestHunts);
+// Dormancy gate (2026-08-04): every player route 404s unless the tenant
+// carries kwest_enabled = 'on' (requireKwestEnabled, after resolveTenant).
+app.get('/api/t/:tenant/kwest', resolveTenant, requireKwestEnabled, listKwestHunts);
 // Registered BEFORE the guest-friendly GET /kwest/:slug pattern below -
 // Hono resolves overlapping patterns by registration order, not
 // static-over-dynamic priority, so "mine" would otherwise be swallowed as a
 // slug and 404. requireAuth chained inline since this route isn't on tenantApp.
-app.get('/api/t/:tenant/kwest/mine', resolveTenant, requireAuth, getMyKwestProgress);
-app.get('/api/t/:tenant/kwest/:slug', resolveTenant, getKwestHunt);
-app.get('/api/t/:tenant/kwest/:slug/rules', resolveTenant, getKwestRules);
-app.post('/api/t/:tenant/kwest/:slug/start', resolveTenant, startKwest);
-app.post('/api/t/:tenant/kwest/:slug/ack', resolveTenant, ackKwest);
-app.get('/api/t/:tenant/kwest/:slug/state', resolveTenant, getKwestState);
-app.post('/api/t/:tenant/kwest/:slug/reveal', resolveTenant, revealKwest);
-app.get('/api/t/:tenant/kwest/:slug/retro', resolveTenant, getKwestRetro);
-app.post('/api/t/:tenant/kwest/minigame/:offerId', resolveTenant, playKwestMinigame);
+app.get('/api/t/:tenant/kwest/mine', resolveTenant, requireKwestEnabled, requireAuth, getMyKwestProgress);
+app.get('/api/t/:tenant/kwest/:slug', resolveTenant, requireKwestEnabled, getKwestHunt);
+app.get('/api/t/:tenant/kwest/:slug/rules', resolveTenant, requireKwestEnabled, getKwestRules);
+app.post('/api/t/:tenant/kwest/:slug/start', resolveTenant, requireKwestEnabled, startKwest);
+app.post('/api/t/:tenant/kwest/:slug/ack', resolveTenant, requireKwestEnabled, ackKwest);
+app.get('/api/t/:tenant/kwest/:slug/state', resolveTenant, requireKwestEnabled, getKwestState);
+app.post('/api/t/:tenant/kwest/:slug/reveal', resolveTenant, requireKwestEnabled, revealKwest);
+app.get('/api/t/:tenant/kwest/:slug/retro', resolveTenant, requireKwestEnabled, getKwestRetro);
+app.post('/api/t/:tenant/kwest/minigame/:offerId', resolveTenant, requireKwestEnabled, playKwestMinigame);
 
 app.get('/api/t/:tenant/passport/members', resolveTenant, async (c) => {
   const tenant = c.get('tenant');
