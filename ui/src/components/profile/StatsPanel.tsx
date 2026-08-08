@@ -8,7 +8,6 @@ import { Spinner } from '../ui/Spinner';
 import { formatDate } from '../../utils/dates';
 import { resolveBalance, balanceText } from '../../utils/balance';
 import { ledgerLabel } from '../../utils/ledgerLabels';
-import type { CreditEntry } from '../../types';
 
 export type StatsPanelType = 'credits';
 
@@ -32,20 +31,12 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-function ExampleDisclaimer() {
+function EmptyState() {
   return (
-    <div style={{
-      background: 'rgba(200,134,10,0.08)', border: '1px dashed var(--amber)',
-      borderRadius: 'var(--r-sm)', padding: '10px 14px', marginBottom: 18,
-      display: 'flex', gap: 10, alignItems: 'flex-start',
-    }}>
-      <ClipboardList size={16} strokeWidth={2} aria-hidden="true" style={{ flexShrink: 0, color: 'var(--amber)' }} />
-      <p style={{
-        fontFamily: 'var(--font-sans)', fontSize: '0.78rem',
-        color: 'var(--amber)', margin: 0, lineHeight: 1.5,
-        fontWeight: 600,
-      }}>
-        Example data shown below - your real activity will appear here once you have data to display.
+    <div className="card" style={{ padding: 32, textAlign: 'center', background: 'var(--white)' }}>
+      <ClipboardList size={28} style={{ color: 'var(--amber)', marginBottom: 8 }} />
+      <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.85rem' }}>
+        No activity yet - check back soon.
       </p>
     </div>
   );
@@ -61,12 +52,6 @@ function LoadingState() {
 
 // ── Credits panel ─────────────────────────────────────────────────────────────
 
-const PLACEHOLDER_CREDITS: CreditEntry[] = [
-  { id: 'p1', amount: 25,  balance_after: 25, reason: 'Welcome bonus',              created_at: 0 },
-  { id: 'p2', amount: 5,   balance_after: 30, reason: 'Checked in at a local shop', created_at: 0 },
-  { id: 'p3', amount: -10, balance_after: 20, reason: 'Claimed a local deal',       created_at: 0 },
-];
-
 function CreditsContent({ tenantId, creditsName }: { tenantId: string; creditsName: string }) {
   const { user } = useAuth();
   const { data, isLoading, isError, isSuccess, refetch } = useQuery({
@@ -79,8 +64,6 @@ function CreditsContent({ tenantId, creditsName }: { tenantId: string; creditsNa
   // an outage, not a real zero. Treat it the same as a client-side fetch failure.
   const creditsUnavailable = isError || (isSuccess && data?.data.balance == null);
   const history  = data?.data.history ?? [];
-  const hasData  = history.length > 0;
-  const rows     = hasData ? history : PLACEHOLDER_CREDITS;
 
   if (isLoading) return <LoadingState />;
 
@@ -121,31 +104,33 @@ function CreditsContent({ tenantId, creditsName }: { tenantId: string; creditsNa
 
       <SectionLabel>Recent Activity</SectionLabel>
 
-      {!hasData && <ExampleDisclaimer />}
-
-      {rows.map((entry, i) => (
-        <div key={entry.id ?? i} style={{
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          padding: '11px 0', borderBottom: '1px solid var(--border)',
-        }}>
-          <div>
-            <div style={{ fontFamily: 'var(--font-sans)', fontSize: '0.875rem', color: 'var(--green)' }}>
-              {ledgerLabel(entry)}
-            </div>
-            {hasData && !!entry.created_at && (
-              <div style={{ fontFamily: 'var(--font-sans)', fontSize: '0.72rem', color: 'var(--muted)' }}>
-                {formatDate(entry.created_at)}
-              </div>
-            )}
-          </div>
-          <span style={{
-            fontFamily: 'var(--font-sans)', fontWeight: 'bold', fontSize: '0.9rem',
-            color: entry.amount > 0 ? 'var(--sage)' : 'var(--muted)',
+      {history.length === 0 ? (
+        <EmptyState />
+      ) : (
+        history.map((entry, i) => (
+          <div key={entry.id ?? i} style={{
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            padding: '11px 0', borderBottom: '1px solid var(--border)',
           }}>
-            {entry.amount > 0 ? '+' : ''}{entry.amount}
-          </span>
-        </div>
-      ))}
+            <div>
+              <div style={{ fontFamily: 'var(--font-sans)', fontSize: '0.875rem', color: 'var(--green)' }}>
+                {ledgerLabel(entry)}
+              </div>
+              {!!entry.created_at && (
+                <div style={{ fontFamily: 'var(--font-sans)', fontSize: '0.72rem', color: 'var(--muted)' }}>
+                  {formatDate(entry.created_at)}
+                </div>
+              )}
+            </div>
+            <span style={{
+              fontFamily: 'var(--font-sans)', fontWeight: 'bold', fontSize: '0.9rem',
+              color: entry.amount > 0 ? 'var(--sage)' : 'var(--muted)',
+            }}>
+              {entry.amount > 0 ? '+' : ''}{entry.amount}
+            </span>
+          </div>
+        ))
+      )}
     </>
   );
 }
