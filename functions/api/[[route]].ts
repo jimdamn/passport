@@ -103,7 +103,10 @@ import { getEconomy, previewEconomy, applyEconomy } from '../../src/handlers/eco
 
 import { logger } from '../../src/lib/logger';
 
-const app = new Hono<{ Bindings: Env }>();
+// Exported (in addition to the default onRequest below) so the Worker/D1
+// execution-test harness (test/worker-entry.ts) can drive the real routes
+// via app.fetch - Pages Functions has no other way to boot this as a Worker.
+export const app = new Hono<{ Bindings: Env }>();
 
 // Allowlist only — reflecting arbitrary origins with credentials:true would
 // let any site make authenticated cookie-bearing requests to this API.

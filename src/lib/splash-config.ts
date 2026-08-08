@@ -23,6 +23,7 @@ export interface SplashConfig {
   destroy_delay_days: number;
   max_video_seconds: number;
   fee_original_cents: number;
+  max_credits_amount: number;
 }
 
 export const SPLASH_CONFIG_DEFAULTS: SplashConfig = {
@@ -32,6 +33,7 @@ export const SPLASH_CONFIG_DEFAULTS: SplashConfig = {
   destroy_delay_days: 7,
   max_video_seconds: 60,
   fee_original_cents: 199,
+  max_credits_amount: 200,
 };
 
 export async function getSplashConfig(env: Env, tenantId: string): Promise<SplashConfig> {

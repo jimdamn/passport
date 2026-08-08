@@ -105,6 +105,7 @@ export interface TenantConfig {
     destroy_delay_days: number;
     max_video_seconds: number;
     fee_original_cents: number;
+    max_credits_amount: number;
   }>;
 }
 

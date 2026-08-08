@@ -363,6 +363,9 @@ export async function createSplashOffer(c: AppContext) {
     if (!Number.isFinite(creditsAmount) || creditsAmount <= 0) {
       throw new HTTPException(400, { message: 'credits_amount must be a positive number' });
     }
+    if (creditsAmount > config.max_credits_amount) {
+      throw new HTTPException(400, { message: `credits_amount cannot exceed ${config.max_credits_amount}` });
+    }
   } else {
     certValueCents = Math.floor(Number(body.cert_value_cents));
     if (!Number.isFinite(certValueCents) || certValueCents <= 0) {

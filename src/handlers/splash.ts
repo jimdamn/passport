@@ -23,6 +23,7 @@ import { transferCredits, escrowUid } from '../lib/credits';
 import { offerEscrowRef } from './splash-internal';
 import { sendSplashCertificateEmail } from '../lib/email';
 import { notifySplash } from '../lib/splash-notify';
+import { logger } from '../lib/logger';
 import { createDirectUpload, getVideoDetails, mintSignedPlaybackToken, signedIframeUrl } from '../lib/stream';
 import { getSplashConfig, setSplashConfig, type SplashConfig } from '../lib/splash-config';
 import { getCount, increment } from '../lib/throttle';
@@ -490,11 +491,16 @@ export async function getSplashMediaRaw(c: AppContext) {
 
 /**
  * POST /splash/offers/:offerId/respond — body { action: 'agree' | 'pass' }.
- * Owner of the submission only. Agree is the atomic settlement (Part D.4):
- * consideration settles FIRST (escrow-out transfer, or certificate mint),
- * and only on that success do offer -> 'agreed' and submission -> 'licensed'
- * happen together in one batch(). If the transfer/mint throws, nothing else
- * changes - a retry re-enters cleanly since the offer is still 'open'.
+ * Owner of the submission only. Agree flips the offer to 'agreed' with a
+ * conditional UPDATE (WHERE status='open') FIRST - the same exclusivity gate
+ * the pass branch and withdrawSplashOffer already use - THEN settles
+ * (escrow-out transfer, or certificate mint). Flipping first is what actually
+ * closes the race: a concurrent pass and agree both read status='open'
+ * before either writes, so only checking the flip's result *after* moving
+ * money (the old shape) lets both money movements complete before either
+ * notices the other won. If settlement fails after the flip, the offer is
+ * reopened so a retry re-enters cleanly instead of being stranded 'agreed'
+ * with nothing paid.
  */
 export async function respondToSplashOffer(c: AppContext) {
   const tenant = c.get('tenant');
@@ -529,13 +535,24 @@ export async function respondToSplashOffer(c: AppContext) {
       await transferCredits(
         c.env, escrowUid(c.env), offer.merchant_uid, offer.credits_amount,
         'Social Splash offer passed - refunded', 'splash_offer_refund', offerEscrowRef(offer)
-      ).catch(() => {}); // best-effort; the merchant-side withdraw route logs failures, this path mirrors it silently since the guest has no reason to see a refund-plumbing error
+      ).catch(e => logger.error(`Splash offer refund failed for offer ${offerId}: ${(e as Error).message}`));
     }
     c.executionCtx.waitUntil(notifySplash(c.env, offer.merchant_uid, 'Offer passed', 'The guest passed on your offer for their photo.'));
     return c.json({ data: { id: offerId, status: 'passed' } });
   }
 
-  // agree
+  // agree — flip first (the exclusivity gate), then settle.
+  const flip = await c.env.DB.prepare(
+    "UPDATE splash_offers SET status = 'agreed', agreed_at = unixepoch() WHERE id = ? AND tenant_id = ? AND status = 'open'"
+  ).bind(offerId, tenant.id).run();
+  if (flip.meta.changes !== 1) throw new HTTPException(400, { message: 'This offer is no longer open.' });
+
+  const reopenOnFailure = (reason: string) =>
+    c.env.DB.prepare(
+      "UPDATE splash_offers SET status = 'open', agreed_at = NULL WHERE id = ? AND tenant_id = ? AND status = 'agreed'"
+    ).bind(offerId, tenant.id).run()
+      .catch(e => logger.error(`Splash agree rollback failed for offer ${offerId} (${reason}): ${(e as Error).message}`));
+
   let certCode: string | null = null;
   if (offer.consideration_type === 'credits') {
     try {
@@ -544,6 +561,7 @@ export async function respondToSplashOffer(c: AppContext) {
         'Social Splash license agreed', 'splash_license', offerEscrowRef(offer)
       );
     } catch {
+      await reopenOnFailure('credits transfer failed');
       throw new HTTPException(502, { message: 'Could not complete this - try again.' });
     }
   } else {
@@ -556,21 +574,19 @@ export async function respondToSplashOffer(c: AppContext) {
       `).bind(tenant.id, offerId, offer.business_id, offer.business_name, offer.kkauth_uid, offer.cert_value_cents, offer.cert_description, tokenHash).run();
       certCode = rawCode;
     } catch (err) {
-      // UNIQUE(offer_id) means a retry already minted this certificate - the
-      // raw code was shown once and is gone; the guest uses the regenerate
-      // route below if they need a fresh one. Any other error is real.
+      // UNIQUE(offer_id): defensive only - the flip above means this request
+      // is the sole owner of the open->agreed transition, so a genuine prior
+      // certificate for this offer_id shouldn't exist. Any error here is real.
       if (!String((err as Error).message).includes('UNIQUE')) {
+        await reopenOnFailure('certificate mint failed');
         throw new HTTPException(500, { message: 'Could not complete this - try again.' });
       }
     }
   }
 
-  await c.env.DB.batch([
-    c.env.DB.prepare("UPDATE splash_offers SET status = 'agreed', agreed_at = unixepoch() WHERE id = ? AND tenant_id = ? AND status = 'open'")
-      .bind(offerId, tenant.id),
-    c.env.DB.prepare("UPDATE splash_submissions SET status = 'licensed', licensed_at = unixepoch() WHERE id = ? AND tenant_id = ?")
-      .bind(offer.submission_id, tenant.id),
-  ]);
+  await c.env.DB.prepare(
+    "UPDATE splash_submissions SET status = 'licensed', licensed_at = unixepoch() WHERE id = ? AND tenant_id = ?"
+  ).bind(offer.submission_id, tenant.id).run();
 
   if (certCode) {
     const guest = await c.env.DB.prepare('SELECT email FROM users WHERE kkauth_uid = ? AND tenant_id = ?')
@@ -699,6 +715,7 @@ const CONFIG_BOUNDS: Record<keyof SplashConfig, [number, number]> = {
   destroy_delay_days: [1, 30],
   max_video_seconds: [10, 300],
   fee_original_cents: [0, 5000],
+  max_credits_amount: [1, 5000],
 };
 
 /**
