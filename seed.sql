@@ -25,23 +25,6 @@ INSERT OR REPLACE INTO tenants (id, hostname, name, region, config) VALUES (
   }')
 );
 
--- Explore niche
-INSERT OR REPLACE INTO niches (id, tenant_id, slug, name, description, icon, accent_color, sort_order, config) VALUES (
-  'll-explore', 'lake-locals', 'explore', 'Explore',
-  'Visit local shops, parks, and dining to scan stamps and earn KrowdKredits.',
-  'compass', '#c8860a', 1,
-  '{"require_reciprocal": false, "show_duration_field": false}'
-);
-
--- Explore categories (Stamps / Places)
-INSERT OR REPLACE INTO categories (id, niche_id, slug, name, icon, sort_order) VALUES
-  ('pass-dining',      'll-explore', 'dining',      'Dining & Drinks',    '🍔', 1),
-  ('pass-shopping',    'll-explore', 'shopping',    'Boutiques & Shops',  '🛍️', 2),
-  ('pass-recreation',  'll-explore', 'recreation',  'Parks & Recreation',  '🌲', 3),
-  ('pass-attractions', 'll-explore', 'attractions', 'Local Attractions',  '🏛️', 4),
-  ('pass-lodging',     'll-explore', 'lodging',     'Lodging & B&Bs',     '🏨', 5),
-  ('pass-farmfood',    'll-explore', 'farmfood',    'Farm & Fresh Food',  '🌾', 6);
-
 -- Guaranteed floor prize. Every winning scan falls through to the kredits_base
 -- prize when no upgraded prize is rolled, so this row MUST exist or scans 500.
 -- value MUST equal what kkgame's passport_scan action actually pays (5 base,
